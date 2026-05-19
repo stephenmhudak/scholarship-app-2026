@@ -1,0 +1,107 @@
+CREATE TABLE IF NOT EXISTS Schools (
+    Id CHAR(36) NOT NULL PRIMARY KEY,
+    Name VARCHAR(255) NOT NULL,
+    Address VARCHAR(500) NOT NULL,
+    CreatedAt DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS Users (
+    Id CHAR(36) NOT NULL PRIMARY KEY,
+    Email VARCHAR(255) NOT NULL UNIQUE,
+    PasswordHash VARCHAR(255) NOT NULL,
+    FirstName VARCHAR(100) NOT NULL,
+    LastName VARCHAR(100) NOT NULL,
+    Role VARCHAR(50) NOT NULL,
+    SchoolId CHAR(36) NULL,
+    CreatedAt DATETIME NOT NULL,
+    CONSTRAINT FK_Users_Schools FOREIGN KEY (SchoolId) REFERENCES Schools(Id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS ScholarshipCycles (
+    Id CHAR(36) NOT NULL PRIMARY KEY,
+    Name VARCHAR(255) NOT NULL,
+    OpenDate DATETIME NOT NULL,
+    CloseDate DATETIME NOT NULL,
+    IsActive TINYINT(1) NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS Questions (
+    Id CHAR(36) NOT NULL PRIMARY KEY,
+    CycleId CHAR(36) NOT NULL,
+    Text TEXT NOT NULL,
+    Type VARCHAR(50) NOT NULL,
+    `Order` INT NOT NULL DEFAULT 0,
+    IsRequired TINYINT(1) NOT NULL DEFAULT 1,
+    CONSTRAINT FK_Questions_Cycles FOREIGN KEY (CycleId) REFERENCES ScholarshipCycles(Id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS QuestionOptions (
+    Id CHAR(36) NOT NULL PRIMARY KEY,
+    QuestionId CHAR(36) NOT NULL,
+    Text VARCHAR(500) NOT NULL,
+    `Order` INT NOT NULL DEFAULT 0,
+    CONSTRAINT FK_QuestionOptions_Questions FOREIGN KEY (QuestionId) REFERENCES Questions(Id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS Applications (
+    Id CHAR(36) NOT NULL PRIMARY KEY,
+    ApplicantId CHAR(36) NOT NULL,
+    CycleId CHAR(36) NOT NULL,
+    Status VARCHAR(50) NOT NULL DEFAULT 'draft',
+    SubmittedAt DATETIME NULL,
+    CreatedAt DATETIME NOT NULL,
+    CONSTRAINT FK_Applications_Users FOREIGN KEY (ApplicantId) REFERENCES Users(Id),
+    CONSTRAINT FK_Applications_Cycles FOREIGN KEY (CycleId) REFERENCES ScholarshipCycles(Id)
+);
+
+CREATE TABLE IF NOT EXISTS ApplicationAnswers (
+    Id CHAR(36) NOT NULL PRIMARY KEY,
+    ApplicationId CHAR(36) NOT NULL,
+    QuestionId CHAR(36) NOT NULL,
+    TextValue TEXT NULL,
+    SelectedOptions JSON NULL,
+    CONSTRAINT FK_Answers_Applications FOREIGN KEY (ApplicationId) REFERENCES Applications(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_Answers_Questions FOREIGN KEY (QuestionId) REFERENCES Questions(Id)
+);
+
+CREATE TABLE IF NOT EXISTS ApplicationFiles (
+    Id CHAR(36) NOT NULL PRIMARY KEY,
+    ApplicationId CHAR(36) NOT NULL,
+    QuestionId CHAR(36) NULL,
+    FileName VARCHAR(255) NOT NULL,
+    StoragePath VARCHAR(1000) NOT NULL,
+    UploadedAt DATETIME NOT NULL,
+    CONSTRAINT FK_Files_Applications FOREIGN KEY (ApplicationId) REFERENCES Applications(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_Files_Questions FOREIGN KEY (QuestionId) REFERENCES Questions(Id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS Scores (
+    Id CHAR(36) NOT NULL PRIMARY KEY,
+    ApplicationId CHAR(36) NOT NULL,
+    ScoredById CHAR(36) NOT NULL,
+    Score DECIMAL(5,2) NOT NULL,
+    Comments TEXT NULL,
+    ScoredAt DATETIME NOT NULL,
+    CONSTRAINT FK_Scores_Applications FOREIGN KEY (ApplicationId) REFERENCES Applications(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_Scores_Users FOREIGN KEY (ScoredById) REFERENCES Users(Id)
+);
+
+CREATE TABLE IF NOT EXISTS `References` (
+    Id CHAR(36) NOT NULL PRIMARY KEY,
+    ApplicationId CHAR(36) NOT NULL,
+    Code VARCHAR(64) NOT NULL UNIQUE,
+    Label VARCHAR(255) NULL,
+    Status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    ExpiresAt DATETIME NOT NULL,
+    CreatedAt DATETIME NOT NULL,
+    CONSTRAINT FK_References_Applications FOREIGN KEY (ApplicationId) REFERENCES Applications(Id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS ReferenceDocuments (
+    Id CHAR(36) NOT NULL PRIMARY KEY,
+    ReferenceId CHAR(36) NOT NULL,
+    FileName VARCHAR(255) NOT NULL,
+    StoragePath VARCHAR(1000) NOT NULL,
+    UploadedAt DATETIME NOT NULL,
+    CONSTRAINT FK_RefDocs_References FOREIGN KEY (ReferenceId) REFERENCES `References`(Id) ON DELETE CASCADE
+);
