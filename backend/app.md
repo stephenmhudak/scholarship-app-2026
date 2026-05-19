@@ -5,8 +5,10 @@
 | Tool | Purpose |
 |------|---------|
 | ASP.NET Core 10 Web API | HTTP API framework |
-| Entity Framework Core 10 | ORM + migrations |
-| SQL Server / PostgreSQL | Relational database |
+| SqlKata + SqlKata.Execution | Fluent SQL query builder (no ORM) |
+| Dapper | Lightweight micro-ORM for result mapping |
+| MySqlConnector | ADO.NET MySQL driver |
+| DbUp | Plain SQL migration runner |
 | JWT Bearer | Authentication tokens |
 | ASP.NET Core Authorization | Role-based access policies |
 | BCrypt.Net-Next | Password hashing |
@@ -76,8 +78,9 @@ ScholarshipApi/
 │   ├── IFileStorageService.cs / FileStorageService.cs
 │   └── IReferenceService.cs / ReferenceService.cs
 ├── Data/
-│   ├── AppDbContext.cs
-│   └── Migrations/
+│   ├── DbConnectionFactory.cs   # Returns open IDbConnection
+│   ├── QueryFactoryFactory.cs   # Builds SqlKata QueryFactory
+│   └── Migrations/              # Plain SQL files: 001_initial.sql, 002_*.sql …
 ├── Authorization/
 │   └── RolePolicies.cs
 ├── Middleware/
@@ -90,111 +93,113 @@ ScholarshipApi/
 
 ## Database Schema
 
+> MySQL type notes: GUIDs stored as `CHAR(36)`, text lengths use `VARCHAR`/`TEXT`, booleans use `TINYINT(1)`, timestamps use `DATETIME`.
+
 ### `Users`
 | Column | Type | Notes |
 |--------|------|-------|
-| `Id` | `Guid` | PK |
-| `Email` | `nvarchar(255)` | Unique |
-| `PasswordHash` | `nvarchar(255)` | BCrypt |
-| `FirstName` | `nvarchar(100)` | |
-| `LastName` | `nvarchar(100)` | |
-| `Role` | `nvarchar(50)` | `applicant` / `scorer` / `app_admin` / `school_admin` / `counselor` |
-| `SchoolId` | `Guid?` | FK → `Schools` (counselors only) |
-| `CreatedAt` | `datetime2` | |
+| `Id` | `CHAR(36)` | PK (UUID) |
+| `Email` | `VARCHAR(255)` | Unique |
+| `PasswordHash` | `VARCHAR(255)` | BCrypt |
+| `FirstName` | `VARCHAR(100)` | |
+| `LastName` | `VARCHAR(100)` | |
+| `Role` | `VARCHAR(50)` | `applicant` / `scorer` / `app_admin` / `school_admin` / `counselor` |
+| `SchoolId` | `CHAR(36)?` | FK → `Schools` (counselors only) |
+| `CreatedAt` | `DATETIME` | |
 
 ### `Schools`
 | Column | Type | Notes |
 |--------|------|-------|
-| `Id` | `Guid` | PK |
-| `Name` | `nvarchar(255)` | |
-| `Address` | `nvarchar(500)` | |
-| `CreatedAt` | `datetime2` | |
+| `Id` | `CHAR(36)` | PK (UUID) |
+| `Name` | `VARCHAR(255)` | |
+| `Address` | `VARCHAR(500)` | |
+| `CreatedAt` | `DATETIME` | |
 
 ### `ScholarshipCycles`
 | Column | Type | Notes |
 |--------|------|-------|
-| `Id` | `Guid` | PK |
-| `Name` | `nvarchar(255)` | e.g. "2026 Spring Scholarship" |
-| `OpenDate` | `datetime2` | |
-| `CloseDate` | `datetime2` | |
-| `IsActive` | `bit` | |
+| `Id` | `CHAR(36)` | PK (UUID) |
+| `Name` | `VARCHAR(255)` | e.g. "2026 Spring Scholarship" |
+| `OpenDate` | `DATETIME` | |
+| `CloseDate` | `DATETIME` | |
+| `IsActive` | `TINYINT(1)` | |
 
 ### `Questions`
 | Column | Type | Notes |
 |--------|------|-------|
-| `Id` | `Guid` | PK |
-| `CycleId` | `Guid` | FK → `ScholarshipCycles` |
-| `Text` | `nvarchar(max)` | |
-| `Type` | `nvarchar(50)` | `short_answer` / `long_answer` / `multiple_choice` / `single_choice` / `file_upload` |
-| `Order` | `int` | Display order |
-| `IsRequired` | `bit` | |
+| `Id` | `CHAR(36)` | PK (UUID) |
+| `CycleId` | `CHAR(36)` | FK → `ScholarshipCycles` |
+| `Text` | `TEXT` | |
+| `Type` | `VARCHAR(50)` | `short_answer` / `long_answer` / `multiple_choice` / `single_choice` / `file_upload` |
+| `Order` | `INT` | Display order |
+| `IsRequired` | `TINYINT(1)` | |
 
 ### `QuestionOptions`
 | Column | Type | Notes |
 |--------|------|-------|
-| `Id` | `Guid` | PK |
-| `QuestionId` | `Guid` | FK → `Questions` |
-| `Text` | `nvarchar(500)` | |
-| `Order` | `int` | |
+| `Id` | `CHAR(36)` | PK (UUID) |
+| `QuestionId` | `CHAR(36)` | FK → `Questions` |
+| `Text` | `VARCHAR(500)` | |
+| `Order` | `INT` | |
 
 ### `Applications`
 | Column | Type | Notes |
 |--------|------|-------|
-| `Id` | `Guid` | PK |
-| `ApplicantId` | `Guid` | FK → `Users` |
-| `CycleId` | `Guid` | FK → `ScholarshipCycles` |
-| `Status` | `nvarchar(50)` | `draft` / `submitted` / `under_review` / `awarded` / `rejected` |
-| `SubmittedAt` | `datetime2?` | |
-| `CreatedAt` | `datetime2` | |
+| `Id` | `CHAR(36)` | PK (UUID) |
+| `ApplicantId` | `CHAR(36)` | FK → `Users` |
+| `CycleId` | `CHAR(36)` | FK → `ScholarshipCycles` |
+| `Status` | `VARCHAR(50)` | `draft` / `submitted` / `under_review` / `awarded` / `rejected` |
+| `SubmittedAt` | `DATETIME NULL` | |
+| `CreatedAt` | `DATETIME` | |
 
 ### `ApplicationAnswers`
 | Column | Type | Notes |
 |--------|------|-------|
-| `Id` | `Guid` | PK |
-| `ApplicationId` | `Guid` | FK → `Applications` |
-| `QuestionId` | `Guid` | FK → `Questions` |
-| `TextValue` | `nvarchar(max)?` | Short/long answer |
-| `SelectedOptions` | `nvarchar(max)?` | JSON array of `QuestionOption` IDs for MC/SC |
+| `Id` | `CHAR(36)` | PK (UUID) |
+| `ApplicationId` | `CHAR(36)` | FK → `Applications` |
+| `QuestionId` | `CHAR(36)` | FK → `Questions` |
+| `TextValue` | `TEXT NULL` | Short/long answer |
+| `SelectedOptions` | `JSON NULL` | JSON array of `QuestionOption` IDs for MC/SC |
 
 ### `ApplicationFiles`
 | Column | Type | Notes |
 |--------|------|-------|
-| `Id` | `Guid` | PK |
-| `ApplicationId` | `Guid` | FK → `Applications` |
-| `QuestionId` | `Guid?` | FK → `Questions` (for file upload questions) |
-| `FileName` | `nvarchar(255)` | Original filename |
-| `StoragePath` | `nvarchar(1000)` | Blob path or local path |
-| `UploadedAt` | `datetime2` | |
+| `Id` | `CHAR(36)` | PK (UUID) |
+| `ApplicationId` | `CHAR(36)` | FK → `Applications` |
+| `QuestionId` | `CHAR(36) NULL` | FK → `Questions` (for file upload questions) |
+| `FileName` | `VARCHAR(255)` | Original filename |
+| `StoragePath` | `VARCHAR(1000)` | Blob path or local path |
+| `UploadedAt` | `DATETIME` | |
 
 ### `Scores`
 | Column | Type | Notes |
 |--------|------|-------|
-| `Id` | `Guid` | PK |
-| `ApplicationId` | `Guid` | FK → `Applications` |
-| `ScoredById` | `Guid` | FK → `Users` (scorer) |
-| `Score` | `decimal(5,2)` | |
-| `Comments` | `nvarchar(max)?` | |
-| `ScoredAt` | `datetime2` | |
+| `Id` | `CHAR(36)` | PK (UUID) |
+| `ApplicationId` | `CHAR(36)` | FK → `Applications` |
+| `ScoredById` | `CHAR(36)` | FK → `Users` (scorer) |
+| `Score` | `DECIMAL(5,2)` | |
+| `Comments` | `TEXT NULL` | |
+| `ScoredAt` | `DATETIME` | |
 
 ### `References`
 | Column | Type | Notes |
 |--------|------|-------|
-| `Id` | `Guid` | PK |
-| `ApplicationId` | `Guid` | FK → `Applications` |
-| `Code` | `nvarchar(32)` | Unique, cryptographically random |
-| `Label` | `nvarchar(255)?` | e.g. "Math Teacher" |
-| `Status` | `nvarchar(50)` | `pending` / `received` |
-| `ExpiresAt` | `datetime2` | Matches cycle close date |
-| `CreatedAt` | `datetime2` | |
+| `Id` | `CHAR(36)` | PK (UUID) |
+| `ApplicationId` | `CHAR(36)` | FK → `Applications` |
+| `Code` | `VARCHAR(64)` | Unique, SHA-256 hex of the plaintext code |
+| `Label` | `VARCHAR(255) NULL` | e.g. "Math Teacher" |
+| `Status` | `VARCHAR(50)` | `pending` / `received` |
+| `ExpiresAt` | `DATETIME` | Matches cycle close date |
+| `CreatedAt` | `DATETIME` | |
 
 ### `ReferenceDocuments`
 | Column | Type | Notes |
 |--------|------|-------|
-| `Id` | `Guid` | PK |
-| `ReferenceId` | `Guid` | FK → `References` |
-| `FileName` | `nvarchar(255)` | Original filename |
-| `StoragePath` | `nvarchar(1000)` | |
-| `UploadedAt` | `datetime2` | |
+| `Id` | `CHAR(36)` | PK (UUID) |
+| `ReferenceId` | `CHAR(36)` | FK → `References` |
+| `FileName` | `VARCHAR(255)` | Original filename |
+| `StoragePath` | `VARCHAR(1000)` | |
+| `UploadedAt` | `DATETIME` | |
 
 ---
 
@@ -320,13 +325,122 @@ Codes are stored hashed (SHA-256) in the database; the plaintext is returned to 
 
 ---
 
+## `Data/DbConnectionFactory.cs`
+
+```csharp
+public interface IDbConnectionFactory
+{
+    IDbConnection Create();
+}
+
+public class MySqlConnectionFactory(IConfiguration config) : IDbConnectionFactory
+{
+    public IDbConnection Create()
+    {
+        var conn = new MySqlConnection(config.GetConnectionString("Default"));
+        conn.Open();
+        return conn;
+    }
+}
+```
+
+## `Data/QueryFactoryFactory.cs`
+
+```csharp
+// Registers a scoped QueryFactory so services can inject it directly.
+// Each request gets its own open connection that is disposed at end-of-scope.
+public static class SqlKataExtensions
+{
+    public static IServiceCollection AddSqlKata(this IServiceCollection services)
+    {
+        services.AddScoped<IDbConnectionFactory, MySqlConnectionFactory>();
+        services.AddScoped<QueryFactory>(sp =>
+        {
+            var factory = sp.GetRequiredService<IDbConnectionFactory>();
+            var conn = factory.Create();
+            return new QueryFactory(conn, new MySqlCompiler());
+        });
+        return services;
+    }
+}
+```
+
+### Using SqlKata in services
+
+```csharp
+public class ApplicationService(QueryFactory db) : IApplicationService
+{
+    public async Task<ApplicationDto?> GetAsync(Guid id) =>
+        await db.Query("Applications").Where("Id", id).FirstOrDefaultAsync<ApplicationDto>();
+
+    public async Task<IEnumerable<ApplicationDto>> ListForApplicantAsync(Guid applicantId) =>
+        await db.Query("Applications").Where("ApplicantId", applicantId).GetAsync<ApplicationDto>();
+
+    public async Task<Guid> CreateAsync(Guid applicantId, Guid cycleId)
+    {
+        var id = Guid.NewGuid();
+        await db.Query("Applications").InsertAsync(new {
+            Id = id, ApplicantId = applicantId, CycleId = cycleId,
+            Status = "draft", CreatedAt = DateTime.UtcNow
+        });
+        return id;
+    }
+
+    public async Task UpdateStatusAsync(Guid id, string status) =>
+        await db.Query("Applications").Where("Id", id).UpdateAsync(new { Status = status });
+}
+```
+
+Joins and pagination:
+```csharp
+// Paginated admin list
+var result = await db.Query("Applications as a")
+    .Join("Users as u", "u.Id", "a.ApplicantId")
+    .Select("a.Id", "a.Status", "u.FirstName", "u.LastName")
+    .When(!string.IsNullOrEmpty(status), q => q.Where("a.Status", status))
+    .ForPage(page, pageSize)
+    .GetAsync<ApplicationListDto>();
+
+var total = await db.Query("Applications").CountAsync<int>();
+```
+
+---
+
+## Database Migrations (DbUp)
+
+Migrations live in `Data/Migrations/` as numbered SQL files:
+```
+001_initial_schema.sql
+002_add_reference_codes.sql
+```
+
+Run on startup in `Program.cs`:
+
+```csharp
+var upgrader = DeployChanges.To
+    .MySqlDatabase(builder.Configuration.GetConnectionString("Default"))
+    .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly())
+    .LogToConsole()
+    .Build();
+
+var result = upgrader.PerformUpgrade();
+if (!result.Successful) throw new Exception("Migration failed", result.Error);
+```
+
+Mark migration files as **Embedded Resource** in the `.csproj`.
+
+---
+
 ## `Program.cs` Outline
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+// Run DbUp migrations before the host starts
+RunMigrations(builder.Configuration);
+
+// SqlKata (registers IDbConnectionFactory + scoped QueryFactory)
+builder.Services.AddSqlKata();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options => { /* configure signing key, issuer, audience */ });
@@ -362,7 +476,7 @@ app.Run();
 ```json
 {
   "ConnectionStrings": {
-    "Default": "Server=localhost;Database=ScholarshipDb;Trusted_Connection=True;"
+    "Default": "Server=localhost;Database=scholarship_db;User=root;Password=CHANGE_ME;"
   },
   "Jwt": {
     "Key": "REPLACE_WITH_SECRET_KEY_MIN_32_CHARS",
@@ -390,9 +504,14 @@ app.Run();
 dotnet new webapi -n ScholarshipApi
 cd ScholarshipApi
 
-# ORM
-dotnet add package Microsoft.EntityFrameworkCore.SqlServer
-dotnet add package Microsoft.EntityFrameworkCore.Tools
+# SqlKata + Dapper + MySQL driver
+dotnet add package SqlKata
+dotnet add package SqlKata.Execution
+dotnet add package Dapper
+dotnet add package MySqlConnector
+
+# Migrations
+dotnet add package dbup-mysql
 
 # Auth
 dotnet add package Microsoft.AspNetCore.Authentication.JwtBearer
@@ -402,11 +521,16 @@ dotnet add package BCrypt.Net-Next
 
 # File storage (optional Azure)
 dotnet add package Azure.Storage.Blobs
-
-# Run initial migration
-dotnet ef migrations add InitialCreate
-dotnet ef database update
 ```
+
+Mark migration SQL files as embedded resources in `ScholarshipApi.csproj`:
+```xml
+<ItemGroup>
+  <EmbeddedResource Include="Data\Migrations\*.sql" />
+</ItemGroup>
+```
+
+Migrations run automatically on startup via DbUp — no CLI tool needed.
 
 ---
 
@@ -417,3 +541,5 @@ dotnet ef database update
 - All file storage paths go through `IFileStorageService` so the implementation (local vs. Azure) can be swapped via `appsettings.json` without changing controllers.
 - The `counselor`'s school association (`SchoolId` on `Users`) is set at account creation by the `school_admin`; counselors can only see applicants whose `SchoolId` matches their own.
 - Paginated list endpoints (`/api/admin/applications`, `/api/counselor/applicants`) should accept `?page=`, `?pageSize=`, and `?search=` query params to support DataTables server-side mode.
+- There is no DbContext, no LINQ, and no EF migrations. All queries go through SqlKata's `QueryFactory`. Schema changes are plain SQL files in `Data/Migrations/` run by DbUp on startup.
+- SqlKata's `.ForPage(page, pageSize)` handles pagination; use `.CountAsync<int>()` on the same base query (before `.ForPage`) for the total count.
