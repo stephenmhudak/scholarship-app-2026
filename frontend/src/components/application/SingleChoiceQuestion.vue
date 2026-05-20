@@ -18,6 +18,7 @@ function onChange(e) {
       {{ question.text }}
       <span v-if="question.isRequired" class="text-red-500 ml-0.5">*</span>
     </p>
+    <p v-if="question.description" class="text-xs text-gray-500">{{ question.description }}</p>
     <div class="space-y-2">
       <label
         v-for="option in question.options"

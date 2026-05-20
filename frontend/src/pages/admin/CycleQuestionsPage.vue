@@ -98,6 +98,7 @@ async function loadSections() {
 function blankQuestion() {
   return {
     text: '',
+    description: '',
     type: 'short_answer',
     isRequired: true,
     sectionId: '',
@@ -118,6 +119,7 @@ function startEdit(q) {
   editing.value = {
     id: q.id,
     text: q.text,
+    description: q.description ?? '',
     type: q.type,
     isRequired: q.isRequired,
     sectionId: q.sectionId ?? '',
@@ -174,6 +176,7 @@ async function save() {
 
   const payload = {
     text: editing.value.text,
+    description: editing.value.description || null,
     type: editing.value.type,
     isRequired: editing.value.isRequired,
     order: isNew.value ? questions.value.length : editing.value.order,
@@ -361,9 +364,6 @@ function globalIndex(q) {
         <h1 class="text-2xl font-bold text-gray-900">Questions</h1>
         <p class="text-gray-500 mt-0.5 text-sm">{{ cycleName }}</p>
       </div>
-      <BaseButton v-if="!editing" @click="startAdd()">
-        <span class="mdi mdi-plus mr-1"></span>Add Question
-      </BaseButton>
     </div>
 
     <BaseAlert v-if="alert" :type="alert.type" :message="alert.message" />
@@ -381,6 +381,17 @@ function globalIndex(q) {
           v-model="editing.text"
           rows="2"
           placeholder="Enter your question…"
+          class="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+        />
+      </div>
+
+      <!-- Additional information -->
+      <div class="space-y-1">
+        <label class="block text-sm font-medium text-gray-700">Additional Information</label>
+        <textarea
+          v-model="editing.description"
+          rows="2"
+          placeholder="Optional help text shown below the question…"
           class="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
         />
       </div>

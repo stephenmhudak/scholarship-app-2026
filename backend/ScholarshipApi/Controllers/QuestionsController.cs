@@ -35,6 +35,7 @@ public class QuestionsController(QueryFactory db) : ControllerBase
             q.Order,
             q.IsRequired,
             q.SectionId,
+            q.Description,
             ValidationRules = q.ValidationRules != null
                 ? JsonSerializer.Deserialize<JsonElement>(q.ValidationRules)
                 : (JsonElement?)null,
@@ -58,6 +59,7 @@ public class QuestionsController(QueryFactory db) : ControllerBase
             Order = request.Order,
             request.IsRequired,
             request.SectionId,
+            request.Description,
             ValidationRules = request.ValidationRules != null
                 ? JsonSerializer.Serialize(request.ValidationRules)
                 : null
@@ -79,6 +81,7 @@ public class QuestionsController(QueryFactory db) : ControllerBase
             Order = request.Order,
             request.IsRequired,
             request.SectionId,
+            request.Description,
             ValidationRules = request.ValidationRules != null
                 ? JsonSerializer.Serialize(request.ValidationRules)
                 : null
@@ -144,6 +147,7 @@ public class QuestionRequest
     public int Order { get; set; }
     public bool IsRequired { get; set; }
     public string? SectionId { get; set; }
+    public string? Description { get; set; }
     public List<string>? Options { get; set; }
     public ValidationRulesRequest? ValidationRules { get; set; }
 }

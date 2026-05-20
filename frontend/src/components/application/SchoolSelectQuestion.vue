@@ -33,6 +33,7 @@ function onChange(e) {
       {{ question.text }}
       <span v-if="question.isRequired" class="text-red-500 ml-0.5">*</span>
     </label>
+    <p v-if="question.description" class="text-xs text-gray-500">{{ question.description }}</p>
 
     <p v-if="loadError" class="text-xs text-red-600">{{ loadError }}</p>
 

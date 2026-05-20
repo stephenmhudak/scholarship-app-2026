@@ -41,6 +41,7 @@ async function onChange(e) {
       {{ question.text }}
       <span v-if="question.isRequired" class="text-red-500 ml-0.5">*</span>
     </label>
+    <p v-if="question.description" class="text-xs text-gray-500">{{ question.description }}</p>
 
     <div :class="['border-2 border-dashed rounded-lg p-4 hover:border-blue-400 transition-colors',
       error ? 'border-red-400' : 'border-gray-300']">
