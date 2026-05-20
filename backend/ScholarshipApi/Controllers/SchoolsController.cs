@@ -8,7 +8,7 @@ namespace ScholarshipApi.Controllers;
 
 [ApiController]
 [Route("api/schools")]
-[Authorize(Policy = "SchoolAdmin")]
+[Authorize]
 public class SchoolsController(QueryFactory db) : ControllerBase
 {
     private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)
@@ -22,6 +22,7 @@ public class SchoolsController(QueryFactory db) : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "SchoolAdmin")]
     public async Task<IActionResult> Create([FromBody] SchoolRequest request)
     {
         var id = Guid.NewGuid().ToString();
@@ -44,6 +45,7 @@ public class SchoolsController(QueryFactory db) : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Policy = "SchoolAdmin")]
     public async Task<IActionResult> Update(string id, [FromBody] SchoolRequest request)
     {
         await db.Query("Schools").Where("Id", id).UpdateAsync(new
@@ -55,6 +57,7 @@ public class SchoolsController(QueryFactory db) : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Policy = "SchoolAdmin")]
     public async Task<IActionResult> Delete(string id)
     {
         await db.Query("Schools").Where("Id", id).DeleteAsync();

@@ -5,18 +5,14 @@ import LongAnswerQuestion from './LongAnswerQuestion.vue'
 import MultipleChoiceQuestion from './MultipleChoiceQuestion.vue'
 import SingleChoiceQuestion from './SingleChoiceQuestion.vue'
 import FileUploadQuestion from './FileUploadQuestion.vue'
+import SchoolSelectQuestion from './SchoolSelectQuestion.vue'
+import DateQuestion from './DateQuestion.vue'
 
 const props = defineProps({
-  question: {
-    type: Object,
-    required: true,
-  },
-  modelValue: {
-    type: [String, Array],
-    default: null,
-  },
+  question: { type: Object, required: true },
+  modelValue: { type: [String, Array], default: null },
+  error: { type: String, default: null },
 })
-
 const emit = defineEmits(['answer', 'update:modelValue'])
 
 const componentMap = {
@@ -25,11 +21,11 @@ const componentMap = {
   multiple_choice: MultipleChoiceQuestion,
   single_choice: SingleChoiceQuestion,
   file_upload: FileUploadQuestion,
+  school_select: SchoolSelectQuestion,
+  date: DateQuestion,
 }
 
-const questionComponent = computed(
-  () => componentMap[props.question.type] || ShortAnswerQuestion
-)
+const questionComponent = computed(() => componentMap[props.question.type] ?? ShortAnswerQuestion)
 </script>
 
 <template>
@@ -38,6 +34,7 @@ const questionComponent = computed(
       :is="questionComponent"
       :question="question"
       :modelValue="modelValue"
+      :error="error"
       @answer="(val) => emit('answer', val)"
       @update:modelValue="(val) => emit('update:modelValue', val)"
     />

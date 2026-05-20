@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SqlKata.Execution;
@@ -27,8 +28,17 @@ public class QuestionsController(QueryFactory db) : ControllerBase
 
         var result = questionList.Select(q => new
         {
-            q.Id, q.CycleId, q.Text, q.Type, q.Order, q.IsRequired,
-            Options = options.Where(o => o.QuestionId == q.Id)
+            q.Id,
+            q.CycleId,
+            q.Text,
+            q.Type,
+            q.Order,
+            q.IsRequired,
+            q.SectionId,
+            ValidationRules = q.ValidationRules != null
+                ? JsonSerializer.Deserialize<JsonElement>(q.ValidationRules)
+                : (JsonElement?)null,
+            Options = options.Where(o => o.QuestionId == q.Id).Select(o => new { o.Id, o.Text, o.Order })
         });
 
         return Ok(result);
@@ -46,7 +56,11 @@ public class QuestionsController(QueryFactory db) : ControllerBase
             Text = request.Text,
             Type = request.Type,
             Order = request.Order,
-            IsRequired = request.IsRequired
+            request.IsRequired,
+            request.SectionId,
+            ValidationRules = request.ValidationRules != null
+                ? JsonSerializer.Serialize(request.ValidationRules)
+                : null
         });
 
         await SaveOptionsAsync(id, request.Options);
@@ -63,7 +77,11 @@ public class QuestionsController(QueryFactory db) : ControllerBase
             Text = request.Text,
             Type = request.Type,
             Order = request.Order,
-            IsRequired = request.IsRequired
+            request.IsRequired,
+            request.SectionId,
+            ValidationRules = request.ValidationRules != null
+                ? JsonSerializer.Serialize(request.ValidationRules)
+                : null
         });
 
         await db.Query("QuestionOptions").Where("QuestionId", questionId).DeleteAsync();
@@ -110,13 +128,24 @@ public class QuestionsController(QueryFactory db) : ControllerBase
     }
 }
 
+public class ValidationRulesRequest
+{
+    public bool NumberOnly { get; set; }
+    public int? MinLength { get; set; }
+    public int? MaxLength { get; set; }
+    public bool PhoneFormat { get; set; }
+    public bool EmailFormat { get; set; }
+}
+
 public class QuestionRequest
 {
     public string Text { get; set; } = null!;
     public string Type { get; set; } = null!;
     public int Order { get; set; }
     public bool IsRequired { get; set; }
+    public string? SectionId { get; set; }
     public List<string>? Options { get; set; }
+    public ValidationRulesRequest? ValidationRules { get; set; }
 }
 
 public class ReorderItem

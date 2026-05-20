@@ -1,16 +1,15 @@
 <script setup>
-defineProps({
-  question: {
-    type: Object,
-    required: true,
-  },
-  modelValue: {
-    type: String,
-    default: '',
-  },
-})
+import { computed } from 'vue'
 
+const props = defineProps({
+  question: { type: Object, required: true },
+  modelValue: { type: String, default: '' },
+  error: { type: String, default: null },
+})
 const emit = defineEmits(['answer', 'update:modelValue'])
+
+const maxLength = computed(() => props.question.validationRules?.maxLength ?? null)
+const charCount = computed(() => (props.modelValue || '').length)
 
 function onInput(e) {
   emit('answer', e.target.value)
@@ -21,20 +20,20 @@ function onInput(e) {
 <template>
   <div class="space-y-1">
     <label class="block text-sm font-medium text-gray-700">
-      {{ question.label }}
-      <span v-if="question.required" class="text-red-500 ml-0.5">*</span>
+      {{ question.text }}
+      <span v-if="question.isRequired" class="text-red-500 ml-0.5">*</span>
     </label>
     <textarea
       :value="modelValue"
-      :placeholder="question.placeholder || 'Your answer...'"
-      :required="question.required"
+      placeholder="Your answer…"
       rows="5"
       @input="onInput"
-      class="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+      :class="['block w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y',
+        error ? 'border-red-400' : 'border-gray-300']"
     />
-    <p v-if="question.hint" class="text-xs text-gray-500">{{ question.hint }}</p>
-    <p v-if="question.maxLength" class="text-xs text-gray-400 text-right">
-      {{ (modelValue || '').length }} / {{ question.maxLength }}
-    </p>
+    <div class="flex justify-between">
+      <p v-if="error" class="text-xs text-red-600">{{ error }}</p>
+      <p v-if="maxLength" class="text-xs text-gray-400 ml-auto">{{ charCount }} / {{ maxLength }}</p>
+    </div>
   </div>
 </template>

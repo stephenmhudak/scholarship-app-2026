@@ -8,4 +8,6 @@ public class Question
     public string Type { get; set; } = null!;
     public int Order { get; set; }
     public bool IsRequired { get; set; }
+    public string? SectionId { get; set; }
+    public string? ValidationRules { get; set; }
 }

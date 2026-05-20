@@ -1,15 +1,9 @@
 <script setup>
-defineProps({
-  question: {
-    type: Object,
-    required: true,
-  },
-  modelValue: {
-    type: String,
-    default: '',
-  },
+const props = defineProps({
+  question: { type: Object, required: true },
+  modelValue: { type: String, default: '' },
+  error: { type: String, default: null },
 })
-
 const emit = defineEmits(['answer', 'update:modelValue'])
 
 function onChange(e) {
@@ -21,26 +15,26 @@ function onChange(e) {
 <template>
   <div class="space-y-2">
     <p class="block text-sm font-medium text-gray-700">
-      {{ question.label }}
-      <span v-if="question.required" class="text-red-500 ml-0.5">*</span>
+      {{ question.text }}
+      <span v-if="question.isRequired" class="text-red-500 ml-0.5">*</span>
     </p>
-    <p v-if="question.hint" class="text-xs text-gray-500">{{ question.hint }}</p>
     <div class="space-y-2">
       <label
         v-for="option in question.options"
-        :key="option.value"
+        :key="option.id"
         class="flex items-center gap-3 cursor-pointer"
       >
         <input
           type="radio"
           :name="question.id"
-          :value="option.value"
-          :checked="modelValue === option.value"
+          :value="option.id"
+          :checked="modelValue === option.id"
           @change="onChange"
           class="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
         />
-        <span class="text-sm text-gray-700">{{ option.label }}</span>
+        <span class="text-sm text-gray-700">{{ option.text }}</span>
       </label>
     </div>
+    <p v-if="error" class="text-xs text-red-600">{{ error }}</p>
   </div>
 </template>

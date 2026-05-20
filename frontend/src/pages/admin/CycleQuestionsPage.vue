@@ -10,6 +10,7 @@ const cycleId = route.params.cycleId
 
 const cycleName = ref('')
 const questions = ref([])
+const sections = ref([])
 const loading = ref(true)
 const saving = ref(false)
 const alert = ref(null)
@@ -17,20 +18,47 @@ const alert = ref(null)
 const editing = ref(null)
 const isNew = ref(false)
 
+const editingSection = ref(null)
+const isNewSection = ref(false)
+const savingSection = ref(false)
+
 const QUESTION_TYPES = [
   { value: 'short_answer',    label: 'Short Answer' },
   { value: 'long_answer',     label: 'Long Answer' },
   { value: 'multiple_choice', label: 'Multiple Choice' },
   { value: 'single_choice',   label: 'Single Choice' },
   { value: 'file_upload',     label: 'File Upload' },
+  { value: 'school_select',   label: 'School Select' },
+  { value: 'date',            label: 'Date' },
 ]
+
+const TEXT_TYPES = ['short_answer', 'long_answer']
 
 const hasOptions = computed(() =>
   editing.value && ['multiple_choice', 'single_choice'].includes(editing.value.type)
 )
 
+const showValidationRules = computed(() =>
+  editing.value && TEXT_TYPES.includes(editing.value.type)
+)
+
+const groupedQuestions = computed(() => {
+  const orderedSections = [...sections.value].sort((a, b) => a.order - b.order)
+  const groups = orderedSections.map((s) => ({
+    ...s,
+    questions: questions.value.filter((q) => q.sectionId === s.id),
+  }))
+
+  const ungrouped = questions.value.filter((q) => !q.sectionId)
+  if (ungrouped.length > 0 || groups.length === 0) {
+    groups.push({ id: null, title: null, description: null, questions: ungrouped })
+  }
+
+  return groups
+})
+
 onMounted(async () => {
-  await Promise.all([loadCycleName(), loadQuestions()])
+  await Promise.all([loadCycleName(), loadQuestions(), loadSections()])
 })
 
 async function loadCycleName() {
@@ -55,30 +83,51 @@ async function loadQuestions() {
   }
 }
 
+async function loadSections() {
+  try {
+    const res = await api.get(`/cycles/${cycleId}/sections`)
+    sections.value = res.data
+  } catch {
+    // non-fatal
+  }
+}
+
 function blankQuestion() {
   return {
     text: '',
     type: 'short_answer',
     isRequired: true,
+    sectionId: '',
     options: [],
     newOption: '',
+    validationRules: { numberOnly: false, phoneFormat: false, emailFormat: false, minLength: null, maxLength: null },
   }
 }
 
-function startAdd() {
+function startAdd(sectionId = '') {
   isNew.value = true
-  editing.value = blankQuestion()
+  editing.value = { ...blankQuestion(), sectionId }
 }
 
 function startEdit(q) {
   isNew.value = false
+  const vr = q.validationRules ?? {}
   editing.value = {
     id: q.id,
     text: q.text,
     type: q.type,
     isRequired: q.isRequired,
+    sectionId: q.sectionId ?? '',
+    order: q.order ?? 0,
     options: q.options?.map((o) => o.text) ?? [],
     newOption: '',
+    validationRules: {
+      numberOnly: vr.numberOnly ?? false,
+      phoneFormat: vr.phoneFormat ?? false,
+      emailFormat: vr.emailFormat ?? false,
+      minLength: vr.minLength ?? null,
+      maxLength: vr.maxLength ?? null,
+    },
   }
 }
 
@@ -107,12 +156,27 @@ async function save() {
   saving.value = true
   alert.value = null
 
+  const vr = editing.value.validationRules
+  const isTextType = TEXT_TYPES.includes(editing.value.type)
+  const hasRules = isTextType && (vr.numberOnly || vr.phoneFormat || vr.emailFormat || vr.minLength || vr.maxLength)
+  const validationRules = hasRules
+    ? {
+        numberOnly: vr.numberOnly || false,
+        phoneFormat: vr.phoneFormat || false,
+        emailFormat: vr.emailFormat || false,
+        minLength: vr.minLength ? Number(vr.minLength) : null,
+        maxLength: vr.maxLength ? Number(vr.maxLength) : null,
+      }
+    : null
+
   const payload = {
     text: editing.value.text,
     type: editing.value.type,
     isRequired: editing.value.isRequired,
-    order: isNew.value ? questions.value.length : editing.value.order ?? 0,
+    order: isNew.value ? questions.value.length : editing.value.order,
+    sectionId: editing.value.sectionId || null,
     options: hasOptions.value ? editing.value.options : [],
+    validationRules,
   }
 
   try {
@@ -158,7 +222,7 @@ async function moveDown(i) {
 }
 
 async function reorder(ordered) {
-  const items = ordered.map((q, i) => ({ id: q.id, order: i }))
+  const items = ordered.map((q, idx) => ({ id: q.id, order: idx }))
   try {
     await api.put(`/cycles/${cycleId}/questions/reorder`, items)
     await loadQuestions()
@@ -167,8 +231,104 @@ async function reorder(ordered) {
   }
 }
 
+// Section management
+
+function blankSection() {
+  return { title: '', description: '' }
+}
+
+function startAddSection() {
+  isNewSection.value = true
+  editingSection.value = blankSection()
+}
+
+function startEditSection(s) {
+  isNewSection.value = false
+  editingSection.value = { id: s.id, title: s.title, description: s.description ?? '', order: s.order ?? 0 }
+}
+
+function cancelSection() {
+  editingSection.value = null
+  isNewSection.value = false
+}
+
+async function saveSection() {
+  if (!editingSection.value.title.trim()) {
+    alert.value = { type: 'error', message: 'Section title is required.' }
+    return
+  }
+
+  savingSection.value = true
+  alert.value = null
+
+  const payload = {
+    title: editingSection.value.title,
+    description: editingSection.value.description || null,
+    order: isNewSection.value ? sections.value.length : editingSection.value.order,
+  }
+
+  try {
+    const wasNew = isNewSection.value
+    if (isNewSection.value) {
+      await api.post(`/cycles/${cycleId}/sections`, payload)
+    } else {
+      await api.put(`/cycles/${cycleId}/sections/${editingSection.value.id}`, payload)
+    }
+    editingSection.value = null
+    isNewSection.value = false
+    await loadSections()
+    alert.value = { type: 'success', message: wasNew ? 'Section added.' : 'Section updated.' }
+  } catch {
+    alert.value = { type: 'error', message: 'Failed to save section.' }
+  } finally {
+    savingSection.value = false
+  }
+}
+
+async function deleteSection(s) {
+  if (!confirm(`Delete section "${s.title}"? Questions in this section will become ungrouped.`)) return
+  try {
+    await api.delete(`/cycles/${cycleId}/sections/${s.id}`)
+    await Promise.all([loadSections(), loadQuestions()])
+  } catch {
+    alert.value = { type: 'error', message: 'Failed to delete section.' }
+  }
+}
+
+async function moveSectionUp(i) {
+  if (i === 0) return
+  const updated = [...sections.value]
+  ;[updated[i - 1], updated[i]] = [updated[i], updated[i - 1]]
+  await reorderSections(updated)
+}
+
+async function moveSectionDown(i) {
+  if (i === sections.value.length - 1) return
+  const updated = [...sections.value]
+  ;[updated[i], updated[i + 1]] = [updated[i + 1], updated[i]]
+  await reorderSections(updated)
+}
+
+async function reorderSections(ordered) {
+  const items = ordered.map((s, idx) => ({ id: s.id, order: idx }))
+  try {
+    await api.put(`/cycles/${cycleId}/sections/reorder`, items)
+    await loadSections()
+  } catch {
+    alert.value = { type: 'error', message: 'Failed to reorder sections.' }
+  }
+}
+
+function sectionName(sectionId) {
+  return sections.value.find((s) => s.id === sectionId)?.title ?? null
+}
+
 function typLabel(type) {
   return QUESTION_TYPES.find((t) => t.value === type)?.label ?? type
+}
+
+function globalIndex(q) {
+  return questions.value.findIndex((x) => x.id === q.id)
 }
 </script>
 
@@ -186,14 +346,104 @@ function typLabel(type) {
         <p class="text-gray-500 mt-0.5 text-sm">{{ cycleName }}</p>
       </div>
       <BaseButton v-if="!editing" @click="startAdd">
-        <span class="mdi mdi-plus mr-1"></span>
-        Add Question
+        <span class="mdi mdi-plus mr-1"></span>Add Question
       </BaseButton>
     </div>
 
     <BaseAlert v-if="alert" :type="alert.type" :message="alert.message" />
 
-    <!-- Add / Edit Form -->
+    <!-- Sections Panel -->
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+        <h2 class="text-sm font-semibold text-gray-700">Sections</h2>
+        <button
+          v-if="!editingSection"
+          @click="startAddSection"
+          class="text-xs text-blue-600 hover:underline flex items-center gap-1"
+        >
+          <span class="mdi mdi-plus"></span> Add Section
+        </button>
+      </div>
+
+      <!-- Section form -->
+      <div v-if="editingSection" class="px-5 py-4 space-y-3 border-b border-gray-100">
+        <div class="space-y-1">
+          <label class="block text-xs font-medium text-gray-700">Title <span class="text-red-500">*</span></label>
+          <input
+            v-model="editingSection.title"
+            type="text"
+            placeholder="Section title…"
+            class="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div class="space-y-1">
+          <label class="block text-xs font-medium text-gray-700">Description</label>
+          <input
+            v-model="editingSection.description"
+            type="text"
+            placeholder="Optional description…"
+            class="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div class="flex gap-2">
+          <BaseButton :loading="savingSection" @click="saveSection">
+            {{ isNewSection ? 'Add Section' : 'Save Section' }}
+          </BaseButton>
+          <BaseButton variant="secondary" @click="cancelSection">Cancel</BaseButton>
+        </div>
+      </div>
+
+      <!-- Sections list -->
+      <div v-if="sections.length === 0 && !editingSection" class="px-5 py-4 text-sm text-gray-400">
+        No sections yet. Questions will appear ungrouped on the form.
+      </div>
+      <div v-else-if="sections.length > 0" class="divide-y divide-gray-100">
+        <div
+          v-for="(s, i) in sections"
+          :key="s.id"
+          class="flex items-center gap-3 px-5 py-3"
+        >
+          <div class="flex flex-col gap-0.5">
+            <button
+              @click="moveSectionUp(i)"
+              :disabled="i === 0"
+              class="text-gray-300 hover:text-gray-500 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <span class="mdi mdi-chevron-up text-base leading-none"></span>
+            </button>
+            <button
+              @click="moveSectionDown(i)"
+              :disabled="i === sections.length - 1"
+              class="text-gray-300 hover:text-gray-500 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <span class="mdi mdi-chevron-down text-base leading-none"></span>
+            </button>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-gray-800">{{ s.title }}</p>
+            <p v-if="s.description" class="text-xs text-gray-400 truncate">{{ s.description }}</p>
+          </div>
+          <div class="flex gap-1 shrink-0">
+            <button
+              @click="startEditSection(s)"
+              class="text-gray-400 hover:text-blue-600 transition-colors p-1"
+              title="Edit"
+            >
+              <span class="mdi mdi-pencil text-sm"></span>
+            </button>
+            <button
+              @click="deleteSection(s)"
+              class="text-gray-400 hover:text-red-500 transition-colors p-1"
+              title="Delete"
+            >
+              <span class="mdi mdi-trash-can text-sm"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add / Edit Question Form -->
     <div v-if="editing" class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-5">
       <h2 class="text-base font-semibold text-gray-900">
         {{ isNew ? 'New Question' : 'Edit Question' }}
@@ -223,13 +473,25 @@ function typLabel(type) {
         </div>
         <div class="flex items-center gap-2 pb-2">
           <input
-            id="required"
+            id="q-required"
             v-model="editing.isRequired"
             type="checkbox"
             class="w-4 h-4 text-blue-600 border-gray-300 rounded"
           />
-          <label for="required" class="text-sm font-medium text-gray-700">Required</label>
+          <label for="q-required" class="text-sm font-medium text-gray-700">Required</label>
         </div>
+      </div>
+
+      <!-- Section assignment -->
+      <div v-if="sections.length > 0" class="space-y-1">
+        <label class="block text-sm font-medium text-gray-700">Section</label>
+        <select
+          v-model="editing.sectionId"
+          class="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">No section (ungrouped)</option>
+          <option v-for="s in sections" :key="s.id" :value="s.id">{{ s.title }}</option>
+        </select>
       </div>
 
       <!-- Options (MC / SC only) -->
@@ -270,9 +532,64 @@ function typLabel(type) {
           </button>
         </div>
 
-        <p v-if="hasOptions && editing.options.length === 0" class="text-xs text-amber-600">
+        <p v-if="editing.options.length === 0" class="text-xs text-amber-600">
           Add at least one option for this question type.
         </p>
+      </div>
+
+      <!-- Validation rules (text-based questions only) -->
+      <div v-if="showValidationRules" class="space-y-4 border-t border-gray-100 pt-4">
+        <p class="text-sm font-medium text-gray-700">Validation Rules</p>
+
+        <div class="grid grid-cols-3 gap-3">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input
+              v-model="editing.validationRules.numberOnly"
+              type="checkbox"
+              class="w-4 h-4 text-blue-600 border-gray-300 rounded"
+            />
+            <span class="text-sm text-gray-700">Numbers only</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input
+              v-model="editing.validationRules.phoneFormat"
+              type="checkbox"
+              class="w-4 h-4 text-blue-600 border-gray-300 rounded"
+            />
+            <span class="text-sm text-gray-700">Phone format</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input
+              v-model="editing.validationRules.emailFormat"
+              type="checkbox"
+              class="w-4 h-4 text-blue-600 border-gray-300 rounded"
+            />
+            <span class="text-sm text-gray-700">Email format</span>
+          </label>
+        </div>
+
+        <div class="flex gap-4">
+          <div class="space-y-1 flex-1">
+            <label class="block text-xs font-medium text-gray-700">Min Length</label>
+            <input
+              v-model.number="editing.validationRules.minLength"
+              type="number"
+              min="0"
+              placeholder="—"
+              class="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div class="space-y-1 flex-1">
+            <label class="block text-xs font-medium text-gray-700">Max Length</label>
+            <input
+              v-model.number="editing.validationRules.maxLength"
+              type="number"
+              min="0"
+              placeholder="—"
+              class="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
       </div>
 
       <!-- Actions -->
@@ -296,73 +613,95 @@ function typLabel(type) {
       <p class="text-gray-500 text-sm">No questions yet. Add the first one above.</p>
     </div>
 
-    <div v-else class="space-y-2">
-      <div
-        v-for="(q, i) in questions"
-        :key="q.id"
-        class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-start gap-3"
-      >
-        <!-- Order controls -->
-        <div class="flex flex-col gap-0.5 pt-0.5">
-          <button
-            @click="moveUp(i)"
-            :disabled="i === 0"
-            class="text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <span class="mdi mdi-chevron-up text-xl leading-none"></span>
-          </button>
-          <button
-            @click="moveDown(i)"
-            :disabled="i === questions.length - 1"
-            class="text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <span class="mdi mdi-chevron-down text-xl leading-none"></span>
-          </button>
-        </div>
+    <template v-else v-for="group in groupedQuestions" :key="group.id ?? '__ungrouped'">
+      <!-- Section header -->
+      <div v-if="group.title" class="flex items-center gap-3 pt-1">
+        <h3 class="text-sm font-semibold text-gray-600 shrink-0">{{ group.title }}</h3>
+        <div class="flex-1 border-t border-gray-200"></div>
+      </div>
+      <div v-else-if="groupedQuestions.some(g => g.title)" class="flex items-center gap-3 pt-1">
+        <h3 class="text-sm font-semibold text-gray-400 shrink-0">Ungrouped</h3>
+        <div class="flex-1 border-t border-gray-200 border-dashed"></div>
+      </div>
 
-        <!-- Content -->
-        <div class="flex-1 min-w-0">
-          <div class="flex items-start justify-between gap-2">
-            <p class="text-sm font-medium text-gray-900 leading-snug">{{ q.text }}</p>
-            <div class="flex gap-1.5 shrink-0">
-              <button
-                @click="startEdit(q)"
-                class="text-gray-400 hover:text-blue-600 transition-colors p-1"
-                title="Edit"
+      <div class="space-y-2">
+        <div
+          v-for="q in group.questions"
+          :key="q.id"
+          class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-start gap-3"
+        >
+          <!-- Order controls -->
+          <div class="flex flex-col gap-0.5 pt-0.5">
+            <button
+              @click="moveUp(globalIndex(q))"
+              :disabled="globalIndex(q) === 0"
+              class="text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <span class="mdi mdi-chevron-up text-xl leading-none"></span>
+            </button>
+            <button
+              @click="moveDown(globalIndex(q))"
+              :disabled="globalIndex(q) === questions.length - 1"
+              class="text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <span class="mdi mdi-chevron-down text-xl leading-none"></span>
+            </button>
+          </div>
+
+          <!-- Content -->
+          <div class="flex-1 min-w-0">
+            <div class="flex items-start justify-between gap-2">
+              <p class="text-sm font-medium text-gray-900 leading-snug">{{ q.text }}</p>
+              <div class="flex gap-1.5 shrink-0">
+                <button
+                  @click="startEdit(q)"
+                  class="text-gray-400 hover:text-blue-600 transition-colors p-1"
+                  title="Edit"
+                >
+                  <span class="mdi mdi-pencil text-base"></span>
+                </button>
+                <button
+                  @click="deleteQuestion(q)"
+                  class="text-gray-400 hover:text-red-500 transition-colors p-1"
+                  title="Delete"
+                >
+                  <span class="mdi mdi-trash-can text-base"></span>
+                </button>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+              <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{{ typLabel(q.type) }}</span>
+              <span v-if="q.isRequired" class="text-xs text-red-600 font-medium">Required</span>
+              <span v-if="q.options?.length" class="text-xs text-gray-400">
+                {{ q.options.length }} option{{ q.options.length !== 1 ? 's' : '' }}
+              </span>
+            </div>
+            <!-- Preview options -->
+            <div v-if="q.options?.length" class="mt-2 flex flex-wrap gap-1.5">
+              <span
+                v-for="opt in q.options"
+                :key="opt.id"
+                class="text-xs border border-gray-200 bg-gray-50 text-gray-600 px-2 py-0.5 rounded"
               >
-                <span class="mdi mdi-pencil text-base"></span>
-              </button>
-              <button
-                @click="deleteQuestion(q)"
-                class="text-gray-400 hover:text-red-500 transition-colors p-1"
-                title="Delete"
-              >
-                <span class="mdi mdi-trash-can text-base"></span>
-              </button>
+                {{ opt.text }}
+              </span>
             </div>
           </div>
-          <div class="flex items-center gap-2 mt-1.5 flex-wrap">
-            <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{{ typLabel(q.type) }}</span>
-            <span v-if="q.isRequired" class="text-xs text-red-600 font-medium">Required</span>
-            <span v-if="q.options?.length" class="text-xs text-gray-400">
-              {{ q.options.length }} option{{ q.options.length !== 1 ? 's' : '' }}
-            </span>
-          </div>
-          <!-- Preview options -->
-          <div v-if="q.options?.length" class="mt-2 flex flex-wrap gap-1.5">
-            <span
-              v-for="opt in q.options"
-              :key="opt.id"
-              class="text-xs border border-gray-200 bg-gray-50 text-gray-600 px-2 py-0.5 rounded"
-            >
-              {{ opt.text }}
-            </span>
-          </div>
+
+          <!-- Question number (global) -->
+          <span class="text-xs font-mono text-gray-300 pt-0.5">{{ globalIndex(q) + 1 }}</span>
         </div>
 
-        <!-- Question number -->
-        <span class="text-xs font-mono text-gray-300 pt-0.5">{{ i + 1 }}</span>
+        <!-- Add question to this section -->
+        <button
+          v-if="!editing"
+          @click="startAdd(group.id ?? '')"
+          class="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg border border-dashed border-gray-200 hover:border-blue-300 transition-colors"
+        >
+          <span class="mdi mdi-plus"></span>
+          Add question{{ group.title ? ` to ${group.title}` : '' }}
+        </button>
       </div>
-    </div>
+    </template>
   </div>
 </template>

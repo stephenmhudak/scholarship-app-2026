@@ -6,7 +6,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['answer', 'update:modelValue'])
 
-function onInput(e) {
+function onChange(e) {
   emit('answer', e.target.value)
   emit('update:modelValue', e.target.value)
 }
@@ -19,11 +19,10 @@ function onInput(e) {
       <span v-if="question.isRequired" class="text-red-500 ml-0.5">*</span>
     </label>
     <input
-      type="text"
+      type="date"
       :value="modelValue"
-      placeholder="Your answer…"
-      @input="onInput"
-      :class="['block w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+      @change="onChange"
+      :class="['border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
         error ? 'border-red-400' : 'border-gray-300']"
     />
     <p v-if="error" class="text-xs text-red-600">{{ error }}</p>
