@@ -1,9 +1,8 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useScoringStore } from '../../stores/scoring'
 import ScoringForm from '../../components/scoring/ScoringForm.vue'
-import ScoreCard from '../../components/scoring/ScoreCard.vue'
 import BaseAlert from '../../components/common/BaseAlert.vue'
 
 const route = useRoute()
@@ -12,7 +11,14 @@ const scoringStore = useScoringStore()
 const applicationId = route.params.applicationId
 const loading = ref(true)
 const submitting = ref(false)
+const scored = ref(false)
 const alert = ref(null)
+
+const applicantName = computed(() => {
+  const app = scoringStore.currentApplication
+  if (!app) return ''
+  return `${app.applicantFirstName ?? ''} ${app.applicantLastName ?? ''}`.trim()
+})
 
 onMounted(async () => {
   try {
@@ -29,6 +35,7 @@ async function handleSubmitScore(payload) {
   alert.value = null
   try {
     await scoringStore.submitScore(applicationId, payload)
+    scored.value = true
     alert.value = { type: 'success', message: 'Score submitted successfully!' }
   } catch {
     alert.value = { type: 'error', message: 'Failed to submit score.' }
@@ -42,9 +49,7 @@ async function handleSubmitScore(payload) {
   <div class="space-y-6 max-w-4xl">
     <div>
       <h1 class="text-2xl font-bold text-gray-900">Score Application</h1>
-      <p v-if="scoringStore.currentApplication" class="text-gray-500 mt-1">
-        {{ scoringStore.currentApplication.applicant_name }}
-      </p>
+      <p v-if="applicantName" class="text-gray-500 mt-1">{{ applicantName }}</p>
     </div>
 
     <div v-if="loading" class="flex items-center gap-2 text-gray-500">
@@ -59,30 +64,30 @@ async function handleSubmitScore(payload) {
         <!-- Application Answers -->
         <div class="space-y-4">
           <h2 class="text-lg font-semibold text-gray-900">Application Answers</h2>
-          <div
-            v-for="answer in scoringStore.currentApplication.answers"
-            :key="answer.question_id"
-            class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm"
-          >
-            <p class="text-sm font-medium text-gray-700">{{ answer.question_label }}</p>
-            <p class="text-sm text-gray-600 mt-2 whitespace-pre-wrap">
-              {{ Array.isArray(answer.value) ? answer.value.join(', ') : answer.value }}
-            </p>
+          <div v-if="scoringStore.currentApplication.answers?.length">
+            <div
+              v-for="answer in scoringStore.currentApplication.answers"
+              :key="answer.questionId"
+              class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm mb-3"
+            >
+              <p class="text-sm font-medium text-gray-700">
+                {{ scoringStore.questionMap[answer.questionId] || answer.questionId }}
+              </p>
+              <p class="text-sm text-gray-600 mt-2 whitespace-pre-wrap">
+                {{ answer.selectedOptions?.length ? answer.selectedOptions.join(', ') : (answer.textValue || '—') }}
+              </p>
+            </div>
           </div>
+          <p v-else class="text-sm text-gray-500">No answers available.</p>
         </div>
 
         <!-- Scoring Panel -->
-        <div class="space-y-6">
-          <div>
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">Submit Your Score</h2>
-            <ScoringForm :submitting="submitting" @submit="handleSubmitScore" />
-          </div>
-
-          <!-- Existing Scores -->
-          <div v-if="scoringStore.scores.length" class="space-y-3">
-            <h2 class="text-lg font-semibold text-gray-900">Previous Scores</h2>
-            <ScoreCard v-for="score in scoringStore.scores" :key="score.id" :score="score" />
-          </div>
+        <div>
+          <h2 class="text-lg font-semibold text-gray-900 mb-4">Submit Your Score</h2>
+          <ScoringForm v-if="!scored" :submitting="submitting" @submit="handleSubmitScore" />
+          <p v-else class="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3">
+            Score submitted. Thank you for your review.
+          </p>
         </div>
       </div>
     </template>

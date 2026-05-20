@@ -14,7 +14,7 @@ const exporting = ref(false)
 const alert = ref(null)
 const statusFilter = ref('')
 
-const statuses = ['', 'draft', 'submitted', 'under_review', 'awarded', 'rejected']
+const statuses = ['draft', 'submitted', 'under_review', 'awarded', 'rejected']
 
 onMounted(async () => {
   await loadApplications()
@@ -24,7 +24,7 @@ async function loadApplications() {
   loading.value = true
   try {
     await adminStore.fetchApplications({
-      status: statusFilter.value,
+      status: statusFilter.value || undefined,
       page: adminStore.pagination.page,
     })
   } catch {
@@ -37,7 +37,7 @@ async function loadApplications() {
 async function exportData() {
   exporting.value = true
   try {
-    await adminStore.exportData({ status: statusFilter.value })
+    await adminStore.exportData({ status: statusFilter.value || undefined })
   } catch {
     alert.value = { type: 'error', message: 'Export failed.' }
   } finally {
@@ -94,7 +94,7 @@ function nextPage() {
         class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
         <option value="">All Statuses</option>
-        <option v-for="s in statuses.slice(1)" :key="s" :value="s" class="capitalize">
+        <option v-for="s in statuses" :key="s" :value="s" class="capitalize">
           {{ s.replace('_', ' ') }}
         </option>
       </select>
@@ -111,7 +111,6 @@ function nextPage() {
         <thead class="bg-gray-50">
           <tr>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Applicant</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">School</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th>
             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -125,15 +124,11 @@ function nextPage() {
             @click="goToDetail(app.id)"
           >
             <td class="px-6 py-4">
-              <div>
-                <p class="text-sm font-medium text-gray-900">{{ app.applicant_name }}</p>
-                <p class="text-xs text-gray-500">{{ app.applicant_email }}</p>
-              </div>
+              <p class="text-sm font-medium text-gray-900">{{ app.firstName }} {{ app.lastName }}</p>
             </td>
-            <td class="px-6 py-4 text-sm text-gray-600">{{ app.school_name || '—' }}</td>
             <td class="px-6 py-4"><StatusBadge :status="app.status" /></td>
             <td class="px-6 py-4 text-sm text-gray-500">
-              {{ app.submitted_at ? new Date(app.submitted_at).toLocaleDateString() : '—' }}
+              {{ app.submittedAt ? new Date(app.submittedAt).toLocaleDateString() : '—' }}
             </td>
             <td class="px-6 py-4 text-right">
               <button @click.stop="goToDetail(app.id)" class="text-sm text-blue-600 hover:text-blue-700 font-medium">
@@ -142,7 +137,7 @@ function nextPage() {
             </td>
           </tr>
           <tr v-if="adminStore.applications.length === 0">
-            <td colspan="5" class="px-6 py-8 text-center text-sm text-gray-500">No applications found.</td>
+            <td colspan="4" class="px-6 py-8 text-center text-sm text-gray-500">No applications found.</td>
           </tr>
         </tbody>
       </table>

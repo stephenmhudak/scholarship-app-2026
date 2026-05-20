@@ -5,8 +5,12 @@ export const useScoringStore = defineStore('scoring', {
   state: () => ({
     queue: [],
     currentApplication: null,
-    scores: [],
+    questions: [],
   }),
+
+  getters: {
+    questionMap: (state) => Object.fromEntries(state.questions.map((q) => [q.id, q.text])),
+  },
 
   actions: {
     async fetchQueue() {
@@ -15,15 +19,17 @@ export const useScoringStore = defineStore('scoring', {
     },
 
     async fetchApplication(id) {
-      const response = await api.get(`/scoring/applications/${id}`)
-      this.currentApplication = response.data.application
-      this.scores = response.data.scores || []
+      const response = await api.get(`/scoring/${id}`)
+      this.currentApplication = response.data
+
+      if (response.data.cycleId) {
+        const qRes = await api.get(`/cycles/${response.data.cycleId}/questions`)
+        this.questions = qRes.data
+      }
     },
 
     async submitScore(applicationId, payload) {
-      const response = await api.post(`/scoring/applications/${applicationId}/score`, payload)
-      this.scores = [...this.scores, response.data]
-      return response.data
+      await api.post(`/scoring/${applicationId}/score`, payload)
     },
   },
 })

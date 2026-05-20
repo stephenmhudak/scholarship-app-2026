@@ -43,8 +43,6 @@ async function confirm() {
   try {
     emit('assigned', { applicationId: props.applicationId, scorerId: selectedScorerId.value })
     emit('close')
-  } catch {
-    error.value = 'Failed to assign scorer.'
   } finally {
     loading.value = false
   }
@@ -66,7 +64,7 @@ async function confirm() {
             :key="scorer.id"
             :value="scorer.id"
           >
-            {{ scorer.name }} ({{ scorer.email }})
+            {{ scorer.firstName }} {{ scorer.lastName }} ({{ scorer.email }})
           </option>
         </select>
       </div>

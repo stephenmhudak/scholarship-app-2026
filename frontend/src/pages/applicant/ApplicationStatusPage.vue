@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../../services/api'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
@@ -8,13 +8,22 @@ const route = useRoute()
 const appId = route.params.id
 
 const application = ref(null)
+const questions = ref([])
 const loading = ref(true)
 const error = ref(null)
+
+const questionMap = computed(() =>
+  Object.fromEntries(questions.value.map((q) => [q.id, q.text]))
+)
 
 onMounted(async () => {
   try {
     const response = await api.get(`/applications/${appId}`)
     application.value = response.data
+    if (response.data.cycleId) {
+      const qRes = await api.get(`/cycles/${response.data.cycleId}/questions`)
+      questions.value = qRes.data
+    }
   } catch {
     error.value = 'Failed to load application status.'
   } finally {
@@ -48,8 +57,8 @@ onMounted(async () => {
             </div>
           </div>
           <div class="text-right text-sm text-gray-500">
-            <p>Submitted: {{ application.submitted_at ? new Date(application.submitted_at).toLocaleDateString() : '—' }}</p>
-            <p>Last updated: {{ new Date(application.updated_at).toLocaleDateString() }}</p>
+            <p>Submitted: {{ application.submittedAt ? new Date(application.submittedAt).toLocaleDateString() : '—' }}</p>
+            <p>Created: {{ new Date(application.createdAt).toLocaleDateString() }}</p>
           </div>
         </div>
       </div>
@@ -60,12 +69,12 @@ onMounted(async () => {
         <div v-if="application.answers && application.answers.length" class="space-y-4">
           <div
             v-for="answer in application.answers"
-            :key="answer.question_id"
+            :key="answer.questionId"
             class="border-b border-gray-100 pb-4 last:border-0 last:pb-0"
           >
-            <p class="text-sm font-medium text-gray-700">{{ answer.question_label }}</p>
+            <p class="text-sm font-medium text-gray-700">{{ questionMap[answer.questionId] || answer.questionId }}</p>
             <p class="text-sm text-gray-600 mt-1 whitespace-pre-wrap">
-              {{ Array.isArray(answer.value) ? answer.value.join(', ') : answer.value }}
+              {{ answer.selectedOptions?.length ? answer.selectedOptions.join(', ') : (answer.textValue || '—') }}
             </p>
           </div>
         </div>

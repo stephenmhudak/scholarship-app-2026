@@ -58,6 +58,17 @@ public class AdminController(IApplicationService applicationService, QueryFactor
         return File(Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", "applications.csv");
     }
 
+    [HttpGet("scorers")]
+    public async Task<IActionResult> ListScorers()
+    {
+        var scorers = await db.Query("Users")
+            .Where("Role", "scorer")
+            .Select("Id", "FirstName", "LastName", "Email")
+            .OrderBy("LastName")
+            .GetAsync<dynamic>();
+        return Ok(scorers);
+    }
+
     [HttpGet("cycles")]
     public async Task<IActionResult> ListCycles()
     {

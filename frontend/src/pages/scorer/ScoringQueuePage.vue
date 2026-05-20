@@ -62,16 +62,13 @@ function goToDetail(applicationId) {
             @click="goToDetail(app.id)"
           >
             <td class="px-6 py-4">
-              <div>
-                <p class="text-sm font-medium text-gray-900">{{ app.applicant_name }}</p>
-                <p class="text-xs text-gray-500">{{ app.applicant_email }}</p>
-              </div>
+              <p class="text-sm font-medium text-gray-900">{{ app.firstName }} {{ app.lastName }}</p>
             </td>
             <td class="px-6 py-4">
               <StatusBadge :status="app.status" />
             </td>
             <td class="px-6 py-4 text-sm text-gray-500">
-              {{ app.submitted_at ? new Date(app.submitted_at).toLocaleDateString() : '—' }}
+              {{ app.submittedAt ? new Date(app.submittedAt).toLocaleDateString() : '—' }}
             </td>
             <td class="px-6 py-4 text-right">
               <button

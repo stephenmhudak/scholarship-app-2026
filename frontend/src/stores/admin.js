@@ -10,7 +10,7 @@ export const useAdminStore = defineStore('admin', {
     },
     pagination: {
       page: 1,
-      perPage: 25,
+      perPage: 20,
       total: 0,
     },
   }),
@@ -20,29 +20,23 @@ export const useAdminStore = defineStore('admin', {
       const response = await api.get('/admin/applications', { params })
       this.applications = response.data.data
       this.pagination = {
-        page: response.data.current_page,
-        perPage: response.data.per_page,
+        page: response.data.page,
+        perPage: response.data.pageSize,
         total: response.data.total,
       }
       return response.data
     },
 
     async updateStatus(id, status) {
-      const response = await api.patch(`/admin/applications/${id}/status`, { status })
+      await api.patch(`/admin/applications/${id}/status`, { status })
       const index = this.applications.findIndex((a) => a.id === id)
       if (index !== -1) {
         this.applications[index] = { ...this.applications[index], status }
       }
-      return response.data
     },
 
     async assignScorer(id, scorerId) {
-      const response = await api.patch(`/admin/applications/${id}/assign`, { scorer_id: scorerId })
-      const index = this.applications.findIndex((a) => a.id === id)
-      if (index !== -1) {
-        this.applications[index] = { ...this.applications[index], scorer_id: scorerId }
-      }
-      return response.data
+      await api.post(`/admin/applications/${id}/assign`, { scoredById: scorerId })
     },
 
     async exportData(params = {}) {

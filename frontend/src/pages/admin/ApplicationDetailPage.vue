@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../../services/api'
 import { useAdminStore } from '../../stores/admin'
@@ -13,6 +13,7 @@ const adminStore = useAdminStore()
 
 const appId = route.params.id
 const application = ref(null)
+const questions = ref([])
 const loading = ref(true)
 const updatingStatus = ref(false)
 const newStatus = ref('')
@@ -21,11 +22,24 @@ const alert = ref(null)
 
 const statuses = ['submitted', 'under_review', 'awarded', 'rejected']
 
+const questionMap = computed(() =>
+  Object.fromEntries(questions.value.map((q) => [q.id, q.text]))
+)
+
+const applicantName = computed(() => {
+  if (!application.value) return ''
+  return `${application.value.applicantFirstName ?? ''} ${application.value.applicantLastName ?? ''}`.trim()
+})
+
 onMounted(async () => {
   try {
-    const response = await api.get(`/admin/applications/${appId}`)
+    const response = await api.get(`/applications/${appId}`)
     application.value = response.data
     newStatus.value = response.data.status
+    if (response.data.cycleId) {
+      const qRes = await api.get(`/cycles/${response.data.cycleId}/questions`)
+      questions.value = qRes.data
+    }
   } catch {
     alert.value = { type: 'error', message: 'Failed to load application.' }
   } finally {
@@ -78,26 +92,22 @@ async function handleAssigned({ applicationId, scorerId }) {
       <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
         <div class="flex items-start justify-between">
           <div>
-            <h1 class="text-2xl font-bold text-gray-900">{{ application.applicant_name }}</h1>
-            <p class="text-gray-500 text-sm mt-1">{{ application.applicant_email }}</p>
+            <h1 class="text-2xl font-bold text-gray-900">{{ applicantName }}</h1>
+            <p class="text-gray-500 text-sm mt-1">{{ application.applicantEmail }}</p>
           </div>
           <StatusBadge :status="application.status" />
         </div>
 
         <div class="grid grid-cols-2 gap-4 mt-6 text-sm">
           <div>
-            <p class="text-gray-500">School</p>
-            <p class="font-medium text-gray-900">{{ application.school_name || '—' }}</p>
-          </div>
-          <div>
             <p class="text-gray-500">Submitted</p>
             <p class="font-medium text-gray-900">
-              {{ application.submitted_at ? new Date(application.submitted_at).toLocaleDateString() : '—' }}
+              {{ application.submittedAt ? new Date(application.submittedAt).toLocaleDateString() : '—' }}
             </p>
           </div>
           <div>
-            <p class="text-gray-500">Assigned Scorer</p>
-            <p class="font-medium text-gray-900">{{ application.scorer_name || 'Unassigned' }}</p>
+            <p class="text-gray-500">Created</p>
+            <p class="font-medium text-gray-900">{{ new Date(application.createdAt).toLocaleDateString() }}</p>
           </div>
         </div>
 
@@ -131,12 +141,12 @@ async function handleAssigned({ applicationId, scorerId }) {
         <div v-if="application.answers?.length" class="space-y-4">
           <div
             v-for="answer in application.answers"
-            :key="answer.question_id"
+            :key="answer.questionId"
             class="border-b border-gray-100 pb-4 last:border-0"
           >
-            <p class="text-sm font-medium text-gray-700">{{ answer.question_label }}</p>
+            <p class="text-sm font-medium text-gray-700">{{ questionMap[answer.questionId] || answer.questionId }}</p>
             <p class="text-sm text-gray-600 mt-1 whitespace-pre-wrap">
-              {{ Array.isArray(answer.value) ? answer.value.join(', ') : answer.value }}
+              {{ answer.selectedOptions?.length ? answer.selectedOptions.join(', ') : (answer.textValue || '—') }}
             </p>
           </div>
         </div>

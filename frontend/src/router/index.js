@@ -35,6 +35,12 @@ const routes = [
     meta: { role: 'applicant' },
   },
   {
+    path: '/application/new',
+    name: 'NewApplication',
+    component: () => import('../pages/applicant/NewApplicationPage.vue'),
+    meta: { role: 'applicant' },
+  },
+  {
     path: '/application/:id',
     name: 'ApplicationForm',
     component: () => import('../pages/applicant/ApplicationFormPage.vue'),
@@ -107,13 +113,29 @@ const routes = [
   },
   {
     path: '/',
-    redirect: '/dashboard',
+    redirect: () => {
+      const role = localStorage.getItem('auth_role')
+      return roleHome(role)
+    },
   },
   {
     path: '/:pathMatch(.*)*',
-    redirect: '/dashboard',
+    redirect: () => {
+      const role = localStorage.getItem('auth_role')
+      return roleHome(role)
+    },
   },
 ]
+
+function roleHome(role) {
+  switch (role) {
+    case 'scorer': return '/scoring'
+    case 'app_admin': return '/admin/applications'
+    case 'school_admin': return '/schools'
+    case 'counselor': return '/counselor'
+    default: return '/dashboard'
+  }
+}
 
 const router = createRouter({
   history: createWebHistory(),
@@ -123,22 +145,11 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
 
-  // Allow public routes through
-  if (to.meta.public) {
-    return next()
-  }
+  if (to.meta.public) return next()
 
-  // Not authenticated — redirect to login
-  if (!authStore.isAuthenticated) {
-    return next('/login')
-  }
+  if (!authStore.isAuthenticated) return next('/login')
 
-  // Route requires a specific role
-  if (to.meta.role) {
-    if (authStore.role !== to.meta.role) {
-      return next('/403')
-    }
-  }
+  if (to.meta.role && authStore.role !== to.meta.role) return next('/403')
 
   next()
 })

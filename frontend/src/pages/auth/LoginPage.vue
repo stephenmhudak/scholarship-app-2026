@@ -15,15 +15,23 @@ const form = ref({
 const loading = ref(false)
 const error = ref(null)
 
+const roleHome = {
+  applicant: '/dashboard',
+  scorer: '/scoring',
+  app_admin: '/admin/applications',
+  school_admin: '/schools',
+  counselor: '/counselor',
+}
+
 async function login() {
   loading.value = true
   error.value = null
 
   try {
     await authStore.login(form.value)
-    router.push('/dashboard')
+    router.push(roleHome[authStore.role] ?? '/dashboard')
   } catch (err) {
-    error.value = err.response?.data?.message || 'Invalid email or password. Please try again.'
+    error.value = err.response?.data?.error || 'Invalid email or password. Please try again.'
   } finally {
     loading.value = false
   }

@@ -19,16 +19,20 @@ const alert = ref(null)
 
 onMounted(async () => {
   try {
-    await appStore.fetchQuestions(appId)
+    await appStore.loadApplicationForm(appId)
   } catch {
-    alert.value = { type: 'error', message: 'Failed to load questions.' }
+    alert.value = { type: 'error', message: 'Failed to load application.' }
   } finally {
     loading.value = false
   }
 })
 
+const requiredCount = computed(() => appStore.questions.filter((q) => q.isRequired).length)
 const answeredCount = computed(
-  () => appStore.questions.filter((q) => appStore.answers[q.id] != null && appStore.answers[q.id] !== '').length
+  () => appStore.questions.filter((q) => {
+    const val = appStore.answers[q.id]
+    return val != null && val !== '' && !(Array.isArray(val) && val.length === 0)
+  }).length
 )
 
 function handleAnswer(questionId, value) {
@@ -49,7 +53,13 @@ async function saveDraft() {
 }
 
 async function submit() {
-  if (answeredCount.value < appStore.questions.length) {
+  const unansweredRequired = appStore.questions.filter((q) => {
+    if (!q.isRequired) return false
+    const val = appStore.answers[q.id]
+    return val == null || val === '' || (Array.isArray(val) && val.length === 0)
+  })
+
+  if (unansweredRequired.length > 0) {
     alert.value = { type: 'warning', message: 'Please answer all required questions before submitting.' }
     return
   }
@@ -57,6 +67,7 @@ async function submit() {
   submitting.value = true
   alert.value = null
   try {
+    await appStore.saveDraft(appId)
     await appStore.submitApplication(appId)
     alert.value = { type: 'success', message: 'Application submitted successfully!' }
     setTimeout(() => router.push(`/application/${appId}/status`), 1500)
