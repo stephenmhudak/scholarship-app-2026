@@ -83,6 +83,12 @@ const routes = [
     meta: { role: 'app_admin' },
   },
   {
+    path: '/admin/cycles/:cycleId/questions',
+    name: 'CycleQuestions',
+    component: () => import('../pages/admin/CycleQuestionsPage.vue'),
+    meta: { role: 'app_admin' },
+  },
+  {
     path: '/schools',
     name: 'SchoolsList',
     component: () => import('../pages/school/SchoolsListPage.vue'),

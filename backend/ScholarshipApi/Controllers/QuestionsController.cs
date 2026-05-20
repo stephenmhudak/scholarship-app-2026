@@ -48,6 +48,9 @@ public class QuestionsController(QueryFactory db) : ControllerBase
             Order = request.Order,
             IsRequired = request.IsRequired
         });
+
+        await SaveOptionsAsync(id, request.Options);
+
         return CreatedAtAction(nameof(List), new { cycleId }, new { id });
     }
 
@@ -62,6 +65,10 @@ public class QuestionsController(QueryFactory db) : ControllerBase
             Order = request.Order,
             IsRequired = request.IsRequired
         });
+
+        await db.Query("QuestionOptions").Where("QuestionId", questionId).DeleteAsync();
+        await SaveOptionsAsync(questionId, request.Options);
+
         return NoContent();
     }
 
@@ -71,6 +78,21 @@ public class QuestionsController(QueryFactory db) : ControllerBase
     {
         await db.Query("Questions").Where("Id", questionId).Where("CycleId", cycleId).DeleteAsync();
         return NoContent();
+    }
+
+    private async Task SaveOptionsAsync(string questionId, List<string>? options)
+    {
+        if (options is null || options.Count == 0) return;
+        for (int i = 0; i < options.Count; i++)
+        {
+            await db.Query("QuestionOptions").InsertAsync(new
+            {
+                Id = Guid.NewGuid().ToString(),
+                QuestionId = questionId,
+                Text = options[i],
+                Order = i
+            });
+        }
     }
 
     [HttpPut("reorder")]
@@ -94,6 +116,7 @@ public class QuestionRequest
     public string Type { get; set; } = null!;
     public int Order { get; set; }
     public bool IsRequired { get; set; }
+    public List<string>? Options { get; set; }
 }
 
 public class ReorderItem

@@ -187,10 +187,19 @@ async function save() {
             {{ new Date(cycle.closeDate).toLocaleDateString() }}
           </p>
         </div>
-        <BaseButton variant="secondary" size="sm" @click="editCycle(cycle)">
-          <span class="mdi mdi-pencil mr-1"></span>
-          Edit
-        </BaseButton>
+        <div class="flex gap-2">
+          <RouterLink
+            :to="`/admin/cycles/${cycle.id}/questions`"
+            class="inline-flex items-center text-sm border border-gray-300 bg-white text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <span class="mdi mdi-format-list-bulleted mr-1"></span>
+            Questions
+          </RouterLink>
+          <BaseButton variant="secondary" size="sm" @click="editCycle(cycle)">
+            <span class="mdi mdi-pencil mr-1"></span>
+            Edit
+          </BaseButton>
+        </div>
       </div>
     </div>
   </div>
