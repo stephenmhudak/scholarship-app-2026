@@ -23,6 +23,17 @@ public class ApplicationsController(IApplicationService applicationService, IRef
         return Ok(apps);
     }
 
+    [HttpGet("current")]
+    [Authorize(Policy = "Applicant")]
+    public async Task<IActionResult> GetCurrent()
+    {
+        var apps = await applicationService.ListForApplicantAsync(UserId);
+        var latest = apps.OrderByDescending(a => a.CreatedAt).FirstOrDefault();
+        if (latest == null) return NotFound(new { error = "Application not found." });
+        var app = await applicationService.GetAsync(latest.Id, UserId, UserRole);
+        return Ok(app);
+    }
+
     [HttpPost]
     [Authorize(Policy = "Applicant")]
     public async Task<IActionResult> Create()
