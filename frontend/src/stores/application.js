@@ -43,13 +43,15 @@ export const useApplicationStore = defineStore('application', {
     },
 
     async saveDraft(appId) {
-      await api.put(`/applications/${appId}/draft`, {
+      const id = this.currentApplication?.id ?? appId
+      await api.put(`/applications/${id}/draft`, {
         answers: this._buildAnswersPayload(),
       })
     },
 
     async submitApplication(appId) {
-      await api.post(`/applications/${appId}/submit`, {
+      const id = this.currentApplication?.id ?? appId
+      await api.post(`/applications/${id}/submit`, {
         answers: this._buildAnswersPayload(),
       })
     },
