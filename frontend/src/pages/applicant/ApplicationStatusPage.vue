@@ -12,8 +12,8 @@ const questions = ref([])
 const loading = ref(true)
 const error = ref(null)
 
-const questionMap = computed(() =>
-  Object.fromEntries(questions.value.map((q) => [q.id, q.text]))
+const answersMap = computed(() =>
+  Object.fromEntries((application.value?.answers ?? []).map((a) => [a.questionId, a]))
 )
 
 onMounted(async () => {
@@ -64,17 +64,17 @@ onMounted(async () => {
       <!-- Submitted Answers -->
       <div class="section-card">
         <h2 class="text-base font-bold text-navy mb-5">Your Answers</h2>
-        <div v-if="application.answers && application.answers.length" class="space-y-5">
+        <div v-if="questions.length" class="space-y-5">
           <div
-            v-for="answer in application.answers"
-            :key="answer.questionId"
+            v-for="q in questions"
+            :key="q.id"
             class="border-b border-[#E9EDF7] pb-5 last:border-0 last:pb-0"
           >
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">
-              {{ questionMap[answer.questionId] || answer.questionId }}
-            </p>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">{{ q.text }}</p>
             <p class="text-sm text-navy whitespace-pre-wrap">
-              {{ answer.selectedOptions?.length ? answer.selectedOptions.join(', ') : (answer.textValue || '—') }}
+              {{ answersMap[q.id]?.selectedOptions?.length
+                  ? answersMap[q.id].selectedOptions.join(', ')
+                  : (answersMap[q.id]?.textValue || '—') }}
             </p>
           </div>
         </div>

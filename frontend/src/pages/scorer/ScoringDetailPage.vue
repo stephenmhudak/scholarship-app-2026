@@ -30,22 +30,25 @@ const answersGroupedBySections = computed(() => {
   const app = scoringStore.currentApplication
   if (!app?.answers?.length) return []
 
-  const questionMap = scoringStore.questionMap
+  const answersMap = Object.fromEntries(app.answers.map((a) => [a.questionId, a]))
   const sectionMap = Object.fromEntries((scoringStore.sections ?? []).map((s) => [s.id, s]))
 
+  // Drive iteration from the ordered questions array so display matches form order
   const groups = {}
-  for (const answer of app.answers) {
-    const q = questionMap[answer.questionId]
-    if (!q) continue
+  const sectionOrder = {}
+  for (const q of scoringStore.questions) {
+    const answer = answersMap[q.id]
+    if (!answer) continue
     const sectionId = q.sectionId ?? null
-    const sectionTitle = sectionId ? (sectionMap[sectionId]?.title ?? 'Section') : 'Ungrouped'
-    if (!groups[sectionId ?? 'null']) {
-      groups[sectionId ?? 'null'] = { title: sectionTitle, answers: [] }
+    const key = sectionId ?? 'null'
+    if (!groups[key]) {
+      const section = sectionId ? sectionMap[sectionId] : null
+      groups[key] = { title: section?.title ?? null, order: section?.order ?? 9999, answers: [] }
     }
-    groups[sectionId ?? 'null'].answers.push({ ...answer, questionText: q.text })
+    groups[key].answers.push({ ...answer, questionText: q.text })
   }
 
-  return Object.values(groups)
+  return Object.values(groups).sort((a, b) => a.order - b.order)
 })
 
 onMounted(async () => {
