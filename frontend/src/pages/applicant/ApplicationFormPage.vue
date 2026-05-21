@@ -112,11 +112,11 @@ async function submit() {
 <template>
   <div class="space-y-6 max-w-3xl">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">Scholarship Application</h1>
-      <p class="text-gray-500 mt-1">Complete all sections and submit before the deadline.</p>
+      <h1 class="page-title">Scholarship Application</h1>
+      <p class="page-subtitle">Complete all sections and submit before the deadline.</p>
     </div>
 
-    <div v-if="loading" class="flex items-center gap-2 text-gray-500">
+    <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
       <span class="mdi mdi-loading animate-spin text-xl"></span>
       Loading…
     </div>
@@ -130,9 +130,9 @@ async function submit() {
       <template v-for="group in groupedSections" :key="group.id ?? '__ungrouped'">
         <!-- Section header (only when named sections exist) -->
         <div v-if="group.title" class="pt-2">
-          <h2 class="text-lg font-semibold text-gray-900">{{ group.title }}</h2>
-          <p v-if="group.description" class="text-sm text-gray-500 mt-0.5">{{ group.description }}</p>
-          <hr class="mt-2 border-gray-200" />
+          <h2 class="text-base font-bold text-navy">{{ group.title }}</h2>
+          <p v-if="group.description" class="text-sm text-slate-400 mt-0.5">{{ group.description }}</p>
+          <hr class="mt-2 border-[#E9EDF7]" />
         </div>
 
         <div class="space-y-4">
@@ -147,12 +147,12 @@ async function submit() {
         </div>
       </template>
 
-      <div class="flex items-center gap-3 pt-4 border-t border-gray-200">
+      <div class="flex items-center gap-3 pt-4 border-t border-[#E9EDF7]">
         <BaseButton variant="secondary" :loading="saving" @click="saveDraft">
-          <span class="mdi mdi-content-save mr-1"></span>Save Draft
+          <span class="mdi mdi-content-save mr-1.5"></span>Save Draft
         </BaseButton>
         <BaseButton :loading="submitting" @click="submit">
-          <span class="mdi mdi-send mr-1"></span>Submit Application
+          <span class="mdi mdi-send mr-1.5"></span>Submit Application
         </BaseButton>
       </div>
     </template>

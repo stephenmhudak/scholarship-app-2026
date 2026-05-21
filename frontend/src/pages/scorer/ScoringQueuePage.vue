@@ -28,52 +28,49 @@ function goToDetail(applicationId) {
 <template>
   <div class="space-y-6">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">Scoring Queue</h1>
-      <p class="text-gray-500 mt-1">Applications assigned to you for review.</p>
+      <h1 class="page-title">Scoring Queue</h1>
+      <p class="page-subtitle">Applications assigned to you for review.</p>
     </div>
 
-    <div v-if="loading" class="flex items-center gap-2 text-gray-500">
+    <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
       <span class="mdi mdi-loading animate-spin text-xl"></span>
-      Loading queue...
+      Loading queue…
     </div>
 
-    <div v-else-if="error" class="text-red-600">{{ error }}</div>
+    <div v-else-if="error" class="text-sm font-medium text-danger">{{ error }}</div>
 
-    <div v-else-if="scoringStore.queue.length === 0" class="bg-white rounded-xl border border-gray-200 p-8 text-center shadow-sm">
-      <span class="mdi mdi-inbox-full text-4xl text-gray-300 block mb-2"></span>
-      <p class="text-gray-500">No applications in your queue.</p>
+    <div v-else-if="scoringStore.queue.length === 0" class="section-card text-center py-10">
+      <span class="mdi mdi-inbox-outline text-4xl text-slate-400 block mb-2"></span>
+      <p class="text-sm text-slate-400">No applications in your queue.</p>
     </div>
 
-    <div v-else class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+    <div v-else class="card overflow-hidden">
+      <table class="dialect-table">
+        <thead>
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applicant</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+            <th>Applicant</th>
+            <th>Status</th>
+            <th>Submitted</th>
+            <th class="text-right">Action</th>
           </tr>
         </thead>
-        <tbody class="bg-white divide-y divide-gray-100">
+        <tbody>
           <tr
             v-for="app in scoringStore.queue"
             :key="app.id"
-            class="hover:bg-gray-50 cursor-pointer transition-colors"
             @click="goToDetail(app.id)"
           >
-            <td class="px-6 py-4">
-              <p class="text-sm font-medium text-gray-900">{{ app.firstName }} {{ app.lastName }}</p>
+            <td>
+              <p class="font-semibold text-navy">{{ app.firstName }} {{ app.lastName }}</p>
             </td>
-            <td class="px-6 py-4">
-              <StatusBadge :status="app.status" />
-            </td>
-            <td class="px-6 py-4 text-sm text-gray-500">
+            <td><StatusBadge :status="app.status" /></td>
+            <td class="text-slate-400">
               {{ app.submittedAt ? new Date(app.submittedAt).toLocaleDateString() : '—' }}
             </td>
-            <td class="px-6 py-4 text-right">
+            <td class="text-right">
               <button
                 @click.stop="goToDetail(app.id)"
-                class="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                class="text-sm font-semibold text-primary hover:text-primary-700 transition-colors"
               >
                 Review
                 <span class="mdi mdi-arrow-right ml-0.5"></span>

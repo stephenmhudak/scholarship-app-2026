@@ -5,6 +5,7 @@ import { useAuthStore } from '../../stores/auth'
 import api from '../../services/api'
 import BaseButton from '../../components/common/BaseButton.vue'
 import BaseAlert from '../../components/common/BaseAlert.vue'
+import BaseInput from '../../components/common/BaseInput.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -48,10 +49,10 @@ async function register() {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-5">
     <div>
-      <h2 class="text-2xl font-bold text-gray-900">Create an account</h2>
-      <p class="text-sm text-gray-500 mt-1">Register to apply for the scholarship</p>
+      <h2 class="text-xl font-bold text-navy">Create an account</h2>
+      <p class="text-sm text-slate-400 mt-0.5">Register to apply for the scholarship</p>
     </div>
 
     <BaseAlert v-if="error" type="error" :message="error" />
@@ -59,69 +60,52 @@ async function register() {
 
     <form @submit.prevent="register" class="space-y-4">
       <div class="grid grid-cols-2 gap-3">
-        <div class="space-y-1">
-          <label class="block text-sm font-medium text-gray-700">First Name</label>
-          <input
-            v-model="form.firstName"
-            type="text"
-            required
-            placeholder="Jane"
-            class="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div class="space-y-1">
-          <label class="block text-sm font-medium text-gray-700">Last Name</label>
-          <input
-            v-model="form.lastName"
-            type="text"
-            required
-            placeholder="Smith"
-            class="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-      </div>
-
-      <div class="space-y-1">
-        <label class="block text-sm font-medium text-gray-700">Email address</label>
-        <input
-          v-model="form.email"
-          type="email"
-          required
-          placeholder="you@example.com"
-          class="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        <BaseInput
+          v-model="form.firstName"
+          label="First Name"
+          placeholder="Jane"
+          :required="true"
+        />
+        <BaseInput
+          v-model="form.lastName"
+          label="Last Name"
+          placeholder="Smith"
+          :required="true"
         />
       </div>
 
-      <div class="space-y-1">
-        <label class="block text-sm font-medium text-gray-700">Password</label>
-        <input
-          v-model="form.password"
-          type="password"
-          required
-          placeholder="At least 8 characters"
-          class="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
+      <BaseInput
+        v-model="form.email"
+        type="email"
+        label="Email address"
+        placeholder="you@example.com"
+        :required="true"
+      />
 
-      <div class="space-y-1">
-        <label class="block text-sm font-medium text-gray-700">Confirm Password</label>
-        <input
-          v-model="form.passwordConfirmation"
-          type="password"
-          required
-          placeholder="Repeat password"
-          class="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
+      <BaseInput
+        v-model="form.password"
+        type="password"
+        label="Password"
+        placeholder="At least 8 characters"
+        :required="true"
+      />
 
-      <BaseButton type="submit" :loading="loading" class="w-full">
+      <BaseInput
+        v-model="form.passwordConfirmation"
+        type="password"
+        label="Confirm Password"
+        placeholder="Repeat password"
+        :required="true"
+      />
+
+      <BaseButton type="submit" :loading="loading" class="w-full mt-1">
         Create Account
       </BaseButton>
     </form>
 
-    <p class="text-sm text-center text-gray-500">
+    <p class="text-sm text-center text-slate-400">
       Already have an account?
-      <RouterLink to="/login" class="text-blue-600 hover:underline font-medium">Sign in</RouterLink>
+      <RouterLink to="/login" class="text-primary font-semibold hover:underline">Sign in</RouterLink>
     </p>
   </div>
 </template>

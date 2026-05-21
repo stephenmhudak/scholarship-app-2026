@@ -9,9 +9,9 @@ const navLinks = computed(() => {
 
   if (role === 'applicant') {
     return [
-      { label: 'Dashboard', icon: 'mdi-view-dashboard', to: '/dashboard' },
-      { label: 'My Application', icon: 'mdi-file-document-edit', to: '/application/current' },
-      { label: 'Status', icon: 'mdi-clipboard-check', to: '/application/current/status' },
+      { label: 'Dashboard', icon: 'mdi-view-dashboard-outline', to: '/dashboard' },
+      { label: 'My Application', icon: 'mdi-file-document-edit-outline', to: '/application/current' },
+      { label: 'Status', icon: 'mdi-clipboard-check-outline', to: '/application/current/status' },
     ]
   }
   if (role === 'scorer') {
@@ -21,8 +21,8 @@ const navLinks = computed(() => {
   }
   if (role === 'app_admin') {
     return [
-      { label: 'Applications', icon: 'mdi-folder-multiple', to: '/admin/applications' },
-      { label: 'Settings', icon: 'mdi-cog', to: '/admin/settings' },
+      { label: 'Applications', icon: 'mdi-folder-multiple-outline', to: '/admin/applications' },
+      { label: 'Settings', icon: 'mdi-cog-outline', to: '/admin/settings' },
     ]
   }
   if (role === 'school_admin') {
@@ -32,7 +32,7 @@ const navLinks = computed(() => {
   }
   if (role === 'counselor') {
     return [
-      { label: 'Dashboard', icon: 'mdi-view-dashboard', to: '/counselor' },
+      { label: 'Dashboard', icon: 'mdi-view-dashboard-outline', to: '/counselor' },
     ]
   }
   return []
@@ -40,23 +40,26 @@ const navLinks = computed(() => {
 </script>
 
 <template>
-  <aside class="w-56 bg-white border-r border-gray-200 flex flex-col shrink-0">
-    <nav class="flex-1 py-4">
-      <ul class="space-y-1 px-2">
+  <aside class="w-60 bg-white border-r border-[#E9EDF7] flex flex-col shrink-0">
+    <nav class="flex-1 py-5 overflow-y-auto">
+      <p class="px-5 mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">Navigation</p>
+      <ul class="space-y-0.5 px-3">
         <li v-for="link in navLinks" :key="link.to">
           <RouterLink
             :to="link.to"
-            class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
-            active-class="bg-blue-50 text-blue-700"
+            class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-navy/70 hover:bg-[#F4F7FE] hover:text-primary transition-colors group"
+            active-class="bg-primary/8 text-primary font-semibold"
           >
-            <span :class="`mdi ${link.icon} text-lg`"></span>
+            <span
+              :class="`mdi ${link.icon} text-xl text-navy/40 group-hover:text-primary transition-colors`"
+            ></span>
             {{ link.label }}
           </RouterLink>
         </li>
       </ul>
     </nav>
-    <div class="p-4 border-t border-gray-100 text-xs text-gray-400">
-      Scholarship App &copy; 2026
+    <div class="p-4 border-t border-[#E9EDF7]">
+      <p class="text-[10px] text-slate-400 text-center">Scholarship App &copy; 2026</p>
     </div>
   </aside>
 </template>

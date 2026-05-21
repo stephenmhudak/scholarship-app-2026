@@ -37,28 +37,28 @@ async function onChange(e) {
 
 <template>
   <div class="space-y-2">
-    <label class="block text-sm font-medium text-gray-700">
+    <label class="block text-sm font-semibold text-navy">
       {{ question.text }}
-      <span v-if="question.isRequired" class="text-red-500 ml-0.5">*</span>
+      <span v-if="question.isRequired" class="text-danger ml-0.5">*</span>
     </label>
-    <p v-if="question.description" class="text-xs text-gray-500">{{ question.description }}</p>
+    <p v-if="question.description" class="text-xs text-slate-400">{{ question.description }}</p>
 
-    <div :class="['border-2 border-dashed rounded-lg p-4 hover:border-blue-400 transition-colors',
-      error ? 'border-red-400' : 'border-gray-300']">
+    <div :class="['border-2 border-dashed rounded-xl p-5 hover:border-primary/40 transition-colors',
+      error ? 'border-danger/40 bg-danger/5' : 'border-[#E9EDF7] bg-[#F4F7FE]']">
       <label class="flex flex-col items-center gap-2 cursor-pointer">
-        <span class="mdi mdi-cloud-upload text-3xl text-gray-400"></span>
-        <span class="text-sm text-gray-600">Click to select a file</span>
+        <span class="mdi mdi-cloud-upload-outline text-3xl text-slate-400"></span>
+        <span class="text-sm font-medium text-slate-400">Click to select a file</span>
         <input type="file" :disabled="uploading" @change="onChange" class="sr-only" />
       </label>
     </div>
 
-    <div v-if="uploading" class="flex items-center gap-2 text-sm text-blue-600">
+    <div v-if="uploading" class="flex items-center gap-2 text-sm font-medium text-primary">
       <span class="mdi mdi-loading animate-spin"></span> Uploading…
     </div>
-    <div v-else-if="uploadedName" class="flex items-center gap-2 text-sm text-green-600">
-      <span class="mdi mdi-check-circle"></span> {{ uploadedName }} uploaded
+    <div v-else-if="uploadedName" class="flex items-center gap-2 text-sm font-medium text-success-dark">
+      <span class="mdi mdi-check-circle-outline"></span> {{ uploadedName }} uploaded
     </div>
 
-    <p v-if="uploadError || error" class="text-xs text-red-600">{{ uploadError || error }}</p>
+    <p v-if="uploadError || error" class="text-xs font-medium text-danger">{{ uploadError || error }}</p>
   </div>
 </template>

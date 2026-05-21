@@ -17,7 +17,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex items-center gap-2 text-gray-500 p-8">
+  <div class="flex items-center gap-2 text-slate-400 p-8">
     <span class="mdi mdi-loading animate-spin text-xl"></span>
     Starting your application…
   </div>

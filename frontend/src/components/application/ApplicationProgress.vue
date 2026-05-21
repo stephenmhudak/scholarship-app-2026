@@ -18,14 +18,14 @@ const percentage = computed(() =>
 </script>
 
 <template>
-  <div class="space-y-1">
-    <div class="flex justify-between text-sm text-gray-600">
-      <span>Progress</span>
-      <span>{{ answered }} / {{ total }} questions answered ({{ percentage }}%)</span>
+  <div class="card p-4 space-y-2">
+    <div class="flex justify-between text-sm">
+      <span class="font-semibold text-navy">Progress</span>
+      <span class="text-slate-400">{{ answered }} / {{ total }} answered ({{ percentage }}%)</span>
     </div>
-    <div class="w-full bg-gray-200 rounded-full h-2.5">
+    <div class="w-full bg-[#E9EDF7] rounded-full h-2">
       <div
-        class="bg-blue-600 h-2.5 rounded-full transition-all duration-500"
+        class="bg-primary h-2 rounded-full transition-all duration-500"
         :style="{ width: `${percentage}%` }"
       ></div>
     </div>

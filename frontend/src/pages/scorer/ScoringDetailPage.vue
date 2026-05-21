@@ -48,13 +48,13 @@ async function handleSubmitScore(payload) {
 <template>
   <div class="space-y-6 max-w-4xl">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">Score Application</h1>
-      <p v-if="applicantName" class="text-gray-500 mt-1">{{ applicantName }}</p>
+      <h1 class="page-title">Score Application</h1>
+      <p v-if="applicantName" class="page-subtitle">{{ applicantName }}</p>
     </div>
 
-    <div v-if="loading" class="flex items-center gap-2 text-gray-500">
+    <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
       <span class="mdi mdi-loading animate-spin text-xl"></span>
-      Loading application...
+      Loading application…
     </div>
 
     <BaseAlert v-if="alert" :type="alert.type" :message="alert.message" />
@@ -63,31 +63,32 @@ async function handleSubmitScore(payload) {
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Application Answers -->
         <div class="space-y-4">
-          <h2 class="text-lg font-semibold text-gray-900">Application Answers</h2>
+          <h2 class="text-base font-bold text-navy">Application Answers</h2>
           <div v-if="scoringStore.currentApplication.answers?.length">
             <div
               v-for="answer in scoringStore.currentApplication.answers"
               :key="answer.questionId"
-              class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm mb-3"
+              class="card p-4 mb-3"
             >
-              <p class="text-sm font-medium text-gray-700">
+              <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">
                 {{ scoringStore.questionMap[answer.questionId] || answer.questionId }}
               </p>
-              <p class="text-sm text-gray-600 mt-2 whitespace-pre-wrap">
+              <p class="text-sm text-navy whitespace-pre-wrap">
                 {{ answer.selectedOptions?.length ? answer.selectedOptions.join(', ') : (answer.textValue || '—') }}
               </p>
             </div>
           </div>
-          <p v-else class="text-sm text-gray-500">No answers available.</p>
+          <p v-else class="text-sm text-slate-400">No answers available.</p>
         </div>
 
         <!-- Scoring Panel -->
         <div>
-          <h2 class="text-lg font-semibold text-gray-900 mb-4">Submit Your Score</h2>
+          <h2 class="text-base font-bold text-navy mb-4">Submit Your Score</h2>
           <ScoringForm v-if="!scored" :submitting="submitting" @submit="handleSubmitScore" />
-          <p v-else class="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3">
+          <div v-else class="flex items-center gap-2 text-success-dark bg-success-light border border-success/20 rounded-xl p-4 text-sm font-medium">
+            <span class="mdi mdi-check-circle-outline text-lg"></span>
             Score submitted. Thank you for your review.
-          </p>
+          </div>
         </div>
       </div>
     </template>

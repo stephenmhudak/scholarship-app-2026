@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import BaseButton from '../../components/common/BaseButton.vue'
 import BaseAlert from '../../components/common/BaseAlert.vue'
+import BaseInput from '../../components/common/BaseInput.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -16,11 +17,11 @@ const loading = ref(false)
 const error = ref(null)
 
 const roleHome = {
-  applicant: '/dashboard',
-  scorer: '/scoring',
-  app_admin: '/admin/applications',
+  applicant:    '/dashboard',
+  scorer:       '/scoring',
+  app_admin:    '/admin/applications',
   school_admin: '/schools',
-  counselor: '/counselor',
+  counselor:    '/counselor',
 }
 
 async function login() {
@@ -39,47 +40,41 @@ async function login() {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-5">
     <div>
-      <h2 class="text-2xl font-bold text-gray-900">Sign in</h2>
-      <p class="text-sm text-gray-500 mt-1">Access your scholarship account</p>
+      <h2 class="text-xl font-bold text-navy">Sign in</h2>
+      <p class="text-sm text-slate-400 mt-0.5">Access your scholarship account</p>
     </div>
 
     <BaseAlert v-if="error" type="error" :message="error" />
 
     <form @submit.prevent="login" class="space-y-4">
-      <div class="space-y-1">
-        <label class="block text-sm font-medium text-gray-700">Email address</label>
-        <input
-          v-model="form.email"
-          type="email"
-          required
-          autocomplete="email"
-          placeholder="you@example.com"
-          class="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
+      <BaseInput
+        v-model="form.email"
+        type="email"
+        label="Email address"
+        placeholder="you@example.com"
+        autocomplete="email"
+        :required="true"
+      />
 
-      <div class="space-y-1">
-        <label class="block text-sm font-medium text-gray-700">Password</label>
-        <input
-          v-model="form.password"
-          type="password"
-          required
-          autocomplete="current-password"
-          placeholder="••••••••"
-          class="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
+      <BaseInput
+        v-model="form.password"
+        type="password"
+        label="Password"
+        placeholder="••••••••"
+        autocomplete="current-password"
+        :required="true"
+      />
 
-      <BaseButton type="submit" :loading="loading" class="w-full">
+      <BaseButton type="submit" :loading="loading" class="w-full mt-1">
         Sign in
       </BaseButton>
     </form>
 
-    <p class="text-sm text-center text-gray-500">
+    <p class="text-sm text-center text-slate-400">
       Don't have an account?
-      <RouterLink to="/register" class="text-blue-600 hover:underline font-medium">Register</RouterLink>
+      <RouterLink to="/register" class="text-primary font-semibold hover:underline">Register</RouterLink>
     </p>
   </div>
 </template>

@@ -23,27 +23,27 @@ function toggle(optionId) {
 
 <template>
   <div class="space-y-2">
-    <p class="block text-sm font-medium text-gray-700">
+    <p class="block text-sm font-semibold text-navy">
       {{ question.text }}
-      <span v-if="question.isRequired" class="text-red-500 ml-0.5">*</span>
+      <span v-if="question.isRequired" class="text-danger ml-0.5">*</span>
     </p>
-    <p v-if="question.description" class="text-xs text-gray-500">{{ question.description }}</p>
-    <div class="space-y-2">
+    <p v-if="question.description" class="text-xs text-slate-400">{{ question.description }}</p>
+    <div class="space-y-2.5 pt-0.5">
       <label
         v-for="option in question.options"
         :key="option.id"
-        class="flex items-center gap-3 cursor-pointer"
+        class="flex items-center gap-3 cursor-pointer group"
       >
         <input
           type="checkbox"
           :value="option.id"
           :checked="selected.includes(option.id)"
           @change="toggle(option.id)"
-          class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+          class="w-4 h-4 rounded border-[#E9EDF7] text-primary focus:ring-primary/30"
         />
-        <span class="text-sm text-gray-700">{{ option.text }}</span>
+        <span class="text-sm text-navy/80 group-hover:text-navy transition-colors">{{ option.text }}</span>
       </label>
     </div>
-    <p v-if="error" class="text-xs text-red-600">{{ error }}</p>
+    <p v-if="error" class="text-xs font-medium text-danger">{{ error }}</p>
   </div>
 </template>

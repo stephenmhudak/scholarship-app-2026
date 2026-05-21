@@ -29,7 +29,7 @@ const questionComponent = computed(() => componentMap[props.question.type] ?? Sh
 </script>
 
 <template>
-  <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+  <div class="card p-5">
     <component
       :is="questionComponent"
       :question="question"

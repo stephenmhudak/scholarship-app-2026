@@ -18,7 +18,6 @@ onMounted(async () => {
     const appsRes = await api.get('/applications/my')
     const apps = appsRes.data
     if (apps.length > 0) {
-      // Most recent application
       application.value = apps.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
       const refRes = await api.get(`/applications/${application.value.id}/references`)
       references.value = refRes.data
@@ -36,50 +35,50 @@ onMounted(async () => {
 <template>
   <div class="space-y-6">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
-      <p class="text-gray-500 mt-1">Welcome back, {{ authStore.fullName || 'Applicant' }}!</p>
+      <h1 class="page-title">Dashboard</h1>
+      <p class="page-subtitle">Welcome back, {{ authStore.fullName || 'Applicant' }}!</p>
     </div>
 
-    <div v-if="loading" class="flex items-center gap-2 text-gray-500">
+    <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
       <span class="mdi mdi-loading animate-spin text-xl"></span>
-      Loading your application...
+      Loading your application…
     </div>
 
-    <div v-else-if="error" class="text-red-600 text-sm">{{ error }}</div>
+    <div v-else-if="error" class="text-sm font-medium text-danger">{{ error }}</div>
 
     <template v-else>
       <!-- Application Status Card -->
-      <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">Application Status</h2>
+      <div class="section-card">
+        <h2 class="text-base font-bold text-navy mb-4">Application Status</h2>
         <div v-if="application">
           <div class="flex items-center gap-3">
             <StatusBadge :status="application.status" />
-            <span class="text-sm text-gray-600">
+            <span class="text-sm text-slate-400">
               Created {{ new Date(application.createdAt).toLocaleDateString() }}
             </span>
           </div>
-          <div class="mt-4 flex gap-3">
+          <div class="mt-5 flex gap-3">
             <RouterLink
               :to="`/application/${application.id}`"
-              class="inline-flex items-center gap-1.5 text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              class="inline-flex items-center gap-1.5 text-sm font-semibold bg-primary text-white px-4 py-2.5 rounded-xl hover:bg-primary-700 transition-colors shadow-sm"
             >
-              <span class="mdi mdi-file-document-edit"></span>
+              <span class="mdi mdi-file-document-edit-outline"></span>
               {{ application.status === 'draft' ? 'Continue Application' : 'View Application' }}
             </RouterLink>
             <RouterLink
               :to="`/application/${application.id}/status`"
-              class="inline-flex items-center gap-1.5 text-sm bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+              class="inline-flex items-center gap-1.5 text-sm font-semibold bg-white text-navy border border-[#E9EDF7] px-4 py-2.5 rounded-xl hover:bg-[#F4F7FE] transition-colors"
             >
-              <span class="mdi mdi-clipboard-check"></span>
+              <span class="mdi mdi-clipboard-check-outline"></span>
               View Status
             </RouterLink>
           </div>
         </div>
-        <div v-else class="space-y-3">
-          <p class="text-gray-500 text-sm">You haven't started an application yet.</p>
+        <div v-else class="space-y-4">
+          <p class="text-sm text-slate-400">You haven't started an application yet.</p>
           <RouterLink
             to="/application/new"
-            class="inline-flex items-center gap-1.5 text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            class="inline-flex items-center gap-1.5 text-sm font-semibold bg-primary text-white px-4 py-2.5 rounded-xl hover:bg-primary-700 transition-colors shadow-sm"
           >
             <span class="mdi mdi-plus"></span>
             Start Application
@@ -88,25 +87,27 @@ onMounted(async () => {
       </div>
 
       <!-- References Card -->
-      <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">Reference Letters</h2>
-        <div v-if="references.length === 0" class="text-sm text-gray-500">
+      <div class="section-card">
+        <h2 class="text-base font-bold text-navy mb-4">Reference Letters</h2>
+        <div v-if="references.length === 0" class="text-sm text-slate-400">
           No reference requests yet. Reference requests will appear here after you start your application.
         </div>
-        <ul v-else class="divide-y divide-gray-100">
+        <ul v-else class="divide-y divide-[#E9EDF7]">
           <li
             v-for="ref in references"
             :key="ref.id"
             class="flex items-center justify-between py-3"
           >
             <div>
-              <p class="text-sm font-medium text-gray-900">{{ ref.label || 'Reference #' + ref.id.slice(0, 8) }}</p>
-              <p class="text-xs text-gray-500">Expires {{ new Date(ref.expiresAt).toLocaleDateString() }}</p>
+              <p class="text-sm font-semibold text-navy">{{ ref.label || 'Reference #' + ref.id.slice(0, 8) }}</p>
+              <p class="text-xs text-slate-400">Expires {{ new Date(ref.expiresAt).toLocaleDateString() }}</p>
             </div>
             <span
               :class="[
-                'text-xs px-2.5 py-1 rounded-full font-medium',
-                ref.status === 'received' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700',
+                'text-xs px-2.5 py-1 rounded-full font-semibold border',
+                ref.status === 'received'
+                  ? 'bg-success-light text-success-dark border-success/20'
+                  : 'bg-warning-light text-[#8C6500] border-warning/20',
               ]"
             >
               {{ ref.status === 'received' ? 'Received' : 'Pending' }}

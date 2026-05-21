@@ -20,34 +20,34 @@ const props = defineProps({
 const dismissed = ref(false)
 
 const styles = {
-  success: 'bg-green-50 border-green-400 text-green-800',
-  error: 'bg-red-50 border-red-400 text-red-800',
-  warning: 'bg-yellow-50 border-yellow-400 text-yellow-800',
-  info: 'bg-blue-50 border-blue-400 text-blue-800',
+  success: 'bg-success-light border-l-4 border-success text-success-dark',
+  error:   'bg-danger-light border-l-4 border-danger text-danger-dark',
+  warning: 'bg-warning-light border-l-4 border-warning text-[#8C6500]',
+  info:    'bg-primary-50 border-l-4 border-primary text-primary-800',
 }
 
 const icons = {
-  success: 'mdi-check-circle',
-  error: 'mdi-alert-circle',
-  warning: 'mdi-alert',
-  info: 'mdi-information',
+  success: 'mdi-check-circle-outline',
+  error:   'mdi-alert-circle-outline',
+  warning: 'mdi-alert-outline',
+  info:    'mdi-information-outline',
 }
 </script>
 
 <template>
   <div
     v-if="!dismissed"
-    :class="['flex items-start gap-3 px-4 py-3 rounded-lg border text-sm', styles[type]]"
+    :class="['flex items-start gap-3 px-4 py-3.5 rounded-xl text-sm', styles[type]]"
     role="alert"
   >
     <span :class="`mdi ${icons[type]} text-lg shrink-0 mt-0.5`"></span>
-    <p class="flex-1">{{ message }}</p>
+    <p class="flex-1 font-medium">{{ message }}</p>
     <button
       v-if="dismissible"
       @click="dismissed = true"
-      class="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+      class="shrink-0 opacity-50 hover:opacity-100 transition-opacity ml-1"
     >
-      <span class="mdi mdi-close"></span>
+      <span class="mdi mdi-close text-sm"></span>
     </button>
   </div>
 </template>

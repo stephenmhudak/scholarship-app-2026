@@ -36,55 +36,53 @@ async function sendNudge(studentId) {
 <template>
   <div class="space-y-6">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">Counselor Dashboard</h1>
-      <p class="text-gray-500 mt-1">Track your students' scholarship application progress.</p>
+      <h1 class="page-title">Counselor Dashboard</h1>
+      <p class="page-subtitle">Track your students' scholarship application progress.</p>
     </div>
 
     <BaseAlert v-if="alert" :type="alert.type" :message="alert.message" />
 
-    <div v-if="loading" class="flex items-center gap-2 text-gray-500">
+    <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
       <span class="mdi mdi-loading animate-spin text-xl"></span>
-      Loading students...
+      Loading students…
     </div>
 
-    <div v-else class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+    <div v-else class="card overflow-hidden">
+      <table class="dialect-table">
+        <thead>
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Application Status</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Activity</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+            <th>Student</th>
+            <th>Application Status</th>
+            <th>Last Activity</th>
+            <th class="text-right">Actions</th>
           </tr>
         </thead>
-        <tbody class="bg-white divide-y divide-gray-100">
+        <tbody>
           <tr v-for="student in students" :key="student.id">
-            <td class="px-6 py-4">
-              <div>
-                <p class="text-sm font-medium text-gray-900">{{ student.name }}</p>
-                <p class="text-xs text-gray-500">{{ student.email }}</p>
-              </div>
+            <td>
+              <p class="font-semibold text-navy">{{ student.name }}</p>
+              <p class="text-xs text-slate-400">{{ student.email }}</p>
             </td>
-            <td class="px-6 py-4">
+            <td>
               <StatusBadge :status="student.application_status || 'draft'" />
             </td>
-            <td class="px-6 py-4 text-sm text-gray-500">
+            <td class="text-slate-400">
               {{ student.last_activity ? new Date(student.last_activity).toLocaleDateString() : 'No activity' }}
             </td>
-            <td class="px-6 py-4 text-right">
+            <td class="text-right">
               <button
                 @click="sendNudge(student.id)"
                 :disabled="nudging[student.id]"
-                class="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
+                class="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary-700 transition-colors disabled:opacity-50"
               >
                 <span v-if="nudging[student.id]" class="mdi mdi-loading animate-spin"></span>
-                <span v-else class="mdi mdi-bell-ring"></span>
+                <span v-else class="mdi mdi-bell-ring-outline"></span>
                 Send Reminder
               </button>
             </td>
           </tr>
           <tr v-if="students.length === 0">
-            <td colspan="4" class="px-6 py-8 text-center text-sm text-gray-500">
+            <td colspan="4" class="px-6 py-10 text-center text-sm text-slate-400">
               No students found in your school.
             </td>
           </tr>
