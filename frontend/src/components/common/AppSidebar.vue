@@ -23,7 +23,7 @@ const navLinks = computed(() => {
     return [
       { label: 'Applications', icon: 'mdi-folder-multiple-outline', to: '/admin/applications' },
       { label: 'Scoring', icon: 'mdi-chart-bar', to: '/admin/scoring' },
-      { label: 'Settings', icon: 'mdi-cog-outline', to: '/admin/settings' },
+      { label: 'Scholarship Settings', icon: 'mdi-cog-outline', to: '/admin/scholarship-settings' },
     ]
   }
   if (role === 'school_admin') {

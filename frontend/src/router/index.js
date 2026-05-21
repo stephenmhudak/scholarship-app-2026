@@ -77,8 +77,8 @@ const routes = [
     meta: { role: 'app_admin' },
   },
   {
-    path: '/admin/settings',
-    name: 'Settings',
+    path: '/admin/scholarship-settings',
+    name: 'ScholarshipSettings',
     component: () => import('../pages/admin/SettingsPage.vue'),
     meta: { role: 'app_admin' },
   },
