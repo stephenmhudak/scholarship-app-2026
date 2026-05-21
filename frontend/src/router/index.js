@@ -149,7 +149,10 @@ function roleHome(role) {
   switch (role) {
     case 'scorer': return '/scoring'
     case 'app_admin': return '/admin/applications'
-    case 'school_admin': return '/schools'
+    case 'school_admin': {
+      const user = JSON.parse(localStorage.getItem('auth_user') || 'null')
+      return user?.schoolId ? `/schools/${user.schoolId}` : '/schools'
+    }
     case 'counselor': return '/counselor'
     default: return '/dashboard'
   }

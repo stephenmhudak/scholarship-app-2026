@@ -17,6 +17,12 @@ const form = ref({
   email: '',
   password: '',
   passwordConfirmation: '',
+  schoolName: '',
+  schoolAddressLine1: '',
+  schoolAddressLine2: '',
+  schoolCity: '',
+  schoolState: '',
+  schoolZip: '',
 })
 const loading = ref(false)
 const error = ref(null)
@@ -55,6 +61,12 @@ async function register() {
       email: form.value.email,
       password: form.value.password,
       inviteToken: inviteToken.value ?? undefined,
+      schoolName: inviteToken.value ? form.value.schoolName : undefined,
+      schoolAddressLine1: inviteToken.value ? form.value.schoolAddressLine1 : undefined,
+      schoolAddressLine2: inviteToken.value ? form.value.schoolAddressLine2 : undefined,
+      schoolCity: inviteToken.value ? form.value.schoolCity : undefined,
+      schoolState: inviteToken.value ? form.value.schoolState : undefined,
+      schoolZip: inviteToken.value ? form.value.schoolZip : undefined,
     })
     success.value = 'Account created! Signing you in…'
     await authStore.login({ email: form.value.email, password: form.value.password })
@@ -71,9 +83,7 @@ async function register() {
   <div class="space-y-5">
     <div>
       <h2 class="text-xl font-bold text-navy">Create an account</h2>
-      <p v-if="inviteInfo" class="text-sm text-slate-400 mt-0.5">
-        You're registering as a school admin for <strong class="text-navy">{{ inviteInfo.schoolName }}</strong>
-      </p>
+      <p v-if="inviteInfo" class="text-sm text-slate-400 mt-0.5">You're registering as a school admin. Enter your school information below.</p>
       <p v-else class="text-sm text-slate-400 mt-0.5">Register to apply for the scholarship</p>
     </div>
 
@@ -120,6 +130,19 @@ async function register() {
         placeholder="Repeat password"
         :required="true"
       />
+
+      <template v-if="inviteToken">
+        <hr class="border-[#E9EDF7]" />
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest">School Information</p>
+        <BaseInput v-model="form.schoolName" label="School Name" placeholder="Lincoln High School" :required="true" />
+        <BaseInput v-model="form.schoolAddressLine1" label="Address Line 1" placeholder="123 Main St" />
+        <BaseInput v-model="form.schoolAddressLine2" label="Address Line 2" placeholder="Suite 100 (optional)" />
+        <div class="grid grid-cols-3 gap-3">
+          <BaseInput v-model="form.schoolCity" label="City" placeholder="Springfield" class="col-span-1" />
+          <BaseInput v-model="form.schoolState" label="State" placeholder="IL" />
+          <BaseInput v-model="form.schoolZip" label="ZIP Code" placeholder="62701" />
+        </div>
+      </template>
 
       <BaseButton type="submit" :loading="loading" :disabled="!!inviteError" class="w-full mt-1">
         Create Account

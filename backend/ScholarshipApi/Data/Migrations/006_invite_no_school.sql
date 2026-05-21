@@ -1,0 +1,2 @@
+ALTER TABLE SchoolAdminInvites DROP FOREIGN KEY FK_SAI_Schools;
+ALTER TABLE SchoolAdminInvites MODIFY COLUMN SchoolId CHAR(36) NULL;

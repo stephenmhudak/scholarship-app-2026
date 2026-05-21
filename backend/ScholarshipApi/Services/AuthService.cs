@@ -37,8 +37,24 @@ public class AuthService(QueryFactory db, IConfiguration config) : IAuthService
                 .FirstOrDefaultAsync<dynamic>()
                 ?? throw new ArgumentException("Invite link is invalid or has expired.");
 
+            if (string.IsNullOrWhiteSpace(request.SchoolName))
+                throw new ArgumentException("School name is required.");
+
+            var newSchoolId = Guid.NewGuid().ToString();
+            await db.Query("Schools").InsertAsync(new
+            {
+                Id = newSchoolId,
+                Name = request.SchoolName.Trim(),
+                AddressLine1 = request.SchoolAddressLine1?.Trim() ?? string.Empty,
+                AddressLine2 = request.SchoolAddressLine2?.Trim() ?? string.Empty,
+                City = request.SchoolCity?.Trim() ?? string.Empty,
+                State = request.SchoolState?.Trim() ?? string.Empty,
+                Zip = request.SchoolZip?.Trim() ?? string.Empty,
+                CreatedAt = DateTime.UtcNow
+            });
+
             role = "school_admin";
-            schoolId = (string)invite.SchoolId;
+            schoolId = newSchoolId;
             inviteId = (string)invite.Id;
         }
 
@@ -64,10 +80,9 @@ public class AuthService(QueryFactory db, IConfiguration config) : IAuthService
 
     public async Task<InviteInfoResponse> GetInviteAsync(string token)
     {
-        var row = await db.Query("SchoolAdminInvites as i")
-            .Join("Schools as s", "s.Id", "i.SchoolId")
-            .Select("i.SchoolId", "s.Name as SchoolName", "i.ExpiresAt", "i.UsedAt")
-            .Where("i.Token", token)
+        var row = await db.Query("SchoolAdminInvites")
+            .Select("ExpiresAt", "UsedAt")
+            .Where("Token", token)
             .FirstOrDefaultAsync<dynamic>()
             ?? throw new KeyNotFoundException("Invite not found.");
 
@@ -77,12 +92,7 @@ public class AuthService(QueryFactory db, IConfiguration config) : IAuthService
         if ((DateTime)row.ExpiresAt < DateTime.UtcNow)
             throw new ArgumentException("This invite has expired.");
 
-        return new InviteInfoResponse
-        {
-            SchoolId = (string)row.SchoolId,
-            SchoolName = (string)row.SchoolName,
-            ExpiresAt = (DateTime)row.ExpiresAt
-        };
+        return new InviteInfoResponse { ExpiresAt = (DateTime)row.ExpiresAt };
     }
 
     public async Task<User> GetCurrentUserAsync(string userId)
@@ -101,7 +111,8 @@ public class AuthService(QueryFactory db, IConfiguration config) : IAuthService
             Email = user.Email,
             FirstName = user.FirstName,
             LastName = user.LastName,
-            Role = user.Role
+            Role = user.Role,
+            SchoolId = user.SchoolId
         };
     }
 
@@ -111,14 +122,16 @@ public class AuthService(QueryFactory db, IConfiguration config) : IAuthService
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var expires = DateTime.UtcNow.AddMinutes(double.Parse(config["Jwt:ExpiresInMinutes"]!));
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-            new Claim(ClaimTypes.Role, user.Role),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim("firstName", user.FirstName),
-            new Claim("lastName", user.LastName)
+            new(JwtRegisteredClaimNames.Sub, user.Id),
+            new(ClaimTypes.Role, user.Role),
+            new(JwtRegisteredClaimNames.Email, user.Email),
+            new("firstName", user.FirstName),
+            new("lastName", user.LastName)
         };
+        if (!string.IsNullOrEmpty(user.SchoolId))
+            claims.Add(new Claim("schoolId", user.SchoolId));
 
         var token = new JwtSecurityToken(
             issuer: config["Jwt:Issuer"],

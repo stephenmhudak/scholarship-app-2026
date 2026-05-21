@@ -119,7 +119,15 @@ async function loadSchools() {
 }
 
 function startEditSchool(school) {
-  editingSchool.value = { id: school.Id, name: school.Name, address: school.Address ?? '' }
+  editingSchool.value = {
+    id: school.Id,
+    name: school.Name,
+    addressLine1: school.AddressLine1 ?? '',
+    addressLine2: school.AddressLine2 ?? '',
+    city: school.City ?? '',
+    state: school.State ?? '',
+    zip: school.Zip ?? '',
+  }
 }
 
 function cancelEditSchool() {
@@ -132,7 +140,11 @@ async function saveSchool() {
   try {
     await api.put(`/admin/schools/${editingSchool.value.id}`, {
       name: editingSchool.value.name,
-      address: editingSchool.value.address,
+      addressLine1: editingSchool.value.addressLine1,
+      addressLine2: editingSchool.value.addressLine2,
+      city: editingSchool.value.city,
+      state: editingSchool.value.state,
+      zip: editingSchool.value.zip,
     })
     showAlert('success', 'School updated.')
     editingSchool.value = null
@@ -147,7 +159,7 @@ async function saveSchool() {
 // ── Invites ───────────────────────────────────────────────────────────────────
 const invites = ref([])
 const invitesLoading = ref(false)
-const generatingInvite = ref(null)
+const generatingInvite = ref(false)
 const newInviteLink = ref(null)
 
 async function loadInvites() {
@@ -162,19 +174,18 @@ async function loadInvites() {
   }
 }
 
-async function generateInvite(schoolId) {
-  generatingInvite.value = schoolId
+async function generateInvite() {
+  generatingInvite.value = true
   newInviteLink.value = null
   try {
-    const res = await api.post(`/admin/schools/${schoolId}/invite`)
+    const res = await api.post('/admin/invites')
     const token = res.data.token
-    const origin = window.location.origin
-    newInviteLink.value = { token, url: `${origin}/register?invite=${token}`, schoolName: res.data.schoolName }
+    newInviteLink.value = { token, url: `${window.location.origin}/register?invite=${token}` }
     await loadInvites()
   } catch (err) {
     showAlert('error', err.response?.data?.error || 'Failed to generate invite.')
   } finally {
-    generatingInvite.value = null
+    generatingInvite.value = false
   }
 }
 
@@ -195,7 +206,7 @@ function switchTab(tab) {
   activeTab.value = tab
   if (tab === 'users' && !users.value.length) loadUsers()
   if (tab === 'schools' && !schools.value.length) loadSchools()
-  if (tab === 'invites') { loadInvites(); if (!schools.value.length) loadSchools() }
+  if (tab === 'invites') loadInvites()
 }
 
 onMounted(() => loadUsers())
@@ -280,9 +291,15 @@ onMounted(() => loadUsers())
 
         <div v-for="school in schools" :key="school.Id" class="section-card space-y-4">
           <div v-if="editingSchool?.id === school.Id" class="space-y-3">
+            <BaseInput v-model="editingSchool.name" label="School Name" :required="true" />
             <div class="grid grid-cols-2 gap-3">
-              <BaseInput v-model="editingSchool.name" label="Name" :required="true" />
-              <BaseInput v-model="editingSchool.address" label="Address" />
+              <BaseInput v-model="editingSchool.addressLine1" label="Address Line 1" />
+              <BaseInput v-model="editingSchool.addressLine2" label="Address Line 2" />
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <BaseInput v-model="editingSchool.city" label="City" />
+              <BaseInput v-model="editingSchool.state" label="State" />
+              <BaseInput v-model="editingSchool.zip" label="ZIP" />
             </div>
             <div class="flex gap-2">
               <BaseButton size="sm" :loading="schoolSaving" @click="saveSchool">Save</BaseButton>
@@ -292,7 +309,9 @@ onMounted(() => loadUsers())
           <div v-else class="flex items-start justify-between">
             <div>
               <p class="font-semibold text-navy">{{ school.Name }}</p>
-              <p class="text-sm text-slate-400">{{ school.Address ?? 'No address set' }}</p>
+              <p class="text-sm text-slate-400">
+                {{ [school.AddressLine1, school.City, school.State, school.Zip].filter(Boolean).join(', ') || 'No address set' }}
+              </p>
             </div>
             <BaseButton size="sm" variant="secondary" @click="startEditSchool(school)">Edit</BaseButton>
           </div>
@@ -303,9 +322,18 @@ onMounted(() => loadUsers())
     <!-- ── Invites Tab ───────────────────────────────────────────────────── -->
     <div v-if="activeTab === 'invites'" class="space-y-6">
 
+      <!-- Generate invite -->
+      <div class="section-card flex items-center justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold text-navy">Generate Registration Link</p>
+          <p class="text-xs text-slate-400 mt-0.5">The school admin will enter their school information when they register. Valid for 7 days.</p>
+        </div>
+        <BaseButton size="sm" :loading="generatingInvite" @click="generateInvite">Generate Link</BaseButton>
+      </div>
+
       <!-- New invite link result -->
       <div v-if="newInviteLink" class="section-card border border-success/20 bg-success-light space-y-2">
-        <p class="text-sm font-semibold text-success-dark">Invite link generated for {{ newInviteLink.schoolName }}</p>
+        <p class="text-sm font-semibold text-success-dark">Link ready — share with the school admin</p>
         <div class="flex items-center gap-2">
           <input
             readonly
@@ -313,31 +341,6 @@ onMounted(() => loadUsers())
             class="form-input flex-1 text-xs font-mono"
           />
           <BaseButton size="sm" variant="secondary" @click="copyLink">Copy</BaseButton>
-        </div>
-        <p class="text-xs text-slate-400">This link is valid for 7 days. Share it with the school admin to register.</p>
-      </div>
-
-      <!-- Generate invite by school -->
-      <div class="section-card space-y-3">
-        <p class="text-sm font-semibold text-navy">Generate Registration Link</p>
-        <div v-if="schoolsLoading" class="text-slate-400 text-sm">Loading schools…</div>
-        <div v-else class="space-y-2">
-          <div
-            v-for="school in schools"
-            :key="school.Id"
-            class="flex items-center justify-between py-2 border-b border-[#E9EDF7] last:border-0"
-          >
-            <span class="text-sm text-navy">{{ school.Name }}</span>
-            <BaseButton
-              size="sm"
-              variant="secondary"
-              :loading="generatingInvite === school.Id"
-              @click="generateInvite(school.Id)"
-            >
-              Generate Link
-            </BaseButton>
-          </div>
-          <p v-if="!schools.length" class="text-sm text-slate-400">No schools found.</p>
         </div>
       </div>
 

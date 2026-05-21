@@ -14,31 +14,35 @@ public class SchoolsController(QueryFactory db) : ControllerBase
     private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)
         ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)!;
 
+    private string? UserSchoolId => User.FindFirstValue("schoolId");
+    private bool IsSchoolAdmin => User.IsInRole("school_admin");
+
+    private IActionResult? EnforceSchoolOwnership(string schoolId)
+    {
+        if (IsSchoolAdmin && UserSchoolId != schoolId)
+            return Forbid();
+        return null;
+    }
+
+    // ── Schools ───────────────────────────────────────────────────────────────
+
     [HttpGet]
     public async Task<IActionResult> List()
     {
-        var schools = await db.Query("Schools").OrderBy("Name").GetAsync<School>();
-        return Ok(schools);
-    }
+        var query = db.Query("Schools").OrderBy("Name");
+        if (IsSchoolAdmin && UserSchoolId != null)
+            query = query.Where("Id", UserSchoolId);
 
-    [HttpPost]
-    [Authorize(Policy = "SchoolAdmin")]
-    public async Task<IActionResult> Create([FromBody] SchoolRequest request)
-    {
-        var id = Guid.NewGuid().ToString();
-        await db.Query("Schools").InsertAsync(new
-        {
-            Id = id,
-            Name = request.Name,
-            Address = request.Address,
-            CreatedAt = DateTime.UtcNow
-        });
-        return CreatedAtAction(nameof(Get), new { id }, new { id });
+        var schools = await query.GetAsync<School>();
+        return Ok(schools);
     }
 
     [HttpGet("{id}")]
     public async Task<IActionResult> Get(string id)
     {
+        var guard = EnforceSchoolOwnership(id);
+        if (guard != null) return guard;
+
         var school = await db.Query("Schools").Where("Id", id).FirstOrDefaultAsync<School>()
             ?? throw new KeyNotFoundException("School not found.");
         return Ok(school);
@@ -48,19 +52,18 @@ public class SchoolsController(QueryFactory db) : ControllerBase
     [Authorize(Policy = "SchoolAdmin")]
     public async Task<IActionResult> Update(string id, [FromBody] SchoolRequest request)
     {
+        var guard = EnforceSchoolOwnership(id);
+        if (guard != null) return guard;
+
         await db.Query("Schools").Where("Id", id).UpdateAsync(new
         {
             Name = request.Name,
-            Address = request.Address
+            AddressLine1 = request.AddressLine1,
+            AddressLine2 = request.AddressLine2,
+            City = request.City,
+            State = request.State,
+            Zip = request.Zip
         });
-        return NoContent();
-    }
-
-    [HttpDelete("{id}")]
-    [Authorize(Policy = "SchoolAdmin")]
-    public async Task<IActionResult> Delete(string id)
-    {
-        await db.Query("Schools").Where("Id", id).DeleteAsync();
         return NoContent();
     }
 
@@ -68,9 +71,11 @@ public class SchoolsController(QueryFactory db) : ControllerBase
     [Authorize(Policy = "Staff")]
     public async Task<IActionResult> GetApplicants(string id, [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
+        var guard = EnforceSchoolOwnership(id);
+        if (guard != null) return guard;
+
         var query = db.Query("Users as u")
             .LeftJoin("Applications as a", j => j.On("a.ApplicantId", "u.Id"))
-            .LeftJoin("ScholarshipCycles as c", j => j.On("c.Id", "a.CycleId").Where("c.IsActive", true))
             .Select("u.Id", "u.FirstName", "u.LastName", "u.Email", "a.Status", "a.SubmittedAt")
             .Where("u.SchoolId", id)
             .Where("u.Role", "applicant")
@@ -85,23 +90,112 @@ public class SchoolsController(QueryFactory db) : ControllerBase
         return Ok(applicants);
     }
 
-    [HttpPost("{id}/counselors/invite")]
-    public async Task<IActionResult> InviteCounselor(string id, [FromBody] InviteCounselorRequest request)
-    {
-        var school = await db.Query("Schools").Where("Id", id).FirstOrDefaultAsync<School>()
-            ?? throw new KeyNotFoundException("School not found.");
+    // ── Counselors ────────────────────────────────────────────────────────────
 
-        return Ok(new { message = $"Invitation sent to {request.Email} for school {school.Name}." });
+    [HttpGet("{id}/counselors")]
+    [Authorize(Policy = "Staff")]
+    public async Task<IActionResult> GetCounselors(string id)
+    {
+        var guard = EnforceSchoolOwnership(id);
+        if (guard != null) return guard;
+
+        var counselors = await db.Query("Users")
+            .Where("Role", "counselor")
+            .Where("SchoolId", id)
+            .Select("Id", "FirstName", "LastName", "Email", "CreatedAt")
+            .OrderBy("LastName")
+            .GetAsync<dynamic>();
+        return Ok(counselors);
+    }
+
+    [HttpPost("{id}/counselors")]
+    [Authorize(Policy = "SchoolAdmin")]
+    public async Task<IActionResult> AddCounselor(string id, [FromBody] AddCounselorRequest request)
+    {
+        var guard = EnforceSchoolOwnership(id);
+        if (guard != null) return guard;
+
+        var schoolExists = await db.Query("Schools").Where("Id", id).ExistsAsync();
+        if (!schoolExists) throw new KeyNotFoundException("School not found.");
+
+        var emailTaken = await db.Query("Users").Where("Email", request.Email).ExistsAsync();
+        if (emailTaken) throw new ArgumentException("Email is already registered.");
+
+        var counselorId = Guid.NewGuid().ToString();
+        await db.Query("Users").InsertAsync(new
+        {
+            Id = counselorId,
+            Email = request.Email,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            FirstName = request.FirstName,
+            LastName = request.LastName,
+            Role = "counselor",
+            SchoolId = id,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        return Ok(new { id = counselorId, firstName = request.FirstName, lastName = request.LastName, email = request.Email });
+    }
+
+    [HttpDelete("{id}/counselors/{counselorId}")]
+    [Authorize(Policy = "SchoolAdmin")]
+    public async Task<IActionResult> RemoveCounselor(string id, string counselorId)
+    {
+        var guard = EnforceSchoolOwnership(id);
+        if (guard != null) return guard;
+
+        var counselor = await db.Query("Users")
+            .Where("Id", counselorId)
+            .Where("SchoolId", id)
+            .Where("Role", "counselor")
+            .FirstOrDefaultAsync<dynamic>()
+            ?? throw new KeyNotFoundException("Counselor not found.");
+
+        await db.Query("Users").Where("Id", counselorId).DeleteAsync();
+        return NoContent();
+    }
+
+    [HttpPost("{id}/counselors/{counselorId}/reset-password")]
+    [Authorize(Policy = "SchoolAdmin")]
+    public async Task<IActionResult> ResetCounselorPassword(string id, string counselorId, [FromBody] ResetCounselorPasswordRequest request)
+    {
+        var guard = EnforceSchoolOwnership(id);
+        if (guard != null) return guard;
+
+        var exists = await db.Query("Users")
+            .Where("Id", counselorId)
+            .Where("SchoolId", id)
+            .Where("Role", "counselor")
+            .ExistsAsync();
+        if (!exists) throw new KeyNotFoundException("Counselor not found.");
+
+        await db.Query("Users").Where("Id", counselorId).UpdateAsync(new
+        {
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword)
+        });
+        return NoContent();
     }
 }
 
 public class SchoolRequest
 {
     public string Name { get; set; } = null!;
-    public string Address { get; set; } = null!;
+    public string AddressLine1 { get; set; } = null!;
+    public string AddressLine2 { get; set; } = null!;
+    public string City { get; set; } = null!;
+    public string State { get; set; } = null!;
+    public string Zip { get; set; } = null!;
 }
 
-public class InviteCounselorRequest
+public class AddCounselorRequest
 {
+    public string FirstName { get; set; } = null!;
+    public string LastName { get; set; } = null!;
     public string Email { get; set; } = null!;
+    public string Password { get; set; } = null!;
+}
+
+public class ResetCounselorPasswordRequest
+{
+    public string NewPassword { get; set; } = null!;
 }

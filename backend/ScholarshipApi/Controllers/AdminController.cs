@@ -211,19 +211,20 @@ public class AdminController(IApplicationService applicationService, QueryFactor
         await db.Query("Schools").Where("Id", id).UpdateAsync(new
         {
             Name = request.Name,
-            Address = request.Address
+            AddressLine1 = request.AddressLine1,
+            AddressLine2 = request.AddressLine2,
+            City = request.City,
+            State = request.State,
+            Zip = request.Zip
         });
         return NoContent();
     }
 
     // ── School Admin Invites ──────────────────────────────────────────────────
 
-    [HttpPost("schools/{id}/invite")]
-    public async Task<IActionResult> GenerateSchoolAdminInvite(string id)
+    [HttpPost("invites")]
+    public async Task<IActionResult> GenerateSchoolAdminInvite()
     {
-        var school = await db.Query("Schools").Where("Id", id).FirstOrDefaultAsync<School>()
-            ?? throw new KeyNotFoundException("School not found.");
-
         var tokenBytes = RandomNumberGenerator.GetBytes(32);
         var token = Convert.ToBase64String(tokenBytes)
             .Replace("+", "-").Replace("/", "_").TrimEnd('=');
@@ -231,22 +232,20 @@ public class AdminController(IApplicationService applicationService, QueryFactor
         await db.Query("SchoolAdminInvites").InsertAsync(new
         {
             Id = Guid.NewGuid().ToString(),
-            SchoolId = id,
             Token = token,
             CreatedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddDays(7)
         });
 
-        return Ok(new { token, schoolName = school.Name });
+        return Ok(new { token });
     }
 
     [HttpGet("invites")]
     public async Task<IActionResult> ListInvites()
     {
         var invites = await db.Query("SchoolAdminInvites as i")
-            .Join("Schools as s", "s.Id", "i.SchoolId")
-            .Select("i.Id", "i.Token", "i.SchoolId", "s.Name as SchoolName",
-                    "i.CreatedAt", "i.ExpiresAt", "i.UsedAt")
+            .LeftJoin("Schools as s", "s.Id", "i.SchoolId")
+            .Select("i.Id", "i.Token", "s.Name as SchoolName", "i.CreatedAt", "i.ExpiresAt", "i.UsedAt")
             .OrderByDesc("i.CreatedAt")
             .GetAsync<dynamic>();
         return Ok(invites);
@@ -310,7 +309,11 @@ public class ResetPasswordRequest { public string NewPassword { get; set; } = nu
 public class AdminSchoolRequest
 {
     public string Name { get; set; } = null!;
-    public string Address { get; set; } = null!;
+    public string AddressLine1 { get; set; } = null!;
+    public string AddressLine2 { get; set; } = null!;
+    public string City { get; set; } = null!;
+    public string State { get; set; } = null!;
+    public string Zip { get; set; } = null!;
 }
 
 public class CycleRequest

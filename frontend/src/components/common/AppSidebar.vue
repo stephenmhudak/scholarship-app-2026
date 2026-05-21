@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 
 const authStore = useAuthStore()
+const schoolId = computed(() => authStore.user?.schoolId)
 
 const navLinks = computed(() => {
   const role = authStore.role
@@ -29,7 +30,7 @@ const navLinks = computed(() => {
   }
   if (role === 'school_admin') {
     return [
-      { label: 'Schools', icon: 'mdi-domain', to: '/schools' },
+      { label: 'My School', icon: 'mdi-domain', to: schoolId.value ? `/schools/${schoolId.value}` : '/schools' },
     ]
   }
   if (role === 'counselor') {
