@@ -22,6 +22,7 @@ const navLinks = computed(() => {
   if (role === 'app_admin') {
     return [
       { label: 'Applications', icon: 'mdi-folder-multiple-outline', to: '/admin/applications' },
+      { label: 'Scoring', icon: 'mdi-chart-bar', to: '/admin/scoring' },
       { label: 'Settings', icon: 'mdi-cog-outline', to: '/admin/settings' },
     ]
   }

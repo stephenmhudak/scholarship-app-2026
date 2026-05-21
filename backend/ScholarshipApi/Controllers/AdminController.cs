@@ -38,6 +38,78 @@ public class AdminController(IApplicationService applicationService, QueryFactor
         return NoContent();
     }
 
+    [HttpGet("applications/{id}/scorers")]
+    public async Task<IActionResult> GetAssignedScorers(string id)
+    {
+        var scorers = await db.Query("ApplicationScorers as aps")
+            .Join("Users as u", "u.Id", "aps.ScoredById")
+            .Select("u.Id", "u.FirstName", "u.LastName", "u.Email", "aps.AssignedAt")
+            .Where("aps.ApplicationId", id)
+            .OrderBy("u.LastName")
+            .GetAsync<dynamic>();
+        return Ok(scorers);
+    }
+
+    [HttpGet("scoring/overview")]
+    public async Task<IActionResult> ScoringOverview()
+    {
+        var apps = (await db.Query("Applications as a")
+            .Join("Users as u", "u.Id", "a.ApplicantId")
+            .Select("a.Id as ApplicationId", "a.Status", "u.FirstName", "u.LastName", "a.SubmittedAt")
+            .WhereNot("a.Status", "draft")
+            .OrderByDesc("a.SubmittedAt")
+            .GetAsync<AppOverviewRow>()).ToList();
+
+        var assignedCounts = (await db.Query("ApplicationScorers")
+            .SelectRaw("ApplicationId, COUNT(*) as Total")
+            .GroupBy("ApplicationId")
+            .GetAsync<CountRow>())
+            .ToDictionary(r => r.ApplicationId, r => r.Total);
+
+        var scoredCounts = (await db.Query("Scores")
+            .SelectRaw("ApplicationId, COUNT(DISTINCT ScoredById) as Total")
+            .GroupBy("ApplicationId")
+            .GetAsync<CountRow>())
+            .ToDictionary(r => r.ApplicationId, r => r.Total);
+
+        var sectionAverages = (await db.Query("Scores as s")
+            .LeftJoin("Sections as sec", "sec.Id", "s.SectionId")
+            .SelectRaw("s.ApplicationId, s.SectionId, COALESCE(sec.Title, 'Ungrouped') as SectionTitle, AVG(s.Score) as Average, COUNT(DISTINCT s.ScoredById) as ScorerCount")
+            .GroupBy("s.ApplicationId", "s.SectionId", "sec.Title")
+            .GetAsync<SectionAvgRow>())
+            .GroupBy(r => r.ApplicationId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var result = apps.Select(app =>
+        {
+            var sections = sectionAverages.GetValueOrDefault(app.ApplicationId, []);
+            var overallAvg = sections.Count > 0
+                ? Math.Round(sections.Average(s => s.Average), 2)
+                : (decimal?)null;
+
+            return new
+            {
+                applicationId = app.ApplicationId,
+                firstName = app.FirstName,
+                lastName = app.LastName,
+                status = app.Status,
+                submittedAt = app.SubmittedAt,
+                assignedCount = assignedCounts.GetValueOrDefault(app.ApplicationId, 0),
+                scoredCount = scoredCounts.GetValueOrDefault(app.ApplicationId, 0),
+                overallAverage = overallAvg,
+                sectionAverages = sections.Select(s => new
+                {
+                    sectionId = s.SectionId,
+                    sectionTitle = s.SectionTitle,
+                    average = Math.Round(s.Average, 2),
+                    scorerCount = s.ScorerCount
+                }).ToList()
+            };
+        }).ToList();
+
+        return Ok(result);
+    }
+
     [HttpGet("applications/export")]
     public async Task<IActionResult> Export([FromQuery] string? status)
     {
@@ -113,4 +185,28 @@ public class CycleRequest
     public DateTime OpenDate { get; set; }
     public DateTime CloseDate { get; set; }
     public bool IsActive { get; set; }
+}
+
+internal class AppOverviewRow
+{
+    public string ApplicationId { get; set; } = null!;
+    public string Status { get; set; } = null!;
+    public string FirstName { get; set; } = null!;
+    public string LastName { get; set; } = null!;
+    public DateTime? SubmittedAt { get; set; }
+}
+
+internal class CountRow
+{
+    public string ApplicationId { get; set; } = null!;
+    public int Total { get; set; }
+}
+
+internal class SectionAvgRow
+{
+    public string ApplicationId { get; set; } = null!;
+    public string? SectionId { get; set; }
+    public string SectionTitle { get; set; } = null!;
+    public decimal Average { get; set; }
+    public int ScorerCount { get; set; }
 }

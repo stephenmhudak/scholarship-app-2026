@@ -11,13 +11,41 @@ const scoringStore = useScoringStore()
 const applicationId = route.params.applicationId
 const loading = ref(true)
 const submitting = ref(false)
-const scored = ref(false)
 const alert = ref(null)
 
 const applicantName = computed(() => {
   const app = scoringStore.currentApplication
   if (!app) return ''
   return `${app.applicantFirstName ?? ''} ${app.applicantLastName ?? ''}`.trim()
+})
+
+const formSections = computed(() => {
+  if (!scoringStore.sections?.length) {
+    return [{ id: null, label: 'Overall Score' }]
+  }
+  return scoringStore.sections.map((s) => ({ id: s.id, label: s.title }))
+})
+
+const answersGroupedBySections = computed(() => {
+  const app = scoringStore.currentApplication
+  if (!app?.answers?.length) return []
+
+  const questionMap = scoringStore.questionMap
+  const sectionMap = Object.fromEntries((scoringStore.sections ?? []).map((s) => [s.id, s]))
+
+  const groups = {}
+  for (const answer of app.answers) {
+    const q = questionMap[answer.questionId]
+    if (!q) continue
+    const sectionId = q.sectionId ?? null
+    const sectionTitle = sectionId ? (sectionMap[sectionId]?.title ?? 'Section') : 'Ungrouped'
+    if (!groups[sectionId ?? 'null']) {
+      groups[sectionId ?? 'null'] = { title: sectionTitle, answers: [] }
+    }
+    groups[sectionId ?? 'null'].answers.push({ ...answer, questionText: q.text })
+  }
+
+  return Object.values(groups)
 })
 
 onMounted(async () => {
@@ -35,7 +63,6 @@ async function handleSubmitScore(payload) {
   alert.value = null
   try {
     await scoringStore.submitScore(applicationId, payload)
-    scored.value = true
     alert.value = { type: 'success', message: 'Score submitted successfully!' }
   } catch {
     alert.value = { type: 'error', message: 'Failed to submit score.' }
@@ -46,7 +73,7 @@ async function handleSubmitScore(payload) {
 </script>
 
 <template>
-  <div class="space-y-6 max-w-4xl">
+  <div class="space-y-6 max-w-5xl">
     <div>
       <h1 class="page-title">Score Application</h1>
       <p v-if="applicantName" class="page-subtitle">{{ applicantName }}</p>
@@ -62,33 +89,41 @@ async function handleSubmitScore(payload) {
     <template v-else-if="scoringStore.currentApplication">
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Application Answers -->
-        <div class="space-y-4">
+        <div class="space-y-5">
           <h2 class="text-base font-bold text-navy">Application Answers</h2>
-          <div v-if="scoringStore.currentApplication.answers?.length">
-            <div
-              v-for="answer in scoringStore.currentApplication.answers"
-              :key="answer.questionId"
-              class="card p-4 mb-3"
-            >
-              <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">
-                {{ scoringStore.questionMap[answer.questionId] || answer.questionId }}
+          <template v-if="answersGroupedBySections.length">
+            <div v-for="group in answersGroupedBySections" :key="group.title" class="space-y-2">
+              <p v-if="scoringStore.sections?.length" class="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">
+                {{ group.title }}
               </p>
-              <p class="text-sm text-navy whitespace-pre-wrap">
-                {{ answer.selectedOptions?.length ? answer.selectedOptions.join(', ') : (answer.textValue || '—') }}
-              </p>
+              <div
+                v-for="answer in group.answers"
+                :key="answer.questionId"
+                class="card p-4"
+              >
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">
+                  {{ answer.questionText || answer.questionId }}
+                </p>
+                <p class="text-sm text-navy whitespace-pre-wrap">
+                  {{ answer.selectedOptions?.length ? answer.selectedOptions.join(', ') : (answer.textValue || '—') }}
+                </p>
+              </div>
             </div>
-          </div>
+          </template>
           <p v-else class="text-sm text-slate-400">No answers available.</p>
         </div>
 
         <!-- Scoring Panel -->
         <div>
-          <h2 class="text-base font-bold text-navy mb-4">Submit Your Score</h2>
-          <ScoringForm v-if="!scored" :submitting="submitting" @submit="handleSubmitScore" />
-          <div v-else class="flex items-center gap-2 text-success-dark bg-success-light border border-success/20 rounded-xl p-4 text-sm font-medium">
-            <span class="mdi mdi-check-circle-outline text-lg"></span>
-            Score submitted. Thank you for your review.
-          </div>
+          <h2 class="text-base font-bold text-navy mb-4">
+            {{ scoringStore.existingScores.length ? 'Edit Your Score' : 'Submit Your Score' }}
+          </h2>
+          <ScoringForm
+            :sections="formSections"
+            :existing-scores="scoringStore.existingScores"
+            :submitting="submitting"
+            @submit="handleSubmitScore"
+          />
         </div>
       </div>
     </template>

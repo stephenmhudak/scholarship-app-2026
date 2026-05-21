@@ -28,6 +28,13 @@ public class ScoringController(IScoringService scoringService) : ControllerBase
         return Ok(app);
     }
 
+    [HttpGet("{applicationId}/my-scores")]
+    public async Task<IActionResult> GetMyScores(string applicationId)
+    {
+        var scores = await scoringService.GetMyScoresAsync(applicationId, UserId);
+        return Ok(scores);
+    }
+
     [HttpPost("{applicationId}/score")]
     public async Task<IActionResult> SubmitScore(string applicationId, [FromBody] SubmitScoreRequest request)
     {

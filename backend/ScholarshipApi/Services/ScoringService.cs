@@ -7,19 +7,31 @@ namespace ScholarshipApi.Services;
 
 public class ScoringService(QueryFactory db, IApplicationService applicationService) : IScoringService
 {
-    public async Task<IEnumerable<ApplicationListDto>> GetQueueAsync(string scorerId)
+    public async Task<IEnumerable<ScoringQueueItemDto>> GetQueueAsync(string scorerId)
     {
-        return await db.Query("Applications as a")
+        var assignments = (await db.Query("Applications as a")
             .Join("Users as u", "u.Id", "a.ApplicantId")
-            .Join("Scores as s", "s.ApplicationId", "a.Id")
-            .Select("a.Id", "a.Status", "u.FirstName", "u.LastName", "a.SubmittedAt", "a.CreatedAt")
-            .Where("s.ScoredById", scorerId)
-            .GetAsync<ApplicationListDto>();
+            .Join("ApplicationScorers as aps", "aps.ApplicationId", "a.Id")
+            .Select("a.Id", "a.Status", "u.FirstName", "u.LastName", "a.SubmittedAt")
+            .Where("aps.ScoredById", scorerId)
+            .GetAsync<ScoringQueueItemDto>()).ToList();
+
+        var scoredIds = (await db.Query("Scores")
+            .Select("ApplicationId")
+            .Where("ScoredById", scorerId)
+            .GetAsync<dynamic>())
+            .Select(r => (string)r.ApplicationId)
+            .ToHashSet();
+
+        foreach (var item in assignments)
+            item.HasScored = scoredIds.Contains(item.Id);
+
+        return assignments;
     }
 
     public async Task<ApplicationDto> GetForScoringAsync(string applicationId, string scorerId)
     {
-        var isAssigned = await db.Query("Scores")
+        var isAssigned = await db.Query("ApplicationScorers")
             .Where("ApplicationId", applicationId)
             .Where("ScoredById", scorerId)
             .ExistsAsync();
@@ -31,17 +43,49 @@ public class ScoringService(QueryFactory db, IApplicationService applicationServ
 
     public async Task SubmitScoreAsync(string applicationId, string scorerId, SubmitScoreRequest request)
     {
-        var scoreRow = await db.Query("Scores")
+        var isAssigned = await db.Query("ApplicationScorers")
             .Where("ApplicationId", applicationId)
             .Where("ScoredById", scorerId)
-            .FirstOrDefaultAsync<Score>()
-            ?? throw new UnauthorizedAccessException("You are not assigned to score this application.");
+            .ExistsAsync();
 
-        await db.Query("Scores").Where("Id", scoreRow.Id).UpdateAsync(new
+        if (!isAssigned) throw new UnauthorizedAccessException("You are not assigned to score this application.");
+
+        await db.Query("Scores")
+            .Where("ApplicationId", applicationId)
+            .Where("ScoredById", scorerId)
+            .DeleteAsync();
+
+        var now = DateTime.UtcNow;
+        foreach (var s in request.SectionScores)
         {
-            Score = request.Score,
-            Comments = request.Comments,
-            ScoredAt = DateTime.UtcNow
-        });
+            await db.Query("Scores").InsertAsync(new
+            {
+                Id = Guid.NewGuid().ToString(),
+                ApplicationId = applicationId,
+                ScoredById = scorerId,
+                SectionId = s.SectionId,
+                Score = s.Score,
+                Comments = s.Comments,
+                ScoredAt = now
+            });
+        }
+    }
+
+    public async Task<IEnumerable<ScoreDto>> GetMyScoresAsync(string applicationId, string scorerId)
+    {
+        var isAssigned = await db.Query("ApplicationScorers")
+            .Where("ApplicationId", applicationId)
+            .Where("ScoredById", scorerId)
+            .ExistsAsync();
+
+        if (!isAssigned) throw new UnauthorizedAccessException("You are not assigned to score this application.");
+
+        return await db.Query("Scores as s")
+            .LeftJoin("Sections as sec", "sec.Id", "s.SectionId")
+            .Select("s.Id", "s.ApplicationId", "s.ScoredById", "s.SectionId",
+                    "s.Score as ScoreValue", "s.Comments", "s.ScoredAt", "sec.Title as SectionTitle")
+            .Where("s.ApplicationId", applicationId)
+            .Where("s.ScoredById", scorerId)
+            .GetAsync<ScoreDto>();
     }
 }

@@ -51,6 +51,7 @@ function goToDetail(applicationId) {
             <th>Applicant</th>
             <th>Status</th>
             <th>Submitted</th>
+            <th>Score Status</th>
             <th class="text-right">Action</th>
           </tr>
         </thead>
@@ -67,12 +68,28 @@ function goToDetail(applicationId) {
             <td class="text-slate-400">
               {{ app.submittedAt ? new Date(app.submittedAt).toLocaleDateString() : '—' }}
             </td>
+            <td>
+              <span
+                v-if="app.hasScored"
+                class="inline-flex items-center gap-1 text-xs font-semibold text-success-dark bg-success-light border border-success/20 px-2 py-0.5 rounded-full"
+              >
+                <span class="mdi mdi-check-circle-outline text-sm"></span>
+                Scored
+              </span>
+              <span
+                v-else
+                class="inline-flex items-center gap-1 text-xs font-semibold text-[#8C6500] bg-warning-light border border-warning/30 px-2 py-0.5 rounded-full"
+              >
+                <span class="mdi mdi-clock-outline text-sm"></span>
+                Pending
+              </span>
+            </td>
             <td class="text-right">
               <button
                 @click.stop="goToDetail(app.id)"
                 class="text-sm font-semibold text-primary hover:text-primary-700 transition-colors"
               >
-                Review
+                {{ app.hasScored ? 'Edit Score' : 'Score Now' }}
                 <span class="mdi mdi-arrow-right ml-0.5"></span>
               </button>
             </td>
