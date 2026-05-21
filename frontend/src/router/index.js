@@ -62,7 +62,7 @@ const routes = [
     path: '/scoring/:applicationId',
     name: 'ScoringDetail',
     component: () => import('../pages/scorer/ScoringDetailPage.vue'),
-    meta: { role: 'scorer' },
+    meta: { anyRole: ['scorer', 'app_admin'] },
   },
   {
     path: '/admin/applications',
@@ -162,6 +162,7 @@ router.beforeEach((to, from, next) => {
   if (!authStore.isAuthenticated) return next('/login')
 
   if (to.meta.role && authStore.role !== to.meta.role) return next('/403')
+  if (to.meta.anyRole && !to.meta.anyRole.includes(authStore.role)) return next('/403')
 
   next()
 })

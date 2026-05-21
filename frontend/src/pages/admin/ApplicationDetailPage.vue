@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import api from '../../services/api'
 import { useAdminStore } from '../../stores/admin'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
@@ -9,6 +9,7 @@ import BaseButton from '../../components/common/BaseButton.vue'
 import BaseAlert from '../../components/common/BaseAlert.vue'
 
 const route = useRoute()
+const router = useRouter()
 const adminStore = useAdminStore()
 
 const appId = route.params.id
@@ -130,6 +131,16 @@ async function handleAssigned({ applicationId, scorerId }) {
           <BaseButton variant="secondary" size="sm" @click="showAssignModal = true">
             <span class="mdi mdi-account-plus mr-1.5"></span>
             Assign Scorer
+          </BaseButton>
+
+          <BaseButton
+            v-if="application.status !== 'draft'"
+            variant="secondary"
+            size="sm"
+            @click="router.push(`/scoring/${appId}`)"
+          >
+            <span class="mdi mdi-star-outline mr-1.5"></span>
+            Score Application
           </BaseButton>
         </div>
       </div>

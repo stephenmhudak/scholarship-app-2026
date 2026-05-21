@@ -29,26 +29,32 @@ public class ScoringService(QueryFactory db, IApplicationService applicationServ
         return assignments;
     }
 
-    public async Task<ApplicationDto> GetForScoringAsync(string applicationId, string scorerId)
+    public async Task<ApplicationDto> GetForScoringAsync(string applicationId, string scorerId, bool isAdmin = false)
     {
-        var isAssigned = await db.Query("ApplicationScorers")
-            .Where("ApplicationId", applicationId)
-            .Where("ScoredById", scorerId)
-            .ExistsAsync();
+        if (!isAdmin)
+        {
+            var isAssigned = await db.Query("ApplicationScorers")
+                .Where("ApplicationId", applicationId)
+                .Where("ScoredById", scorerId)
+                .ExistsAsync();
 
-        if (!isAssigned) throw new UnauthorizedAccessException("You are not assigned to score this application.");
+            if (!isAssigned) throw new UnauthorizedAccessException("You are not assigned to score this application.");
+        }
 
-        return await applicationService.GetAsync(applicationId, scorerId, "scorer");
+        return await applicationService.GetAsync(applicationId, scorerId, isAdmin ? "app_admin" : "scorer");
     }
 
-    public async Task SubmitScoreAsync(string applicationId, string scorerId, SubmitScoreRequest request)
+    public async Task SubmitScoreAsync(string applicationId, string scorerId, SubmitScoreRequest request, bool isAdmin = false)
     {
-        var isAssigned = await db.Query("ApplicationScorers")
-            .Where("ApplicationId", applicationId)
-            .Where("ScoredById", scorerId)
-            .ExistsAsync();
+        if (!isAdmin)
+        {
+            var isAssigned = await db.Query("ApplicationScorers")
+                .Where("ApplicationId", applicationId)
+                .Where("ScoredById", scorerId)
+                .ExistsAsync();
 
-        if (!isAssigned) throw new UnauthorizedAccessException("You are not assigned to score this application.");
+            if (!isAssigned) throw new UnauthorizedAccessException("You are not assigned to score this application.");
+        }
 
         await db.Query("Scores")
             .Where("ApplicationId", applicationId)
@@ -71,14 +77,17 @@ public class ScoringService(QueryFactory db, IApplicationService applicationServ
         }
     }
 
-    public async Task<IEnumerable<ScoreDto>> GetMyScoresAsync(string applicationId, string scorerId)
+    public async Task<IEnumerable<ScoreDto>> GetMyScoresAsync(string applicationId, string scorerId, bool isAdmin = false)
     {
-        var isAssigned = await db.Query("ApplicationScorers")
-            .Where("ApplicationId", applicationId)
-            .Where("ScoredById", scorerId)
-            .ExistsAsync();
+        if (!isAdmin)
+        {
+            var isAssigned = await db.Query("ApplicationScorers")
+                .Where("ApplicationId", applicationId)
+                .Where("ScoredById", scorerId)
+                .ExistsAsync();
 
-        if (!isAssigned) throw new UnauthorizedAccessException("You are not assigned to score this application.");
+            if (!isAssigned) throw new UnauthorizedAccessException("You are not assigned to score this application.");
+        }
 
         return await db.Query("Scores as s")
             .LeftJoin("Sections as sec", "sec.Id", "s.SectionId")
