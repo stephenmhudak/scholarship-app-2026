@@ -1,7 +1,9 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../../services/api'
+import { useTableSort } from '../../composables/useTableSort'
+import SortTh from '../../components/common/SortTh.vue'
 import BaseButton from '../../components/common/BaseButton.vue'
 import BaseAlert from '../../components/common/BaseAlert.vue'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
@@ -17,6 +19,14 @@ const saving = ref(false)
 const inviting = ref(false)
 const alert = ref(null)
 const inviteEmail = ref('')
+
+const { sortKey, sortDir, setSort, applySort } = useTableSort('name')
+
+const sortedApplicants = computed(() => applySort(applicants.value, {
+  name: (a) => (a.name ?? '').toLowerCase(),
+  email: (a) => (a.email ?? '').toLowerCase(),
+  status: (a) => a.application_status ?? '',
+}))
 
 onMounted(async () => {
   try {
@@ -137,13 +147,13 @@ async function inviteCounselor() {
         <table v-if="applicants.length" class="dialect-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Status</th>
+              <SortTh column="name" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Name</SortTh>
+              <SortTh column="email" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Email</SortTh>
+              <SortTh column="status" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Status</SortTh>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="a in applicants" :key="a.id">
+            <tr v-for="a in sortedApplicants" :key="a.id">
               <td class="font-semibold text-navy">{{ a.name }}</td>
               <td class="text-slate-400">{{ a.email }}</td>
               <td><StatusBadge :status="a.application_status || 'draft'" /></td>

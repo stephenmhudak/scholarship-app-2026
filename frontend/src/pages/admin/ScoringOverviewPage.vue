@@ -2,7 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../../services/api'
+import { useTableSort } from '../../composables/useTableSort'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
+import SortTh from '../../components/common/SortTh.vue'
 import BaseAlert from '../../components/common/BaseAlert.vue'
 
 const router = useRouter()
@@ -11,54 +13,15 @@ const alert = ref(null)
 const applications = ref([])
 const expanded = ref(new Set())
 
-const sortKey = ref('submittedAt')
-const sortDir = ref('desc')
+const { sortKey, sortDir, setSort, applySort } = useTableSort('submitted', 'desc')
 
-const columns = [
-  { key: 'applicant', label: 'Applicant' },
-  { key: 'status', label: 'Status' },
-  { key: 'scorers', label: 'Scorers' },
-  { key: 'avgScore', label: 'Avg Score' },
-]
-
-function setSort(key) {
-  if (sortKey.value === key) {
-    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
-  } else {
-    sortKey.value = key
-    sortDir.value = key === 'avgScore' ? 'desc' : 'asc'
-  }
-}
-
-const sortedApplications = computed(() => {
-  return [...applications.value].sort((a, b) => {
-    let av, bv
-    switch (sortKey.value) {
-      case 'applicant':
-        av = `${a.lastName} ${a.firstName}`.toLowerCase()
-        bv = `${b.lastName} ${b.firstName}`.toLowerCase()
-        break
-      case 'status':
-        av = a.status
-        bv = b.status
-        break
-      case 'scorers':
-        av = a.scoredCount / (a.assignedCount || 1)
-        bv = b.scoredCount / (b.assignedCount || 1)
-        break
-      case 'avgScore':
-        av = a.overallAverage ?? -1
-        bv = b.overallAverage ?? -1
-        break
-      default:
-        av = a.submittedAt ?? ''
-        bv = b.submittedAt ?? ''
-    }
-    if (av < bv) return sortDir.value === 'asc' ? -1 : 1
-    if (av > bv) return sortDir.value === 'asc' ? 1 : -1
-    return 0
-  })
-})
+const sortedApplications = computed(() => applySort(applications.value, {
+  applicant: (a) => `${a.lastName} ${a.firstName}`.toLowerCase(),
+  status: (a) => a.status,
+  scorers: (a) => a.scoredCount / (a.assignedCount || 1),
+  avgScore: (a) => a.overallAverage ?? -1,
+  submitted: (a) => a.submittedAt ?? '',
+}))
 
 onMounted(async () => {
   try {
@@ -111,20 +74,10 @@ function scoringProgress(app) {
         <thead>
           <tr>
             <th class="w-8"></th>
-            <th
-              v-for="col in columns"
-              :key="col.key"
-              class="cursor-pointer select-none group"
-              @click="setSort(col.key)"
-            >
-              <span class="inline-flex items-center gap-1">
-                {{ col.label }}
-                <span class="inline-flex flex-col leading-none text-[10px] text-slate-400 group-hover:text-primary transition-colors">
-                  <span :class="sortKey === col.key && sortDir === 'asc' ? 'text-primary' : ''">▲</span>
-                  <span :class="sortKey === col.key && sortDir === 'desc' ? 'text-primary' : ''">▼</span>
-                </span>
-              </span>
-            </th>
+            <SortTh column="applicant" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Applicant</SortTh>
+            <SortTh column="status" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Status</SortTh>
+            <SortTh column="scorers" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Scorers</SortTh>
+            <SortTh column="avgScore" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Avg Score</SortTh>
             <th class="text-right">Action</th>
           </tr>
         </thead>

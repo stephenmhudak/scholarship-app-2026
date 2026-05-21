@@ -1,8 +1,10 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAdminStore } from '../../stores/admin'
+import { useTableSort } from '../../composables/useTableSort'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
+import SortTh from '../../components/common/SortTh.vue'
 import BaseButton from '../../components/common/BaseButton.vue'
 import BaseAlert from '../../components/common/BaseAlert.vue'
 
@@ -15,6 +17,14 @@ const alert = ref(null)
 const statusFilter = ref('')
 
 const statuses = ['draft', 'submitted', 'under_review', 'awarded', 'rejected']
+
+const { sortKey, sortDir, setSort, applySort } = useTableSort('submitted', 'desc')
+
+const sortedApplications = computed(() => applySort(adminStore.applications, {
+  applicant: (a) => `${a.lastName} ${a.firstName}`.toLowerCase(),
+  status: (a) => a.status,
+  submitted: (a) => a.submittedAt ?? '',
+}))
 
 onMounted(async () => {
   await loadApplications()
@@ -111,15 +121,15 @@ function nextPage() {
       <table class="dialect-table">
         <thead>
           <tr>
-            <th>Applicant</th>
-            <th>Status</th>
-            <th>Submitted</th>
+            <SortTh column="applicant" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Applicant</SortTh>
+            <SortTh column="status" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Status</SortTh>
+            <SortTh column="submitted" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Submitted</SortTh>
             <th class="text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
           <tr
-            v-for="app in adminStore.applications"
+            v-for="app in sortedApplications"
             :key="app.id"
             @click="goToDetail(app.id)"
           >

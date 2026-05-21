@@ -1,13 +1,23 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import api from '../../services/api'
+import { useTableSort } from '../../composables/useTableSort'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
+import SortTh from '../../components/common/SortTh.vue'
 import BaseAlert from '../../components/common/BaseAlert.vue'
 
 const students = ref([])
 const loading = ref(true)
 const alert = ref(null)
 const nudging = ref({})
+
+const { sortKey, sortDir, setSort, applySort } = useTableSort('name')
+
+const sortedStudents = computed(() => applySort(students.value, {
+  name: (s) => (s.name ?? '').toLowerCase(),
+  status: (s) => s.application_status ?? '',
+  lastActivity: (s) => s.last_activity ?? '',
+}))
 
 onMounted(async () => {
   try {
@@ -51,14 +61,14 @@ async function sendNudge(studentId) {
       <table class="dialect-table">
         <thead>
           <tr>
-            <th>Student</th>
-            <th>Application Status</th>
-            <th>Last Activity</th>
+            <SortTh column="name" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Student</SortTh>
+            <SortTh column="status" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Application Status</SortTh>
+            <SortTh column="lastActivity" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Last Activity</SortTh>
             <th class="text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="student in students" :key="student.id">
+          <tr v-for="student in sortedStudents" :key="student.id">
             <td>
               <p class="font-semibold text-navy">{{ student.name }}</p>
               <p class="text-xs text-slate-400">{{ student.email }}</p>

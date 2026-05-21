@@ -1,14 +1,25 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useScoringStore } from '../../stores/scoring'
+import { useTableSort } from '../../composables/useTableSort'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
+import SortTh from '../../components/common/SortTh.vue'
 
 const router = useRouter()
 const scoringStore = useScoringStore()
 
 const loading = ref(true)
 const error = ref(null)
+
+const { sortKey, sortDir, setSort, applySort } = useTableSort('submitted', 'desc')
+
+const sortedQueue = computed(() => applySort(scoringStore.queue, {
+  applicant: (a) => `${a.lastName} ${a.firstName}`.toLowerCase(),
+  status: (a) => a.status,
+  submitted: (a) => a.submittedAt ?? '',
+  scoreStatus: (a) => (a.hasScored ? 1 : 0),
+}))
 
 onMounted(async () => {
   try {
@@ -48,16 +59,16 @@ function goToDetail(applicationId) {
       <table class="dialect-table">
         <thead>
           <tr>
-            <th>Applicant</th>
-            <th>Status</th>
-            <th>Submitted</th>
-            <th>Score Status</th>
+            <SortTh column="applicant" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Applicant</SortTh>
+            <SortTh column="status" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Status</SortTh>
+            <SortTh column="submitted" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Submitted</SortTh>
+            <SortTh column="scoreStatus" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Score Status</SortTh>
             <th class="text-right">Action</th>
           </tr>
         </thead>
         <tbody>
           <tr
-            v-for="app in scoringStore.queue"
+            v-for="app in sortedQueue"
             :key="app.id"
             @click="goToDetail(app.id)"
           >
