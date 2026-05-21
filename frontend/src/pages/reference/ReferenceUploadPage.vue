@@ -24,14 +24,14 @@ function onUploaded() {
       <div
         :class="[
           'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold',
-          step !== 'code' ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700',
+          step !== 'code' ? 'bg-primary text-white' : 'bg-primary-100 text-primary-700',
         ]"
       >1</div>
-      <div class="flex-1 h-0.5 bg-gray-200"></div>
+      <div class="flex-1 h-0.5 bg-[#E9EDF7]"></div>
       <div
         :class="[
           'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold',
-          step === 'done' ? 'bg-blue-600 text-white' : step === 'upload' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400',
+          step === 'done' ? 'bg-primary text-white' : step === 'upload' ? 'bg-primary-100 text-primary-700' : 'bg-[#F4F7FE] text-slate-400',
         ]"
       >2</div>
     </div>
@@ -51,14 +51,14 @@ function onUploaded() {
 
     <!-- Step 3: Success -->
     <div v-else class="text-center space-y-4 py-4">
-      <span class="mdi mdi-check-circle text-5xl text-green-500 block"></span>
-      <h2 class="text-xl font-semibold text-gray-900">Reference Uploaded!</h2>
-      <p class="text-sm text-gray-600">
+      <span class="mdi mdi-check-circle text-5xl text-success block"></span>
+      <h2 class="text-xl font-bold text-navy">Reference Uploaded!</h2>
+      <p class="text-sm text-slate-400">
         Your reference letter has been successfully submitted for code
-        <strong>{{ referenceCode }}</strong>.
+        <strong class="text-navy">{{ referenceCode }}</strong>.
         The applicant will be notified.
       </p>
-      <p class="text-sm text-gray-500">You may now close this window.</p>
+      <p class="text-sm text-slate-400">You may now close this window.</p>
     </div>
   </div>
 </template>

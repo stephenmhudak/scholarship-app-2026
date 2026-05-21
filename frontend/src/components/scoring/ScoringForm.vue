@@ -25,17 +25,17 @@ function onSubmit() {
 </script>
 
 <template>
-  <form @submit.prevent="onSubmit" class="space-y-6">
+  <form @submit.prevent="onSubmit" class="space-y-5">
     <div
       v-for="section in sections"
       :key="section.id"
-      class="bg-gray-50 border border-gray-200 rounded-xl p-5 space-y-3"
+      class="card p-5 space-y-4"
     >
-      <h3 class="font-semibold text-gray-800">{{ section.label }}</h3>
+      <h3 class="text-sm font-bold text-navy">{{ section.label }}</h3>
 
-      <div class="space-y-1">
-        <label class="block text-sm font-medium text-gray-700">
-          Score <span class="text-gray-400">(1–100)</span>
+      <div class="space-y-1.5">
+        <label class="block text-sm font-semibold text-navy">
+          Score <span class="text-slate-400 font-normal">(1–100)</span>
         </label>
         <input
           v-model.number="scores[section.id].score"
@@ -43,24 +43,24 @@ function onSubmit() {
           min="1"
           max="100"
           required
-          placeholder="Enter score..."
-          class="block w-32 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Enter score…"
+          class="form-input w-36"
         />
       </div>
 
-      <div class="space-y-1">
-        <label class="block text-sm font-medium text-gray-700">Comments</label>
+      <div class="space-y-1.5">
+        <label class="block text-sm font-semibold text-navy">Comments</label>
         <textarea
           v-model="scores[section.id].comments"
           rows="3"
-          placeholder="Enter your comments..."
-          class="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+          placeholder="Enter your comments…"
+          class="form-input resize-y"
         />
       </div>
     </div>
 
     <BaseButton type="submit" :loading="submitting">
-      <span class="mdi mdi-send mr-1"></span>
+      <span class="mdi mdi-send mr-1.5"></span>
       Submit Score
     </BaseButton>
   </form>

@@ -52,13 +52,13 @@ async function confirm() {
 <template>
   <BaseModal :show="show" title="Assign Scorer" @close="emit('close')">
     <div class="space-y-4">
-      <div class="space-y-1">
-        <label class="block text-sm font-medium text-gray-700">Select Scorer</label>
+      <div class="space-y-1.5">
+        <label class="block text-sm font-semibold text-navy">Select Scorer</label>
         <select
           v-model="selectedScorerId"
-          class="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          class="form-select w-full"
         >
-          <option value="" disabled>-- Choose a scorer --</option>
+          <option value="" disabled>— Choose a scorer —</option>
           <option
             v-for="scorer in scorers"
             :key="scorer.id"
@@ -69,7 +69,7 @@ async function confirm() {
         </select>
       </div>
 
-      <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
+      <p v-if="error" class="text-sm font-medium text-danger">{{ error }}</p>
 
       <div class="flex justify-end gap-3 pt-2">
         <BaseButton variant="secondary" @click="emit('close')">Cancel</BaseButton>

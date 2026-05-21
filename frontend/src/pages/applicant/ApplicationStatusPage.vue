@@ -35,28 +35,26 @@ onMounted(async () => {
 <template>
   <div class="space-y-6 max-w-3xl">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">Application Status</h1>
-      <p class="text-gray-500 mt-1">View your submission and current status.</p>
+      <h1 class="page-title">Application Status</h1>
+      <p class="page-subtitle">View your submission and current status.</p>
     </div>
 
-    <div v-if="loading" class="flex items-center gap-2 text-gray-500">
+    <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
       <span class="mdi mdi-loading animate-spin text-xl"></span>
-      Loading application...
+      Loading application…
     </div>
 
-    <div v-else-if="error" class="text-red-600">{{ error }}</div>
+    <div v-else-if="error" class="text-sm font-medium text-danger">{{ error }}</div>
 
     <template v-else-if="application">
       <!-- Status Summary -->
-      <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+      <div class="section-card">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Current Status</p>
-            <div class="mt-1">
-              <StatusBadge :status="application.status" />
-            </div>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Current Status</p>
+            <StatusBadge :status="application.status" />
           </div>
-          <div class="text-right text-sm text-gray-500">
+          <div class="text-right text-sm text-slate-400 space-y-0.5">
             <p>Submitted: {{ application.submittedAt ? new Date(application.submittedAt).toLocaleDateString() : '—' }}</p>
             <p>Created: {{ new Date(application.createdAt).toLocaleDateString() }}</p>
           </div>
@@ -64,21 +62,23 @@ onMounted(async () => {
       </div>
 
       <!-- Submitted Answers -->
-      <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">Your Answers</h2>
-        <div v-if="application.answers && application.answers.length" class="space-y-4">
+      <div class="section-card">
+        <h2 class="text-base font-bold text-navy mb-5">Your Answers</h2>
+        <div v-if="application.answers && application.answers.length" class="space-y-5">
           <div
             v-for="answer in application.answers"
             :key="answer.questionId"
-            class="border-b border-gray-100 pb-4 last:border-0 last:pb-0"
+            class="border-b border-[#E9EDF7] pb-5 last:border-0 last:pb-0"
           >
-            <p class="text-sm font-medium text-gray-700">{{ questionMap[answer.questionId] || answer.questionId }}</p>
-            <p class="text-sm text-gray-600 mt-1 whitespace-pre-wrap">
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">
+              {{ questionMap[answer.questionId] || answer.questionId }}
+            </p>
+            <p class="text-sm text-navy whitespace-pre-wrap">
               {{ answer.selectedOptions?.length ? answer.selectedOptions.join(', ') : (answer.textValue || '—') }}
             </p>
           </div>
         </div>
-        <p v-else class="text-sm text-gray-500">No answers submitted yet.</p>
+        <p v-else class="text-sm text-slate-400">No answers submitted yet.</p>
       </div>
     </template>
   </div>

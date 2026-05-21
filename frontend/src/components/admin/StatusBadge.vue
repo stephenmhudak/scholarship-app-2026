@@ -7,27 +7,27 @@ defineProps({
 })
 
 const styles = {
-  draft: 'bg-gray-100 text-gray-700',
-  submitted: 'bg-blue-100 text-blue-700',
-  under_review: 'bg-yellow-100 text-yellow-700',
-  awarded: 'bg-green-100 text-green-700',
-  rejected: 'bg-red-100 text-red-700',
+  draft:        'bg-navy-50 text-navy-600 border border-navy-100',
+  submitted:    'bg-primary-50 text-primary-700 border border-primary-100',
+  under_review: 'bg-warning-light text-[#8C6500] border border-warning/30',
+  awarded:      'bg-success-light text-success-dark border border-success/30',
+  rejected:     'bg-danger-light text-danger-dark border border-danger/30',
 }
 
 const labels = {
-  draft: 'Draft',
-  submitted: 'Submitted',
+  draft:        'Draft',
+  submitted:    'Submitted',
   under_review: 'Under Review',
-  awarded: 'Awarded',
-  rejected: 'Rejected',
+  awarded:      'Awarded',
+  rejected:     'Rejected',
 }
 </script>
 
 <template>
   <span
     :class="[
-      'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize',
-      styles[status] || 'bg-gray-100 text-gray-600',
+      'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold',
+      styles[status] || 'bg-navy-50 text-navy-600',
     ]"
   >
     {{ labels[status] || status }}

@@ -13,19 +13,18 @@ function onChange(e) {
 </script>
 
 <template>
-  <div class="space-y-1">
-    <label class="block text-sm font-medium text-gray-700">
+  <div class="space-y-1.5">
+    <label class="block text-sm font-semibold text-navy">
       {{ question.text }}
-      <span v-if="question.isRequired" class="text-red-500 ml-0.5">*</span>
+      <span v-if="question.isRequired" class="text-danger ml-0.5">*</span>
     </label>
-    <p v-if="question.description" class="text-xs text-gray-500">{{ question.description }}</p>
+    <p v-if="question.description" class="text-xs text-slate-400">{{ question.description }}</p>
     <input
       type="date"
       :value="modelValue"
       @change="onChange"
-      :class="['border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-        error ? 'border-red-400' : 'border-gray-300']"
+      :class="['form-input', error && 'is-error']"
     />
-    <p v-if="error" class="text-xs text-red-600">{{ error }}</p>
+    <p v-if="error" class="text-xs font-medium text-danger">{{ error }}</p>
   </div>
 </template>

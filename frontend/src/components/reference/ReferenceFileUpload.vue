@@ -44,17 +44,17 @@ async function upload() {
 <template>
   <div class="space-y-5">
     <div>
-      <h2 class="text-xl font-semibold text-gray-900">Upload Reference Letter</h2>
-      <p class="text-sm text-gray-500 mt-1">
-        Upload your reference letter for code <strong>{{ referenceCode }}</strong>.
+      <h2 class="text-xl font-bold text-navy">Upload Reference Letter</h2>
+      <p class="text-sm text-slate-400 mt-1">
+        Upload your reference letter for code <strong class="text-navy">{{ referenceCode }}</strong>.
         Accepted formats: {{ ACCEPTED_REFERENCE_TYPES.join(', ') }}
       </p>
     </div>
 
-    <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
-      <span class="mdi mdi-file-upload text-4xl text-gray-400 block mb-2"></span>
+    <div class="border-2 border-dashed border-[#E9EDF7] bg-[#F4F7FE] rounded-xl p-6 text-center hover:border-primary/40 transition-colors">
+      <span class="mdi mdi-file-upload-outline text-4xl text-slate-400 block mb-2"></span>
       <label class="cursor-pointer">
-        <span class="text-sm text-blue-600 hover:text-blue-700 font-medium">
+        <span class="text-sm font-semibold text-primary hover:text-primary-700 transition-colors">
           {{ file ? file.name : 'Click to select a file' }}
         </span>
         <input
@@ -64,13 +64,13 @@ async function upload() {
           class="sr-only"
         />
       </label>
-      <p class="text-xs text-gray-400 mt-1">{{ ACCEPTED_REFERENCE_TYPES.join(', ') }} up to 10MB</p>
+      <p class="text-xs text-slate-400 mt-1">{{ ACCEPTED_REFERENCE_TYPES.join(', ') }} up to 10MB</p>
     </div>
 
-    <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
+    <p v-if="error" class="text-sm font-medium text-danger">{{ error }}</p>
 
     <BaseButton @click="upload" :loading="uploading" :disabled="!file || uploading" class="w-full">
-      <span class="mdi mdi-upload mr-1"></span>
+      <span class="mdi mdi-upload mr-1.5"></span>
       Upload Reference Letter
     </BaseButton>
   </div>

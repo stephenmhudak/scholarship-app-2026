@@ -29,19 +29,19 @@ const emit = defineEmits(['close'])
       >
         <!-- Overlay -->
         <div
-          class="absolute inset-0 bg-black/50"
+          class="absolute inset-0 bg-navy/40 backdrop-blur-sm"
           @click="emit('close')"
         ></div>
 
         <!-- Modal panel -->
-        <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 z-10">
-          <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-            <h2 class="text-lg font-semibold text-gray-900">{{ title }}</h2>
+        <div class="relative bg-white rounded-2xl shadow-card-lg w-full max-w-lg mx-4 z-10 border border-[#E9EDF7]">
+          <div class="flex items-center justify-between px-6 py-4 border-b border-[#E9EDF7]">
+            <h2 class="text-base font-bold text-navy">{{ title }}</h2>
             <button
               @click="emit('close')"
-              class="text-gray-400 hover:text-gray-600 transition-colors"
+              class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-navy hover:bg-[#F4F7FE] transition-colors"
             >
-              <span class="mdi mdi-close text-xl"></span>
+              <span class="mdi mdi-close text-lg"></span>
             </button>
           </div>
           <div class="px-6 py-5">

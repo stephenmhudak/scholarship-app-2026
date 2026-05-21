@@ -74,11 +74,11 @@ function nextPage() {
   <div class="space-y-6">
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Applications</h1>
-        <p class="text-gray-500 mt-1">{{ adminStore.pagination.total }} total applications</p>
+        <h1 class="page-title">Applications</h1>
+        <p class="page-subtitle">{{ adminStore.pagination.total }} total applications</p>
       </div>
       <BaseButton variant="secondary" :loading="exporting" @click="exportData">
-        <span class="mdi mdi-download mr-1"></span>
+        <span class="mdi mdi-download mr-1.5"></span>
         Export CSV
       </BaseButton>
     </div>
@@ -86,12 +86,12 @@ function nextPage() {
     <BaseAlert v-if="alert" :type="alert.type" :message="alert.message" />
 
     <!-- Filters -->
-    <div class="flex items-center gap-4 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-      <label class="text-sm font-medium text-gray-700">Filter by status:</label>
+    <div class="card p-4 flex items-center gap-4">
+      <label class="text-sm font-semibold text-navy shrink-0">Filter by status:</label>
       <select
         v-model="statusFilter"
         @change="onStatusFilterChange"
-        class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        class="form-select w-48"
       >
         <option value="">All Statuses</option>
         <option v-for="s in statuses" :key="s" :value="s" class="capitalize">
@@ -100,51 +100,51 @@ function nextPage() {
       </select>
     </div>
 
-    <!-- Table -->
-    <div v-if="loading" class="flex items-center gap-2 text-gray-500">
+    <!-- Loading -->
+    <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
       <span class="mdi mdi-loading animate-spin text-xl"></span>
-      Loading...
+      Loading…
     </div>
 
-    <div v-else class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+    <!-- Table -->
+    <div v-else class="card overflow-hidden">
+      <table class="dialect-table">
+        <thead>
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Applicant</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+            <th>Applicant</th>
+            <th>Status</th>
+            <th>Submitted</th>
+            <th class="text-right">Actions</th>
           </tr>
         </thead>
-        <tbody class="bg-white divide-y divide-gray-100">
+        <tbody>
           <tr
             v-for="app in adminStore.applications"
             :key="app.id"
-            class="hover:bg-gray-50 cursor-pointer transition-colors"
             @click="goToDetail(app.id)"
           >
-            <td class="px-6 py-4">
-              <p class="text-sm font-medium text-gray-900">{{ app.firstName }} {{ app.lastName }}</p>
+            <td>
+              <p class="font-semibold text-navy">{{ app.firstName }} {{ app.lastName }}</p>
             </td>
-            <td class="px-6 py-4"><StatusBadge :status="app.status" /></td>
-            <td class="px-6 py-4 text-sm text-gray-500">
+            <td><StatusBadge :status="app.status" /></td>
+            <td class="text-slate-400">
               {{ app.submittedAt ? new Date(app.submittedAt).toLocaleDateString() : '—' }}
             </td>
-            <td class="px-6 py-4 text-right">
-              <button @click.stop="goToDetail(app.id)" class="text-sm text-blue-600 hover:text-blue-700 font-medium">
+            <td class="text-right">
+              <button @click.stop="goToDetail(app.id)" class="text-sm font-semibold text-primary hover:text-primary-700 transition-colors">
                 View
               </button>
             </td>
           </tr>
           <tr v-if="adminStore.applications.length === 0">
-            <td colspan="4" class="px-6 py-8 text-center text-sm text-gray-500">No applications found.</td>
+            <td colspan="4" class="px-6 py-10 text-center text-sm text-slate-400">No applications found.</td>
           </tr>
         </tbody>
       </table>
 
       <!-- Pagination -->
-      <div class="flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50">
-        <p class="text-sm text-gray-500">
+      <div class="flex items-center justify-between px-6 py-3 border-t border-[#E9EDF7] bg-[#F4F7FE]">
+        <p class="text-sm text-slate-400">
           Page {{ adminStore.pagination.page }} of
           {{ Math.ceil(adminStore.pagination.total / adminStore.pagination.perPage) || 1 }}
         </p>
@@ -152,14 +152,14 @@ function nextPage() {
           <button
             @click="prevPage"
             :disabled="adminStore.pagination.page <= 1"
-            class="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="pagination-btn"
           >
             Previous
           </button>
           <button
             @click="nextPage"
             :disabled="adminStore.pagination.page >= Math.ceil(adminStore.pagination.total / adminStore.pagination.perPage)"
-            class="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="pagination-btn"
           >
             Next
           </button>
