@@ -1,6 +1,6 @@
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import api from '../../services/api'
 import BaseButton from '../../components/common/BaseButton.vue'
@@ -8,6 +8,7 @@ import BaseAlert from '../../components/common/BaseAlert.vue'
 import BaseInput from '../../components/common/BaseInput.vue'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 
 const form = ref({
@@ -20,6 +21,23 @@ const form = ref({
 const loading = ref(false)
 const error = ref(null)
 const success = ref(null)
+
+const inviteToken = ref(null)
+const inviteInfo = ref(null)
+const inviteError = ref(null)
+
+onMounted(async () => {
+  const token = route.query.invite
+  if (!token) return
+
+  inviteToken.value = token
+  try {
+    const res = await api.get(`/auth/invite/${token}`)
+    inviteInfo.value = res.data
+  } catch (err) {
+    inviteError.value = err.response?.data?.error || 'This invite link is invalid or has expired.'
+  }
+})
 
 async function register() {
   if (form.value.password !== form.value.passwordConfirmation) {
@@ -36,6 +54,7 @@ async function register() {
       lastName: form.value.lastName,
       email: form.value.email,
       password: form.value.password,
+      inviteToken: inviteToken.value ?? undefined,
     })
     success.value = 'Account created! Signing you in…'
     await authStore.login({ email: form.value.email, password: form.value.password })
@@ -52,9 +71,13 @@ async function register() {
   <div class="space-y-5">
     <div>
       <h2 class="text-xl font-bold text-navy">Create an account</h2>
-      <p class="text-sm text-slate-400 mt-0.5">Register to apply for the scholarship</p>
+      <p v-if="inviteInfo" class="text-sm text-slate-400 mt-0.5">
+        You're registering as a school admin for <strong class="text-navy">{{ inviteInfo.schoolName }}</strong>
+      </p>
+      <p v-else class="text-sm text-slate-400 mt-0.5">Register to apply for the scholarship</p>
     </div>
 
+    <BaseAlert v-if="inviteError" type="error" :message="inviteError" />
     <BaseAlert v-if="error" type="error" :message="error" />
     <BaseAlert v-if="success" type="success" :message="success" />
 
@@ -98,7 +121,7 @@ async function register() {
         :required="true"
       />
 
-      <BaseButton type="submit" :loading="loading" class="w-full mt-1">
+      <BaseButton type="submit" :loading="loading" :disabled="!!inviteError" class="w-full mt-1">
         Create Account
       </BaseButton>
     </form>
