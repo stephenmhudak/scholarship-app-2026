@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Cryptography;
 using System.Text;
 using SqlKata.Execution;
 using ScholarshipApi.Models;
@@ -12,6 +13,8 @@ namespace ScholarshipApi.Controllers;
 [Authorize(Policy = "AppAdmin")]
 public class AdminController(IApplicationService applicationService, QueryFactory db) : ControllerBase
 {
+    // ── Applications ──────────────────────────────────────────────────────────
+
     [HttpGet("applications")]
     public async Task<IActionResult> ListApplications(
         [FromQuery] string? status,
@@ -49,6 +52,8 @@ public class AdminController(IApplicationService applicationService, QueryFactor
             .GetAsync<dynamic>();
         return Ok(scorers);
     }
+
+    // ── Scoring Overview ──────────────────────────────────────────────────────
 
     [HttpGet("scoring/overview")]
     public async Task<IActionResult> ScoringOverview()
@@ -110,6 +115,8 @@ public class AdminController(IApplicationService applicationService, QueryFactor
         return Ok(result);
     }
 
+    // ── Export ────────────────────────────────────────────────────────────────
+
     [HttpGet("applications/export")]
     public async Task<IActionResult> Export([FromQuery] string? status)
     {
@@ -123,12 +130,12 @@ public class AdminController(IApplicationService applicationService, QueryFactor
         var csv = new StringBuilder();
         csv.AppendLine("Id,Status,FirstName,LastName,Email,SubmittedAt,CreatedAt");
         foreach (var row in rows)
-        {
             csv.AppendLine($"{row.Id},{row.Status},{row.FirstName},{row.LastName},{row.Email},{row.SubmittedAt},{row.CreatedAt}");
-        }
 
         return File(Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", "applications.csv");
     }
+
+    // ── Scorers ───────────────────────────────────────────────────────────────
 
     [HttpGet("scorers")]
     public async Task<IActionResult> ListScorers()
@@ -140,6 +147,112 @@ public class AdminController(IApplicationService applicationService, QueryFactor
             .GetAsync<dynamic>();
         return Ok(scorers);
     }
+
+    // ── Users ─────────────────────────────────────────────────────────────────
+
+    [HttpGet("users")]
+    public async Task<IActionResult> ListUsers()
+    {
+        var users = await db.Query("Users as u")
+            .LeftJoin("Schools as s", "s.Id", "u.SchoolId")
+            .Select("u.Id", "u.Email", "u.FirstName", "u.LastName", "u.Role", "u.SchoolId",
+                    "s.Name as SchoolName", "u.CreatedAt")
+            .OrderBy("u.LastName", "u.FirstName")
+            .GetAsync<dynamic>();
+        return Ok(users);
+    }
+
+    [HttpPost("users")]
+    public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request)
+    {
+        var exists = await db.Query("Users").Where("Email", request.Email).ExistsAsync();
+        if (exists) throw new ArgumentException("Email is already registered.");
+
+        var id = Guid.NewGuid().ToString();
+        await db.Query("Users").InsertAsync(new
+        {
+            Id = id,
+            Email = request.Email,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            FirstName = request.FirstName,
+            LastName = request.LastName,
+            Role = request.Role,
+            SchoolId = string.IsNullOrEmpty(request.SchoolId) ? null : request.SchoolId,
+            CreatedAt = DateTime.UtcNow
+        });
+        return CreatedAtAction(nameof(ListUsers), new { }, new { id });
+    }
+
+    [HttpPost("users/{id}/reset-password")]
+    public async Task<IActionResult> ResetPassword(string id, [FromBody] ResetPasswordRequest request)
+    {
+        var exists = await db.Query("Users").Where("Id", id).ExistsAsync();
+        if (!exists) throw new KeyNotFoundException("User not found.");
+
+        await db.Query("Users").Where("Id", id).UpdateAsync(new
+        {
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword)
+        });
+        return NoContent();
+    }
+
+    // ── Schools ───────────────────────────────────────────────────────────────
+
+    [HttpGet("schools")]
+    public async Task<IActionResult> AdminListSchools()
+    {
+        var schools = await db.Query("Schools").OrderBy("Name").GetAsync<School>();
+        return Ok(schools);
+    }
+
+    [HttpPut("schools/{id}")]
+    public async Task<IActionResult> AdminUpdateSchool(string id, [FromBody] AdminSchoolRequest request)
+    {
+        await db.Query("Schools").Where("Id", id).UpdateAsync(new
+        {
+            Name = request.Name,
+            Address = request.Address
+        });
+        return NoContent();
+    }
+
+    // ── School Admin Invites ──────────────────────────────────────────────────
+
+    [HttpPost("schools/{id}/invite")]
+    public async Task<IActionResult> GenerateSchoolAdminInvite(string id)
+    {
+        var school = await db.Query("Schools").Where("Id", id).FirstOrDefaultAsync<School>()
+            ?? throw new KeyNotFoundException("School not found.");
+
+        var tokenBytes = RandomNumberGenerator.GetBytes(32);
+        var token = Convert.ToBase64String(tokenBytes)
+            .Replace("+", "-").Replace("/", "_").TrimEnd('=');
+
+        await db.Query("SchoolAdminInvites").InsertAsync(new
+        {
+            Id = Guid.NewGuid().ToString(),
+            SchoolId = id,
+            Token = token,
+            CreatedAt = DateTime.UtcNow,
+            ExpiresAt = DateTime.UtcNow.AddDays(7)
+        });
+
+        return Ok(new { token, schoolName = school.Name });
+    }
+
+    [HttpGet("invites")]
+    public async Task<IActionResult> ListInvites()
+    {
+        var invites = await db.Query("SchoolAdminInvites as i")
+            .Join("Schools as s", "s.Id", "i.SchoolId")
+            .Select("i.Id", "i.Token", "i.SchoolId", "s.Name as SchoolName",
+                    "i.CreatedAt", "i.ExpiresAt", "i.UsedAt")
+            .OrderByDesc("i.CreatedAt")
+            .GetAsync<dynamic>();
+        return Ok(invites);
+    }
+
+    // ── Cycles ────────────────────────────────────────────────────────────────
 
     [HttpGet("cycles")]
     public async Task<IActionResult> ListCycles()
@@ -177,8 +290,29 @@ public class AdminController(IApplicationService applicationService, QueryFactor
     }
 }
 
+// ── Request / Row types ───────────────────────────────────────────────────────
+
 public class UpdateStatusRequest { public string Status { get; set; } = null!; }
 public class AssignScorerRequest { public string ScoredById { get; set; } = null!; }
+
+public class CreateUserRequest
+{
+    public string FirstName { get; set; } = null!;
+    public string LastName { get; set; } = null!;
+    public string Email { get; set; } = null!;
+    public string Password { get; set; } = null!;
+    public string Role { get; set; } = null!;
+    public string? SchoolId { get; set; }
+}
+
+public class ResetPasswordRequest { public string NewPassword { get; set; } = null!; }
+
+public class AdminSchoolRequest
+{
+    public string Name { get; set; } = null!;
+    public string Address { get; set; } = null!;
+}
+
 public class CycleRequest
 {
     public string Name { get; set; } = null!;

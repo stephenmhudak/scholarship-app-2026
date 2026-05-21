@@ -24,6 +24,24 @@ public class AuthService(QueryFactory db, IConfiguration config) : IAuthService
         var exists = await db.Query("Users").Where("Email", request.Email).ExistsAsync();
         if (exists) throw new ArgumentException("Email is already registered.");
 
+        string role = "applicant";
+        string? schoolId = null;
+        string? inviteId = null;
+
+        if (!string.IsNullOrEmpty(request.InviteToken))
+        {
+            var invite = await db.Query("SchoolAdminInvites")
+                .Where("Token", request.InviteToken)
+                .WhereNull("UsedAt")
+                .Where("ExpiresAt", ">", DateTime.UtcNow)
+                .FirstOrDefaultAsync<dynamic>()
+                ?? throw new ArgumentException("Invite link is invalid or has expired.");
+
+            role = "school_admin";
+            schoolId = (string)invite.SchoolId;
+            inviteId = (string)invite.Id;
+        }
+
         var id = Guid.NewGuid().ToString();
         await db.Query("Users").InsertAsync(new
         {
@@ -32,12 +50,39 @@ public class AuthService(QueryFactory db, IConfiguration config) : IAuthService
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             FirstName = request.FirstName,
             LastName = request.LastName,
-            Role = "applicant",
+            Role = role,
+            SchoolId = schoolId,
             CreatedAt = DateTime.UtcNow
         });
 
+        if (inviteId is not null)
+            await db.Query("SchoolAdminInvites").Where("Id", inviteId).UpdateAsync(new { UsedAt = DateTime.UtcNow });
+
         var user = await db.Query("Users").Where("Id", id).FirstAsync<User>();
         return BuildAuthResponse(user);
+    }
+
+    public async Task<InviteInfoResponse> GetInviteAsync(string token)
+    {
+        var row = await db.Query("SchoolAdminInvites as i")
+            .Join("Schools as s", "s.Id", "i.SchoolId")
+            .Select("i.SchoolId", "s.Name as SchoolName", "i.ExpiresAt", "i.UsedAt")
+            .Where("i.Token", token)
+            .FirstOrDefaultAsync<dynamic>()
+            ?? throw new KeyNotFoundException("Invite not found.");
+
+        if (row.UsedAt is not null)
+            throw new ArgumentException("This invite has already been used.");
+
+        if ((DateTime)row.ExpiresAt < DateTime.UtcNow)
+            throw new ArgumentException("This invite has expired.");
+
+        return new InviteInfoResponse
+        {
+            SchoolId = (string)row.SchoolId,
+            SchoolName = (string)row.SchoolName,
+            ExpiresAt = (DateTime)row.ExpiresAt
+        };
     }
 
     public async Task<User> GetCurrentUserAsync(string userId)
