@@ -40,7 +40,7 @@ function goToDetail(applicationId) {
   <div class="space-y-6">
     <div>
       <h1 class="page-title">Scoring Queue</h1>
-      <p class="page-subtitle">Applications assigned to you for review.</p>
+      <p class="page-subtitle">Applications with sections pending your score.</p>
     </div>
 
     <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
@@ -82,10 +82,10 @@ function goToDetail(applicationId) {
             <td>
               <span
                 v-if="app.hasScored"
-                class="inline-flex items-center gap-1 text-xs font-semibold text-success-dark bg-success-light border border-success/20 px-2 py-0.5 rounded-full"
+                class="inline-flex items-center gap-1 text-xs font-semibold text-[#8C6500] bg-warning-light border border-warning/30 px-2 py-0.5 rounded-full"
               >
-                <span class="mdi mdi-check-circle-outline text-sm"></span>
-                Scored
+                <span class="mdi mdi-pencil-outline text-sm"></span>
+                In Progress
               </span>
               <span
                 v-else
@@ -100,7 +100,7 @@ function goToDetail(applicationId) {
                 @click.stop="goToDetail(app.id)"
                 class="text-sm font-semibold text-primary hover:text-primary-700 transition-colors"
               >
-                {{ app.hasScored ? 'Edit Score' : 'Score Now' }}
+                {{ app.hasScored ? 'Continue' : 'Score Now' }}
                 <span class="mdi mdi-arrow-right ml-0.5"></span>
               </button>
             </td>
