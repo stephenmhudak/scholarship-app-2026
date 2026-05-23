@@ -72,7 +72,7 @@ public class AuthService(QueryFactory db, IConfiguration config) : IAuthService
         });
 
         if (inviteId is not null)
-            await db.Query("SchoolAdminInvites").Where("Id", inviteId).UpdateAsync(new { UsedAt = DateTime.UtcNow });
+            await db.Query("SchoolAdminInvites").Where("Id", inviteId).UpdateAsync(new { UsedAt = DateTime.UtcNow, SchoolId = schoolId });
 
         var user = await db.Query("Users").Where("Id", id).FirstAsync<User>();
         return BuildAuthResponse(user);
