@@ -55,6 +55,22 @@ public class ScoringService(QueryFactory db, IApplicationService applicationServ
 
             if (!isAssigned) throw new UnauthorizedAccessException("You are not assigned to score this application.");
         }
+        else
+        {
+            var alreadyTracked = await db.Query("ApplicationScorers")
+                .Where("ApplicationId", applicationId)
+                .Where("ScoredById", scorerId)
+                .ExistsAsync();
+
+            if (!alreadyTracked)
+                await db.Query("ApplicationScorers").InsertAsync(new
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    ApplicationId = applicationId,
+                    ScoredById = scorerId,
+                    AssignedAt = DateTime.UtcNow
+                });
+        }
 
         await db.Query("Scores")
             .Where("ApplicationId", applicationId)

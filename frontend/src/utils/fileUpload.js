@@ -1,6 +1,6 @@
 import api from '../services/api'
 
-export const ACCEPTED_REFERENCE_TYPES = ['.doc', '.docx', '.pdf']
+export const ACCEPTED_REFERENCE_TYPES = ['.jpg', '.jpeg', '.doc', '.docx', '.pdf', '.png']
 
 /**
  * Upload a file to the given endpoint as multipart/form-data.
