@@ -10,6 +10,7 @@ const scoringStore = useScoringStore()
 
 const applicationId = route.params.applicationId
 const loading = ref(true)
+const saving = ref(false)
 const submitting = ref(false)
 const alert = ref(null)
 
@@ -60,6 +61,19 @@ onMounted(async () => {
     loading.value = false
   }
 })
+
+async function handleSave(payload) {
+  saving.value = true
+  alert.value = null
+  try {
+    await scoringStore.submitScore(applicationId, payload)
+    alert.value = { type: 'success', message: 'Progress saved.' }
+  } catch {
+    alert.value = { type: 'error', message: 'Failed to save progress.' }
+  } finally {
+    saving.value = false
+  }
+}
 
 async function handleSubmitScore(payload) {
   submitting.value = true
@@ -118,13 +132,13 @@ async function handleSubmitScore(payload) {
 
         <!-- Scoring Panel -->
         <div>
-          <h2 class="text-base font-bold text-navy mb-4">
-            {{ scoringStore.existingScores.length ? 'Edit Your Score' : 'Submit Your Score' }}
-          </h2>
+          <h2 class="text-base font-bold text-navy mb-4">Your Score</h2>
           <ScoringForm
             :sections="formSections"
             :existing-scores="scoringStore.existingScores"
+            :saving="saving"
             :submitting="submitting"
+            @save="handleSave"
             @submit="handleSubmitScore"
           />
         </div>

@@ -15,9 +15,13 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  saving: {
+    type: Boolean,
+    default: false,
+  },
 })
 
-const emit = defineEmits(['submit'])
+const emit = defineEmits(['save', 'submit'])
 
 function buildScores() {
   return props.sections.map((s) => {
@@ -32,6 +36,7 @@ function buildScores() {
 }
 
 const scores = ref(buildScores())
+const submitError = ref(null)
 
 watch(
   () => [props.sections, props.existingScores],
@@ -39,25 +44,36 @@ watch(
   { deep: true },
 )
 
-const isEditing = ref(props.existingScores.length > 0)
-watch(
-  () => props.existingScores,
-  (val) => { isEditing.value = val.length > 0 },
-)
-
-function onSubmit() {
-  emit('submit', {
-    sectionScores: scores.value.map((s) => ({
+function toPayload(rows) {
+  return {
+    sectionScores: rows.map((s) => ({
       sectionId: s.sectionId,
       score: Number(s.score),
       comments: s.comments || null,
     })),
-  })
+  }
+}
+
+function onSave() {
+  submitError.value = null
+  const filled = scores.value.filter((s) => s.score !== '' && s.score != null)
+  if (!filled.length) return
+  emit('save', toPayload(filled))
+}
+
+function onSubmit() {
+  submitError.value = null
+  const unfilled = scores.value.filter((s) => s.score === '' || s.score == null)
+  if (unfilled.length) {
+    submitError.value = `Please enter scores for all sections before submitting (${unfilled.map((s) => s.label).join(', ')}).`
+    return
+  }
+  emit('submit', toPayload(scores.value))
 }
 </script>
 
 <template>
-  <form @submit.prevent="onSubmit" class="space-y-5">
+  <div class="space-y-5">
     <div
       v-for="(section, idx) in scores"
       :key="section.sectionId ?? 'overall'"
@@ -74,7 +90,6 @@ function onSubmit() {
           type="number"
           min="1"
           max="100"
-          required
           placeholder="Enter score…"
           class="form-input w-36"
         />
@@ -91,9 +106,17 @@ function onSubmit() {
       </div>
     </div>
 
-    <BaseButton type="submit" :loading="submitting">
-      <span :class="`mdi ${isEditing ? 'mdi-pencil' : 'mdi-send'} mr-1.5`"></span>
-      {{ isEditing ? 'Update Score' : 'Submit Score' }}
-    </BaseButton>
-  </form>
+    <p v-if="submitError" class="text-sm text-danger font-medium">{{ submitError }}</p>
+
+    <div class="flex items-center gap-3">
+      <BaseButton type="button" variant="secondary" :loading="saving" :disabled="submitting" @click="onSave">
+        <span class="mdi mdi-content-save-outline mr-1.5"></span>
+        Save Progress
+      </BaseButton>
+      <BaseButton type="button" :loading="submitting" :disabled="saving" @click="onSubmit">
+        <span class="mdi mdi-send mr-1.5"></span>
+        Submit Score
+      </BaseButton>
+    </div>
+  </div>
 </template>
