@@ -11,7 +11,6 @@ const scoringStore = useScoringStore()
 const applicationId = route.params.applicationId
 const loading = ref(true)
 const saving = ref(false)
-const submitting = ref(false)
 const alert = ref(null)
 
 const applicantName = computed(() => {
@@ -67,24 +66,11 @@ async function handleSave(payload) {
   alert.value = null
   try {
     await scoringStore.submitScore(applicationId, payload)
-    alert.value = { type: 'success', message: 'Progress saved.' }
+    alert.value = { type: 'success', message: 'Scores saved.' }
   } catch {
-    alert.value = { type: 'error', message: 'Failed to save progress.' }
+    alert.value = { type: 'error', message: 'Failed to save scores.' }
   } finally {
     saving.value = false
-  }
-}
-
-async function handleSubmitScore(payload) {
-  submitting.value = true
-  alert.value = null
-  try {
-    await scoringStore.submitScore(applicationId, payload)
-    alert.value = { type: 'success', message: 'Score submitted successfully!' }
-  } catch {
-    alert.value = { type: 'error', message: 'Failed to submit score.' }
-  } finally {
-    submitting.value = false
   }
 }
 </script>
@@ -137,9 +123,7 @@ async function handleSubmitScore(payload) {
             :sections="formSections"
             :existing-scores="scoringStore.existingScores"
             :saving="saving"
-            :submitting="submitting"
             @save="handleSave"
-            @submit="handleSubmitScore"
           />
         </div>
       </div>
