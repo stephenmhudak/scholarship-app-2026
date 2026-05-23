@@ -120,13 +120,13 @@ async function loadSchools() {
 
 function startEditSchool(school) {
   editingSchool.value = {
-    id: school.Id,
-    name: school.Name,
-    addressLine1: school.AddressLine1 ?? '',
-    addressLine2: school.AddressLine2 ?? '',
-    city: school.City ?? '',
-    state: school.State ?? '',
-    zip: school.Zip ?? '',
+    id: school.id,
+    name: school.name,
+    addressLine1: school.addressLine1 ?? '',
+    addressLine2: school.addressLine2 ?? '',
+    city: school.city ?? '',
+    state: school.state ?? '',
+    zip: school.zip ?? '',
   }
 }
 
@@ -204,12 +204,10 @@ function formatDate(d) {
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function switchTab(tab) {
   activeTab.value = tab
-  if (tab === 'users' && !users.value.length) loadUsers()
-  if (tab === 'schools' && !schools.value.length) loadSchools()
   if (tab === 'invites') loadInvites()
 }
 
-onMounted(() => loadUsers())
+onMounted(() => { loadUsers(); loadSchools() })
 </script>
 
 <template>
@@ -289,8 +287,8 @@ onMounted(() => loadUsers())
       <div v-else class="space-y-3">
         <div v-if="!schools.length" class="section-card text-slate-400 text-sm text-center">No schools found.</div>
 
-        <div v-for="school in schools" :key="school.Id" class="section-card space-y-4">
-          <div v-if="editingSchool?.id === school.Id" class="space-y-3">
+        <div v-for="school in schools" :key="school.id" class="section-card space-y-4">
+          <div v-if="editingSchool?.id === school.id" class="space-y-3">
             <BaseInput v-model="editingSchool.name" label="School Name" :required="true" />
             <div class="grid grid-cols-2 gap-3">
               <BaseInput v-model="editingSchool.addressLine1" label="Address Line 1" />
@@ -308,9 +306,9 @@ onMounted(() => loadUsers())
           </div>
           <div v-else class="flex items-start justify-between">
             <div>
-              <p class="font-semibold text-navy">{{ school.Name }}</p>
+              <p class="font-semibold text-navy">{{ school.name }}</p>
               <p class="text-sm text-slate-400">
-                {{ [school.AddressLine1, school.City, school.State, school.Zip].filter(Boolean).join(', ') || 'No address set' }}
+                {{ [school.addressLine1, school.city, school.state, school.zip].filter(Boolean).join(', ') || 'No address set' }}
               </p>
             </div>
             <BaseButton size="sm" variant="secondary" @click="startEditSchool(school)">Edit</BaseButton>
@@ -407,7 +405,7 @@ onMounted(() => loadUsers())
         <label class="block text-sm font-medium text-navy mb-1">School</label>
         <select v-model="addUserForm.schoolId" class="form-select w-full">
           <option value="">— No School —</option>
-          <option v-for="s in schools" :key="s.Id" :value="s.Id">{{ s.Name }}</option>
+          <option v-for="s in schools" :key="s.id" :value="s.id">{{ s.name }}</option>
         </select>
       </div>
 

@@ -59,12 +59,12 @@ async function saveSchool() {
   saving.value = true
   try {
     await api.put(`/schools/${schoolId}`, {
-      name: school.value.Name,
-      addressLine1: school.value.AddressLine1,
-      addressLine2: school.value.AddressLine2,
-      city: school.value.City,
-      state: school.value.State,
-      zip: school.value.Zip,
+      name: school.value.name,
+      addressLine1: school.value.addressLine1,
+      addressLine2: school.value.addressLine2,
+      city: school.value.city,
+      state: school.value.state,
+      zip: school.value.zip,
     })
     showAlert('success', 'School updated successfully.')
   } catch {
@@ -152,22 +152,22 @@ async function submitResetPassword() {
       <!-- School Info -->
       <div class="section-card space-y-4">
         <div>
-          <h1 class="page-title">{{ school.Name }}</h1>
+          <h1 class="page-title">{{ school.name }}</h1>
           <p class="page-subtitle">School information</p>
         </div>
 
         <div class="space-y-3">
-          <BaseInput :model-value="school.Name" @update:model-value="school.Name = $event" label="School Name" :required="true" />
+          <BaseInput v-model="school.name" label="School Name" :required="true" />
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <BaseInput :model-value="school.AddressLine1" @update:model-value="school.AddressLine1 = $event" label="Address Line 1" placeholder="123 Main St" />
-            <BaseInput :model-value="school.AddressLine2" @update:model-value="school.AddressLine2 = $event" label="Address Line 2" placeholder="Suite 100 (optional)" />
+            <BaseInput v-model="school.addressLine1" label="Address Line 1" placeholder="123 Main St" />
+            <BaseInput v-model="school.addressLine2" label="Address Line 2" placeholder="Suite 100 (optional)" />
           </div>
 
           <div class="grid grid-cols-3 gap-3">
-            <BaseInput :model-value="school.City" @update:model-value="school.City = $event" label="City" placeholder="Springfield" class="col-span-1" />
-            <BaseInput :model-value="school.State" @update:model-value="school.State = $event" label="State" placeholder="IL" />
-            <BaseInput :model-value="school.Zip" @update:model-value="school.Zip = $event" label="ZIP Code" placeholder="62701" />
+            <BaseInput v-model="school.city" label="City" placeholder="Springfield" class="col-span-1" />
+            <BaseInput v-model="school.state" label="State" placeholder="IL" />
+            <BaseInput v-model="school.zip" label="ZIP Code" placeholder="62701" />
           </div>
         </div>
 
