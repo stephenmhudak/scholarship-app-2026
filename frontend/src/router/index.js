@@ -173,6 +173,9 @@ router.beforeEach((to, from, next) => {
   if (to.meta.role && authStore.role !== to.meta.role) return next('/403')
   if (to.meta.anyRole && !to.meta.anyRole.includes(authStore.role)) return next('/403')
 
+  if (to.name === 'SchoolsList' && authStore.role === 'school_admin' && authStore.user?.schoolId)
+    return next(`/schools/${authStore.user.schoolId}`)
+
   next()
 })
 
