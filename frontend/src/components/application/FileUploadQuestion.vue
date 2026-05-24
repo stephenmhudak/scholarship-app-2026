@@ -13,9 +13,16 @@ const uploading = ref(false)
 const uploadError = ref(null)
 const uploadedName = ref(null)
 
+const MAX_FILE_SIZE = 5 * 1024 * 1024
+
 async function onChange(e) {
   const file = e.target.files?.[0]
   if (!file) return
+  if (file.size > MAX_FILE_SIZE) {
+    uploadError.value = 'File must be 5 MB or less.'
+    e.target.value = ''
+    return
+  }
   uploading.value = true
   uploadError.value = null
   try {
@@ -48,6 +55,7 @@ async function onChange(e) {
       <label class="flex flex-col items-center gap-2 cursor-pointer">
         <span class="mdi mdi-cloud-upload-outline text-3xl text-slate-400"></span>
         <span class="text-sm font-medium text-slate-400">Click to select a file</span>
+        <span class="text-xs text-slate-400">Max 5 MB</span>
         <input type="file" :disabled="uploading" @change="onChange" class="sr-only" />
       </label>
     </div>
