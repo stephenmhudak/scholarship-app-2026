@@ -18,7 +18,7 @@ const { sortKey, sortDir, setSort, applySort } = useTableSort('submitted', 'desc
 const sortedApplications = computed(() => applySort(applications.value, {
   applicant: (a) => `${a.lastName} ${a.firstName}`.toLowerCase(),
   status: (a) => a.status,
-  scorers: (a) => a.scoredCount / (a.assignedCount || 1),
+  scorers: (a) => a.scoredCount,
   avgScore: (a) => a.overallAverage ?? -1,
   submitted: (a) => a.submittedAt ?? '',
 }))
@@ -43,10 +43,8 @@ function toggleExpand(id) {
 }
 
 function scoringProgress(app) {
-  if (!app.assignedCount) return { label: 'No scorers', color: 'text-slate-400' }
-  if (app.scoredCount === 0) return { label: `0 / ${app.assignedCount} scored`, color: 'text-danger' }
-  if (app.scoredCount < app.assignedCount) return { label: `${app.scoredCount} / ${app.assignedCount} scored`, color: 'text-[#8C6500]' }
-  return { label: `${app.scoredCount} / ${app.assignedCount} scored`, color: 'text-success-dark' }
+  if (app.scoredCount === 0) return { label: 'No scores', color: 'text-slate-400' }
+  return { label: `${app.scoredCount} scored`, color: 'text-success-dark' }
 }
 </script>
 
