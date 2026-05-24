@@ -24,6 +24,13 @@ public class AuthController(IAuthService authService) : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("invite/{token}")]
+    public async Task<IActionResult> GetInvite(string token)
+    {
+        var result = await authService.GetInviteAsync(token);
+        return Ok(result);
+    }
+
     [HttpGet("me")]
     [Authorize]
     public async Task<IActionResult> Me()

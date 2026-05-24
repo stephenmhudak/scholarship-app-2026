@@ -62,7 +62,7 @@ const routes = [
     path: '/scoring/:applicationId',
     name: 'ScoringDetail',
     component: () => import('../pages/scorer/ScoringDetailPage.vue'),
-    meta: { role: 'scorer' },
+    meta: { anyRole: ['scorer', 'app_admin'] },
   },
   {
     path: '/admin/applications',
@@ -77,9 +77,21 @@ const routes = [
     meta: { role: 'app_admin' },
   },
   {
-    path: '/admin/settings',
-    name: 'Settings',
+    path: '/admin/scholarship-settings',
+    name: 'ScholarshipSettings',
     component: () => import('../pages/admin/SettingsPage.vue'),
+    meta: { role: 'app_admin' },
+  },
+  {
+    path: '/admin/settings',
+    name: 'AdminSettings',
+    component: () => import('../pages/admin/AdminSettingsPage.vue'),
+    meta: { role: 'app_admin' },
+  },
+  {
+    path: '/admin/scoring',
+    name: 'ScoringOverview',
+    component: () => import('../pages/admin/ScoringOverviewPage.vue'),
     meta: { role: 'app_admin' },
   },
   {
@@ -137,7 +149,10 @@ function roleHome(role) {
   switch (role) {
     case 'scorer': return '/scoring'
     case 'app_admin': return '/admin/applications'
-    case 'school_admin': return '/schools'
+    case 'school_admin': {
+      const user = JSON.parse(localStorage.getItem('auth_user') || 'null')
+      return user?.schoolId ? `/schools/${user.schoolId}` : '/schools'
+    }
     case 'counselor': return '/counselor'
     default: return '/dashboard'
   }
@@ -156,6 +171,7 @@ router.beforeEach((to, from, next) => {
   if (!authStore.isAuthenticated) return next('/login')
 
   if (to.meta.role && authStore.role !== to.meta.role) return next('/403')
+  if (to.meta.anyRole && !to.meta.anyRole.includes(authStore.role)) return next('/403')
 
   next()
 })

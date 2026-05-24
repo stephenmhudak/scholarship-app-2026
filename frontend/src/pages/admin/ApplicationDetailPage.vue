@@ -1,14 +1,14 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import api from '../../services/api'
 import { useAdminStore } from '../../stores/admin'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
-import AssignScorerModal from '../../components/admin/AssignScorerModal.vue'
 import BaseButton from '../../components/common/BaseButton.vue'
 import BaseAlert from '../../components/common/BaseAlert.vue'
 
 const route = useRoute()
+const router = useRouter()
 const adminStore = useAdminStore()
 
 const appId = route.params.id
@@ -17,13 +17,12 @@ const questions = ref([])
 const loading = ref(true)
 const updatingStatus = ref(false)
 const newStatus = ref('')
-const showAssignModal = ref(false)
 const alert = ref(null)
 
 const statuses = ['submitted', 'under_review', 'awarded', 'rejected']
 
-const questionMap = computed(() =>
-  Object.fromEntries(questions.value.map((q) => [q.id, q.text]))
+const answersMap = computed(() =>
+  Object.fromEntries((application.value?.answers ?? []).map((a) => [a.questionId, a]))
 )
 
 const applicantName = computed(() => {
@@ -62,14 +61,7 @@ async function updateStatus() {
   }
 }
 
-async function handleAssigned({ applicationId, scorerId }) {
-  try {
-    await adminStore.assignScorer(applicationId, scorerId)
-    alert.value = { type: 'success', message: 'Scorer assigned successfully.' }
-  } catch {
-    alert.value = { type: 'error', message: 'Failed to assign scorer.' }
-  }
-}
+
 </script>
 
 <template>
@@ -127,9 +119,14 @@ async function handleAssigned({ applicationId, scorerId }) {
             </BaseButton>
           </div>
 
-          <BaseButton variant="secondary" size="sm" @click="showAssignModal = true">
-            <span class="mdi mdi-account-plus mr-1.5"></span>
-            Assign Scorer
+          <BaseButton
+            v-if="application.status !== 'draft'"
+            variant="secondary"
+            size="sm"
+            @click="router.push(`/scoring/${appId}`)"
+          >
+            <span class="mdi mdi-star-outline mr-1.5"></span>
+            Score Application
           </BaseButton>
         </div>
       </div>
@@ -137,17 +134,17 @@ async function handleAssigned({ applicationId, scorerId }) {
       <!-- Answers card -->
       <div class="section-card">
         <h2 class="text-base font-bold text-navy mb-5">Application Answers</h2>
-        <div v-if="application.answers?.length" class="space-y-5">
+        <div v-if="questions.length" class="space-y-5">
           <div
-            v-for="answer in application.answers"
-            :key="answer.questionId"
+            v-for="q in questions"
+            :key="q.id"
             class="border-b border-[#E9EDF7] pb-5 last:border-0 last:pb-0"
           >
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">
-              {{ questionMap[answer.questionId] || answer.questionId }}
-            </p>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">{{ q.text }}</p>
             <p class="text-sm text-navy whitespace-pre-wrap">
-              {{ answer.selectedOptions?.length ? answer.selectedOptions.join(', ') : (answer.textValue || '—') }}
+              {{ answersMap[q.id]?.selectedOptions?.length
+                  ? answersMap[q.id].selectedOptions.join(', ')
+                  : (answersMap[q.id]?.textValue || '—') }}
             </p>
           </div>
         </div>
@@ -155,11 +152,5 @@ async function handleAssigned({ applicationId, scorerId }) {
       </div>
     </template>
 
-    <AssignScorerModal
-      :show="showAssignModal"
-      :applicationId="appId"
-      @close="showAssignModal = false"
-      @assigned="handleAssigned"
-    />
   </div>
 </template>

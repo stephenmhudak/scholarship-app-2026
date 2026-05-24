@@ -12,5 +12,4 @@ public interface IApplicationService
     Task<IEnumerable<ApplicationListDto>> AdminListAsync(string? status, string? search, int page, int pageSize);
     Task<int> AdminCountAsync(string? status, string? search);
     Task UpdateStatusAsync(string id, string status);
-    Task AssignScorerAsync(string id, string scorerId);
 }

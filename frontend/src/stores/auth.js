@@ -31,10 +31,18 @@ export const useAuthStore = defineStore('auth', {
 
     async fetchCurrentUser() {
       const response = await api.get('/auth/me')
-      this.user = response.data
-      this.role = response.data.role
-      localStorage.setItem('auth_role', response.data.role)
-      localStorage.setItem('auth_user', JSON.stringify(response.data))
+      const d = response.data
+      this.role = d.role
+      this.user = {
+        id: d.id,
+        email: d.email,
+        firstName: d.firstName,
+        lastName: d.lastName,
+        role: d.role,
+        schoolId: d.schoolId ?? null,
+      }
+      localStorage.setItem('auth_role', d.role)
+      localStorage.setItem('auth_user', JSON.stringify(this.user))
     },
 
     _applyAuthResponse(data) {
@@ -46,6 +54,7 @@ export const useAuthStore = defineStore('auth', {
         firstName: data.firstName,
         lastName: data.lastName,
         role: data.role,
+        schoolId: data.schoolId ?? null,
       }
       localStorage.setItem('auth_token', data.token)
       localStorage.setItem('auth_role', data.role)

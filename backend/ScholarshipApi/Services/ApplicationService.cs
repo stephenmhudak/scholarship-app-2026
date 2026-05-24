@@ -126,22 +126,4 @@ public class ApplicationService(QueryFactory db) : IApplicationService
     public async Task UpdateStatusAsync(string id, string status) =>
         await db.Query("Applications").Where("Id", id).UpdateAsync(new { Status = status });
 
-    public async Task AssignScorerAsync(string id, string scorerId)
-    {
-        var scorer = await db.Query("Users").Where("Id", scorerId).Where("Role", "scorer").FirstOrDefaultAsync<Models.User>()
-            ?? throw new ArgumentException("Scorer not found.");
-
-        var existingScore = await db.Query("Scores").Where("ApplicationId", id).Where("ScoredById", scorerId).ExistsAsync();
-        if (!existingScore)
-        {
-            await db.Query("Scores").InsertAsync(new
-            {
-                Id = Guid.NewGuid().ToString(),
-                ApplicationId = id,
-                ScoredById = scorerId,
-                Score = 0,
-                ScoredAt = DateTime.UtcNow
-            });
-        }
-    }
 }

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 
 const authStore = useAuthStore()
+const schoolId = computed(() => authStore.user?.schoolId)
 
 const navLinks = computed(() => {
   const role = authStore.role
@@ -22,12 +23,14 @@ const navLinks = computed(() => {
   if (role === 'app_admin') {
     return [
       { label: 'Applications', icon: 'mdi-folder-multiple-outline', to: '/admin/applications' },
-      { label: 'Settings', icon: 'mdi-cog-outline', to: '/admin/settings' },
+      { label: 'Scoring', icon: 'mdi-chart-bar', to: '/admin/scoring' },
+      { label: 'Settings', icon: 'mdi-account-cog-outline', to: '/admin/settings' },
+      { label: 'Scholarship Settings', icon: 'mdi-cog-outline', to: '/admin/scholarship-settings' },
     ]
   }
   if (role === 'school_admin') {
     return [
-      { label: 'Schools', icon: 'mdi-domain', to: '/schools' },
+      { label: 'My School', icon: 'mdi-domain', to: schoolId.value ? `/schools/${schoolId.value}` : '/schools' },
     ]
   }
   if (role === 'counselor') {

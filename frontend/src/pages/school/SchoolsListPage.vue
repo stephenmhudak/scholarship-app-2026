@@ -1,7 +1,9 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../../services/api'
+import { useTableSort } from '../../composables/useTableSort'
+import SortTh from '../../components/common/SortTh.vue'
 import BaseButton from '../../components/common/BaseButton.vue'
 import BaseAlert from '../../components/common/BaseAlert.vue'
 import BaseModal from '../../components/common/BaseModal.vue'
@@ -21,6 +23,15 @@ const newSchool = ref({
   city: '',
   state: '',
 })
+
+const { sortKey, sortDir, setSort, applySort } = useTableSort('name')
+
+const sortedSchools = computed(() => applySort(schools.value, {
+  name: (s) => (s.name ?? '').toLowerCase(),
+  location: (s) => `${s.city ?? ''} ${s.state ?? ''}`.toLowerCase().trim(),
+  counselors: (s) => s.counselors_count ?? -1,
+  applicants: (s) => s.applicants_count ?? -1,
+}))
 
 onMounted(async () => {
   await loadSchools()
@@ -78,16 +89,16 @@ async function addSchool() {
       <table class="dialect-table">
         <thead>
           <tr>
-            <th>School Name</th>
-            <th>Location</th>
-            <th>Counselors</th>
-            <th>Applicants</th>
+            <SortTh column="name" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">School Name</SortTh>
+            <SortTh column="location" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Location</SortTh>
+            <SortTh column="counselors" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Counselors</SortTh>
+            <SortTh column="applicants" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Applicants</SortTh>
             <th class="text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
           <tr
-            v-for="school in schools"
+            v-for="school in sortedSchools"
             :key="school.id"
             @click="router.push(`/schools/${school.id}`)"
           >
