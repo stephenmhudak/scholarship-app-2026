@@ -35,10 +35,6 @@ export const useAdminStore = defineStore('admin', {
       }
     },
 
-    async assignScorer(id, scorerId) {
-      await api.post(`/admin/applications/${id}/assign`, { scoredById: scorerId })
-    },
-
     async exportData(params = {}) {
       const response = await api.get('/admin/applications/export', {
         params,

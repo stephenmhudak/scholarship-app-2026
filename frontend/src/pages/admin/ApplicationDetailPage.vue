@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import api from '../../services/api'
 import { useAdminStore } from '../../stores/admin'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
-import AssignScorerModal from '../../components/admin/AssignScorerModal.vue'
 import BaseButton from '../../components/common/BaseButton.vue'
 import BaseAlert from '../../components/common/BaseAlert.vue'
 
@@ -18,7 +17,6 @@ const questions = ref([])
 const loading = ref(true)
 const updatingStatus = ref(false)
 const newStatus = ref('')
-const showAssignModal = ref(false)
 const alert = ref(null)
 
 const statuses = ['submitted', 'under_review', 'awarded', 'rejected']
@@ -63,14 +61,7 @@ async function updateStatus() {
   }
 }
 
-async function handleAssigned({ applicationId, scorerId }) {
-  try {
-    await adminStore.assignScorer(applicationId, scorerId)
-    alert.value = { type: 'success', message: 'Scorer assigned successfully.' }
-  } catch {
-    alert.value = { type: 'error', message: 'Failed to assign scorer.' }
-  }
-}
+
 </script>
 
 <template>
@@ -128,11 +119,6 @@ async function handleAssigned({ applicationId, scorerId }) {
             </BaseButton>
           </div>
 
-          <BaseButton variant="secondary" size="sm" @click="showAssignModal = true">
-            <span class="mdi mdi-account-plus mr-1.5"></span>
-            Assign Scorer
-          </BaseButton>
-
           <BaseButton
             v-if="application.status !== 'draft'"
             variant="secondary"
@@ -166,11 +152,5 @@ async function handleAssigned({ applicationId, scorerId }) {
       </div>
     </template>
 
-    <AssignScorerModal
-      :show="showAssignModal"
-      :applicationId="appId"
-      @close="showAssignModal = false"
-      @assigned="handleAssigned"
-    />
   </div>
 </template>

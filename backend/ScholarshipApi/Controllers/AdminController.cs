@@ -34,25 +34,6 @@ public class AdminController(IApplicationService applicationService, QueryFactor
         return NoContent();
     }
 
-    [HttpPost("applications/{id}/assign")]
-    public async Task<IActionResult> AssignScorer(string id, [FromBody] AssignScorerRequest request)
-    {
-        await applicationService.AssignScorerAsync(id, request.ScoredById);
-        return NoContent();
-    }
-
-    [HttpGet("applications/{id}/scorers")]
-    public async Task<IActionResult> GetAssignedScorers(string id)
-    {
-        var scorers = await db.Query("ApplicationScorers as aps")
-            .Join("Users as u", "u.Id", "aps.ScoredById")
-            .Select("u.Id", "u.FirstName", "u.LastName", "u.Email", "aps.AssignedAt")
-            .Where("aps.ApplicationId", id)
-            .OrderBy("u.LastName")
-            .GetAsync<dynamic>();
-        return Ok(scorers);
-    }
-
     // ── Scoring Overview ──────────────────────────────────────────────────────
 
     [HttpGet("scoring/overview")]
@@ -64,12 +45,6 @@ public class AdminController(IApplicationService applicationService, QueryFactor
             .WhereNot("a.Status", "draft")
             .OrderByDesc("a.SubmittedAt")
             .GetAsync<AppOverviewRow>()).ToList();
-
-        var assignedCounts = (await db.Query("ApplicationScorers")
-            .SelectRaw("ApplicationId, COUNT(*) as Total")
-            .GroupBy("ApplicationId")
-            .GetAsync<CountRow>())
-            .ToDictionary(r => r.ApplicationId, r => r.Total);
 
         var scoredCounts = (await db.Query("Scores")
             .SelectRaw("ApplicationId, COUNT(DISTINCT ScoredById) as Total")
@@ -99,7 +74,6 @@ public class AdminController(IApplicationService applicationService, QueryFactor
                 lastName = app.LastName,
                 status = app.Status,
                 submittedAt = app.SubmittedAt,
-                assignedCount = assignedCounts.GetValueOrDefault(app.ApplicationId, 0),
                 scoredCount = scoredCounts.GetValueOrDefault(app.ApplicationId, 0),
                 overallAverage = overallAvg,
                 sectionAverages = sections.Select(s => new
@@ -292,7 +266,6 @@ public class AdminController(IApplicationService applicationService, QueryFactor
 // ── Request / Row types ───────────────────────────────────────────────────────
 
 public class UpdateStatusRequest { public string Status { get; set; } = null!; }
-public class AssignScorerRequest { public string ScoredById { get; set; } = null!; }
 
 public class CreateUserRequest
 {
