@@ -38,6 +38,7 @@ public class AuthController(IAuthService authService) : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)!;
         var user = await authService.GetCurrentUserAsync(userId);
-        return Ok(new { user.Id, user.Email, user.FirstName, user.LastName, user.Role, user.SchoolId });
+        var permissions = await authService.GetPermissionsForRoleAsync(user.Role);
+        return Ok(new { user.Id, user.Email, user.FirstName, user.LastName, user.Role, user.SchoolId, Permissions = permissions });
     }
 }

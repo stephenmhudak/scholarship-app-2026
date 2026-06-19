@@ -14,7 +14,7 @@ import StatusBadge from '../../components/admin/StatusBadge.vue'
 const route = useRoute()
 const authStore = useAuthStore()
 const schoolId = route.params.id
-const isSchoolAdmin = authStore.role === 'school_admin'
+const canManageStaff = authStore.hasPermission('manage_school_staff')
 
 const school = ref(null)
 const counselors = ref([])
@@ -178,7 +178,7 @@ async function submitResetPassword() {
       </div>
 
       <!-- Counselors (school_admin only) -->
-      <div v-if="isSchoolAdmin" class="section-card space-y-4">
+      <div v-if="canManageStaff" class="section-card space-y-4">
         <div class="flex items-center justify-between">
           <h2 class="text-base font-bold text-navy">Counselors</h2>
           <BaseButton size="sm" @click="showAddCounselor = true">
