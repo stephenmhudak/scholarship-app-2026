@@ -4,3 +4,5 @@ backend/ScholarshipApi/Properties/launchSettings.json
 backend/ScholarshipApi/obj/
 backend/ScholarshipApi/bin/
 scholarship-app-2026.sln
+backend.tar
+frontend.tar
