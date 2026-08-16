@@ -16,7 +16,8 @@ public class AuthService(QueryFactory db, IConfiguration config) : IAuthService
         if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             throw new ArgumentException("Invalid email or password.");
 
-        return BuildAuthResponse(user);
+        var permissions = await GetPermissionsForRoleAsync(user.Role);
+        return BuildAuthResponse(user, permissions);
     }
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
@@ -75,7 +76,8 @@ public class AuthService(QueryFactory db, IConfiguration config) : IAuthService
             await db.Query("SchoolAdminInvites").Where("Id", inviteId).UpdateAsync(new { UsedAt = DateTime.UtcNow, SchoolId = schoolId });
 
         var user = await db.Query("Users").Where("Id", id).FirstAsync<User>();
-        return BuildAuthResponse(user);
+        var permissions = await GetPermissionsForRoleAsync(user.Role);
+        return BuildAuthResponse(user, permissions);
     }
 
     public async Task<InviteInfoResponse> GetInviteAsync(string token)
@@ -101,9 +103,21 @@ public class AuthService(QueryFactory db, IConfiguration config) : IAuthService
         return user ?? throw new KeyNotFoundException("User not found.");
     }
 
-    private AuthResponse BuildAuthResponse(User user)
+    public async Task<IEnumerable<string>> GetPermissionsForRoleAsync(string roleName)
     {
-        var token = GenerateToken(user);
+        var rows = await db.Query("Permissions as p")
+            .Join("RolePermissions as rp", "rp.PermissionId", "p.Id")
+            .Join("Roles as r", "r.Id", "rp.RoleId")
+            .Where("r.Name", roleName)
+            .Select("p.Name")
+            .GetAsync<dynamic>();
+        return rows.Select(r => (string)r.Name).ToList();
+    }
+
+    private AuthResponse BuildAuthResponse(User user, IEnumerable<string> permissions)
+    {
+        var permList = permissions.ToList();
+        var token = GenerateToken(user, permList);
         return new AuthResponse
         {
             Token = token,
@@ -112,11 +126,12 @@ public class AuthService(QueryFactory db, IConfiguration config) : IAuthService
             FirstName = user.FirstName,
             LastName = user.LastName,
             Role = user.Role,
-            SchoolId = user.SchoolId
+            SchoolId = user.SchoolId,
+            Permissions = permList.ToArray()
         };
     }
 
-    private string GenerateToken(User user)
+    private string GenerateToken(User user, List<string> permissions)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -132,6 +147,8 @@ public class AuthService(QueryFactory db, IConfiguration config) : IAuthService
         };
         if (!string.IsNullOrEmpty(user.SchoolId))
             claims.Add(new Claim("schoolId", user.SchoolId));
+        foreach (var p in permissions)
+            claims.Add(new Claim("permission", p));
 
         var token = new JwtSecurityToken(
             issuer: config["Jwt:Issuer"],

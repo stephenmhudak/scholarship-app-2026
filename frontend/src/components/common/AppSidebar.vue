@@ -6,39 +6,19 @@ const authStore = useAuthStore()
 const schoolId = computed(() => authStore.user?.schoolId)
 
 const navLinks = computed(() => {
-  const role = authStore.role
-
-  if (role === 'applicant') {
-    return [
-      { label: 'Dashboard', icon: 'mdi-view-dashboard-outline', to: '/dashboard' },
-      { label: 'My Application', icon: 'mdi-file-document-edit-outline', to: '/application/current' },
-      { label: 'Status', icon: 'mdi-clipboard-check-outline', to: '/application/current/status' },
-    ]
-  }
-  if (role === 'scorer') {
-    return [
-      { label: 'Scoring Queue', icon: 'mdi-format-list-checks', to: '/scoring' },
-    ]
-  }
-  if (role === 'app_admin') {
-    return [
-      { label: 'Applications', icon: 'mdi-folder-multiple-outline', to: '/admin/applications' },
-      { label: 'Scoring', icon: 'mdi-chart-bar', to: '/admin/scoring' },
-      { label: 'Settings', icon: 'mdi-account-cog-outline', to: '/admin/settings' },
-      { label: 'Scholarship Settings', icon: 'mdi-cog-outline', to: '/admin/scholarship-settings' },
-    ]
-  }
-  if (role === 'school_admin') {
-    return [
-      { label: 'My School', icon: 'mdi-domain', to: schoolId.value ? `/schools/${schoolId.value}` : '/schools' },
-    ]
-  }
-  if (role === 'counselor') {
-    return [
-      { label: 'Dashboard', icon: 'mdi-view-dashboard-outline', to: '/counselor' },
-    ]
-  }
-  return []
+  const all = [
+    { label: 'Dashboard',             icon: 'mdi-view-dashboard-outline',      to: '/dashboard',                  permission: 'view_dashboard' },
+    { label: 'My Application',        icon: 'mdi-file-document-edit-outline',  to: '/application/current',        permission: 'manage_application' },
+    { label: 'Status',                icon: 'mdi-clipboard-check-outline',     to: '/application/current/status', permission: 'manage_application' },
+    { label: 'Scoring Queue',         icon: 'mdi-format-list-checks',          to: '/scoring',                    permission: 'view_scoring_queue' },
+    { label: 'Applications',          icon: 'mdi-folder-multiple-outline',     to: '/admin/applications',         permission: 'admin_applications' },
+    { label: 'Scoring',               icon: 'mdi-chart-bar',                   to: '/admin/scoring',              permission: 'view_scoring_overview' },
+    { label: 'Settings',              icon: 'mdi-account-cog-outline',         to: '/admin/settings',             permission: 'admin_settings' },
+    { label: 'Scholarship Settings',  icon: 'mdi-cog-outline',                 to: '/admin/scholarship-settings', permission: 'admin_scholarship' },
+    { label: 'My School',             icon: 'mdi-domain',                      to: schoolId.value ? `/schools/${schoolId.value}` : '/schools', permission: 'manage_school' },
+    { label: 'Dashboard',             icon: 'mdi-view-dashboard-outline',      to: '/counselor',                  permission: 'view_counselor_dashboard' },
+  ]
+  return all.filter(item => authStore.hasPermission(item.permission))
 })
 </script>
 
@@ -61,8 +41,5 @@ const navLinks = computed(() => {
         </li>
       </ul>
     </nav>
-    <div class="p-4 border-t border-[#E9EDF7]">
-      <p class="text-[10px] text-slate-400 text-center">Scholarship App &copy; 2026</p>
-    </div>
   </aside>
 </template>

@@ -32,91 +32,91 @@ const routes = [
     path: '/dashboard',
     name: 'Dashboard',
     component: () => import('../pages/applicant/DashboardPage.vue'),
-    meta: { role: 'applicant' },
+    meta: { permission: 'view_dashboard' },
   },
   {
     path: '/application/new',
     name: 'NewApplication',
     component: () => import('../pages/applicant/NewApplicationPage.vue'),
-    meta: { role: 'applicant' },
+    meta: { permission: 'manage_application' },
   },
   {
     path: '/application/:id',
     name: 'ApplicationForm',
     component: () => import('../pages/applicant/ApplicationFormPage.vue'),
-    meta: { role: 'applicant' },
+    meta: { permission: 'manage_application' },
   },
   {
     path: '/application/:id/status',
     name: 'ApplicationStatus',
     component: () => import('../pages/applicant/ApplicationStatusPage.vue'),
-    meta: { role: 'applicant' },
+    meta: { permission: 'manage_application' },
   },
   {
     path: '/scoring',
     name: 'ScoringQueue',
     component: () => import('../pages/scorer/ScoringQueuePage.vue'),
-    meta: { role: 'scorer' },
+    meta: { permission: 'view_scoring_queue' },
   },
   {
     path: '/scoring/:applicationId',
     name: 'ScoringDetail',
     component: () => import('../pages/scorer/ScoringDetailPage.vue'),
-    meta: { anyRole: ['scorer', 'app_admin'] },
+    meta: { permission: 'score_application' },
   },
   {
     path: '/admin/applications',
     name: 'ApplicationsList',
     component: () => import('../pages/admin/ApplicationsListPage.vue'),
-    meta: { role: 'app_admin' },
+    meta: { permission: 'admin_applications' },
   },
   {
     path: '/admin/applications/:id',
     name: 'ApplicationDetail',
     component: () => import('../pages/admin/ApplicationDetailPage.vue'),
-    meta: { role: 'app_admin' },
+    meta: { permission: 'admin_applications' },
   },
   {
     path: '/admin/scholarship-settings',
     name: 'ScholarshipSettings',
     component: () => import('../pages/admin/SettingsPage.vue'),
-    meta: { role: 'app_admin' },
+    meta: { permission: 'admin_scholarship' },
   },
   {
     path: '/admin/settings',
     name: 'AdminSettings',
     component: () => import('../pages/admin/AdminSettingsPage.vue'),
-    meta: { role: 'app_admin' },
+    meta: { permission: 'admin_settings' },
   },
   {
     path: '/admin/scoring',
     name: 'ScoringOverview',
     component: () => import('../pages/admin/ScoringOverviewPage.vue'),
-    meta: { role: 'app_admin' },
+    meta: { permission: 'view_scoring_overview' },
   },
   {
     path: '/admin/cycles/:cycleId/questions',
     name: 'CycleQuestions',
     component: () => import('../pages/admin/CycleQuestionsPage.vue'),
-    meta: { role: 'app_admin' },
+    meta: { permission: 'admin_scholarship' },
   },
   {
     path: '/schools',
     name: 'SchoolsList',
     component: () => import('../pages/school/SchoolsListPage.vue'),
-    meta: { role: 'school_admin' },
+    meta: { permission: 'manage_school' },
   },
   {
     path: '/schools/:id',
     name: 'SchoolDetail',
     component: () => import('../pages/school/SchoolDetailPage.vue'),
-    meta: { role: 'school_admin' },
+    meta: { permission: 'manage_school' },
   },
   {
     path: '/counselor',
     name: 'CounselorDashboard',
     component: () => import('../pages/counselor/CounselorDashboardPage.vue'),
-    meta: { role: 'counselor' },
+    meta: { permission: 'view_counselor_dashboard' },
   },
   {
     path: '/reference',
@@ -163,15 +163,18 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore()
 
   if (to.meta.public) return next()
 
   if (!authStore.isAuthenticated) return next('/login')
 
-  if (to.meta.role && authStore.role !== to.meta.role) return next('/403')
-  if (to.meta.anyRole && !to.meta.anyRole.includes(authStore.role)) return next('/403')
+  if (to.meta.permission && !authStore.hasPermission(to.meta.permission))
+    return next('/403')
+
+  if (to.name === 'SchoolsList' && authStore.hasPermission('manage_school') && authStore.user?.schoolId)
+    return next(`/schools/${authStore.user.schoolId}`)
 
   next()
 })
