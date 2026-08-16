@@ -12,7 +12,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: scholarshipap:latest
+          image: scholarship-app-2026-backend:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080

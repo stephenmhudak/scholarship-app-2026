@@ -12,7 +12,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: yourfrontend:latest
+          image: scholarship-app-2026-frontend:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
