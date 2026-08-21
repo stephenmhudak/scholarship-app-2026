@@ -1,0 +1,7 @@
+{
+    email stephen@shudak.com
+}
+
+scholarships.shudak.com {
+    reverse_proxy frontend:80
+}
