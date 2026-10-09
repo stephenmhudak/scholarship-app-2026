@@ -52,10 +52,15 @@ builder.Services.AddScoped<IApplicationService, ApplicationService>();
 builder.Services.AddScoped<IScoringService, ScoringService>();
 builder.Services.AddScoped<IReferenceService, ReferenceService>();
 
-// File storage: swap between Local and Azure via appsettings
+// File storage: swap between Local, Azure, and Cloudflare R2 via appsettings
 var storageProvider = builder.Configuration["Storage:Provider"];
 if (storageProvider == "AzureBlob")
     builder.Services.AddScoped<IFileStorageService, AzureBlobStorageService>();
+else if (storageProvider == "R2")
+{
+    builder.Services.AddSingleton<Amazon.S3.IAmazonS3>(sp => R2StorageService.CreateClient(sp.GetRequiredService<IConfiguration>()));
+    builder.Services.AddScoped<IFileStorageService, R2StorageService>();
+}
 else
     builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 
