@@ -16,6 +16,12 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    environment:
+      Storage__Provider: ${STORAGE_PROVIDER:-Local}
+      Storage__R2__AccountId: ${R2_ACCOUNT_ID:-}
+      Storage__R2__AccessKeyId: ${R2_ACCESS_KEY_ID:-}
+      Storage__R2__SecretAccessKey: ${R2_SECRET_ACCESS_KEY:-}
+      Storage__R2__BucketName: ${R2_BUCKET_NAME:-scholarship-files}
     depends_on:
       mysql:
         condition: service_healthy

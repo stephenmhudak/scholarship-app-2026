@@ -19,6 +19,12 @@ spec:
           env:
             - name: ConnectionStrings__Default
               value: "Server=mysql;Database=scholarship_db;User=root;Password=App!Password_2026;"
+            - name: Storage__Provider
+              value: "R2"
+          # R2 credentials come from a Secret created out-of-band (see k8s/r2-secret.example.yaml)
+          envFrom:
+            - secretRef:
+                name: r2-credentials
 ---
 apiVersion: v1
 kind: Service
