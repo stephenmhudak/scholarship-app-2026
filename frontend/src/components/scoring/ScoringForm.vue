@@ -1,6 +1,5 @@
 <script setup>
 import { ref, watch } from 'vue'
-import BaseButton from '../common/BaseButton.vue'
 
 const props = defineProps({
   sections: {
@@ -25,7 +24,7 @@ function buildScores() {
     return {
       sectionId: s.id,
       label: s.label,
-      score: existing?.scoreValue ?? '',
+      score: existing?.scoreValue ?? null,
       comments: existing?.comments ?? '',
     }
   })
@@ -54,43 +53,36 @@ function onSave() {
 
 <template>
   <div class="space-y-5">
-    <div
+    <v-card
       v-for="(section, idx) in scores"
       :key="section.sectionId ?? 'overall'"
-      class="card p-5 space-y-4"
+      class="pa-5 space-y-4"
     >
       <h3 class="text-sm font-bold text-navy">{{ section.label }}</h3>
 
-      <div class="space-y-1.5">
-        <label class="block text-sm font-semibold text-navy">
-          Score <span class="text-slate-400 font-normal">(1–100)</span>
-        </label>
-        <input
-          v-model.number="scores[idx].score"
-          type="number"
-          min="1"
-          max="100"
-          placeholder="Enter score…"
-          class="form-input w-36"
-        />
-      </div>
+      <v-number-input
+        v-model="scores[idx].score"
+        label="Score (1–100)"
+        :min="1"
+        :max="100"
+        control-variant="split"
+        class="max-w-[14rem]"
+        hide-details
+      />
 
-      <div class="space-y-1.5">
-        <label class="block text-sm font-semibold text-navy">Comments</label>
-        <textarea
-          v-model="scores[idx].comments"
-          rows="3"
-          placeholder="Enter your comments…"
-          class="form-input resize-y"
-        />
-      </div>
-    </div>
+      <v-textarea
+        v-model="scores[idx].comments"
+        label="Comments"
+        rows="3"
+        placeholder="Enter your comments…"
+        hide-details
+      />
+    </v-card>
 
     <div class="flex justify-end">
-      <BaseButton type="button" :loading="saving" @click="onSave">
-        <span class="mdi mdi-content-save-outline mr-1.5"></span>
+      <v-btn color="primary" prepend-icon="mdi-content-save-outline" :loading="saving" @click="onSave">
         Save Scores
-      </BaseButton>
+      </v-btn>
     </div>
   </div>
 </template>

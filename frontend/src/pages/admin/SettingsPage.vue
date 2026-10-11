@@ -1,9 +1,7 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import api from '../../services/api'
-import BaseButton from '../../components/common/BaseButton.vue'
-import BaseAlert from '../../components/common/BaseAlert.vue'
-import BaseInput from '../../components/common/BaseInput.vue'
+import DateField from '../../components/common/DateField.vue'
 
 const cycles = ref([])
 const editing = ref(null)
@@ -19,6 +17,11 @@ const blank = () => ({
   isActive: false,
   copyFromCycleId: '',
 })
+
+const copyFromItems = computed(() => [
+  { title: 'Default application questions', value: '' },
+  ...cycles.value.map((c) => ({ title: `Copy from ${c.name}`, value: c.id })),
+])
 
 onMounted(async () => {
   await loadCycles()
@@ -98,99 +101,75 @@ async function save() {
         <h1 class="page-title">Scholarship Settings</h1>
         <p class="page-subtitle">Manage scholarship cycles and application windows.</p>
       </div>
-      <BaseButton v-if="!editing" @click="startCreate()">
-        <span class="mdi mdi-plus mr-1.5"></span>
+      <v-btn v-if="!editing" color="primary" prepend-icon="mdi-plus" @click="startCreate()">
         New Cycle
-      </BaseButton>
+      </v-btn>
     </div>
 
-    <BaseAlert v-if="alert" :type="alert.type" :message="alert.message" />
+    <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
     <!-- Edit / Create Form -->
-    <div v-if="editing" class="section-card space-y-5">
+    <v-card v-if="editing" class="pa-6 space-y-5">
       <h2 class="text-base font-bold text-navy">
         {{ creating ? 'Create Cycle' : 'Edit Cycle' }}
       </h2>
 
-      <BaseInput
+      <v-text-field
         v-model="editing.name"
         label="Cycle Name"
         placeholder="e.g. 2026 Spring Scholarship"
+        hide-details="auto"
       />
 
       <div class="grid grid-cols-2 gap-4">
-        <BaseInput
-          v-model="editing.openDate"
-          type="date"
-          label="Open Date"
-        />
-        <BaseInput
-          v-model="editing.closeDate"
-          type="date"
-          label="Close Date"
-        />
+        <DateField v-model="editing.openDate" label="Open Date" hide-details="auto" />
+        <DateField v-model="editing.closeDate" label="Close Date" hide-details="auto" />
       </div>
 
-      <div v-if="creating" class="space-y-1.5">
-        <label for="copy_from" class="block text-sm font-semibold text-navy">Questions</label>
-        <select id="copy_from" v-model="editing.copyFromCycleId" class="form-select">
-          <option value="">Default application questions</option>
-          <option v-for="cycle in cycles" :key="cycle.id" :value="cycle.id">
-            Copy from {{ cycle.name }}
-          </option>
-        </select>
-        <p class="text-xs text-slate-400">
-          Sections and questions are copied; applications and scores are not.
-        </p>
-      </div>
+      <v-select
+        v-if="creating"
+        v-model="editing.copyFromCycleId"
+        :items="copyFromItems"
+        label="Questions"
+        hint="Sections and questions are copied; applications and scores are not."
+        persistent-hint
+      />
 
-      <label class="flex items-center gap-3 cursor-pointer">
-        <input
-          id="is_active"
-          v-model="editing.isActive"
-          type="checkbox"
-          class="w-4 h-4 rounded border-[#E9EDF7] text-primary focus:ring-primary/30"
-        />
-        <span class="text-sm font-semibold text-navy">Active (applications open)</span>
-      </label>
+      <v-switch v-model="editing.isActive" label="Active (applications open)" />
 
       <div class="flex gap-3 pt-2">
-        <BaseButton :loading="saving" @click="save">
-          <span class="mdi mdi-content-save mr-1.5"></span>
+        <v-btn color="primary" prepend-icon="mdi-content-save" :loading="saving" @click="save">
           Save
-        </BaseButton>
-        <BaseButton variant="secondary" @click="cancel">Cancel</BaseButton>
+        </v-btn>
+        <v-btn variant="outlined" @click="cancel">Cancel</v-btn>
       </div>
-    </div>
+    </v-card>
 
     <!-- Loading -->
-    <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
-      <span class="mdi mdi-loading animate-spin text-xl"></span>
+    <div v-if="loading" class="flex items-center gap-3 text-slate-400 py-4">
+      <v-progress-circular indeterminate color="primary" size="22" width="2" />
       Loading cycles…
     </div>
 
     <!-- Empty state -->
-    <div v-else-if="cycles.length === 0 && !editing" class="section-card text-center py-10">
-      <span class="mdi mdi-calendar-blank-outline text-4xl text-slate-400 mb-2 block"></span>
-      <p class="text-slate-400 text-sm">No scholarship cycles yet. Create one to get started.</p>
-    </div>
+    <v-card v-else-if="cycles.length === 0 && !editing">
+      <v-empty-state
+        icon="mdi-calendar-blank-outline"
+        text="No scholarship cycles yet. Create one to get started."
+      />
+    </v-card>
 
     <!-- Cycles list -->
     <div v-else class="space-y-3">
-      <div
+      <v-card
         v-for="cycle in cycles"
         :key="cycle.id"
-        class="card p-4 flex items-center justify-between"
+        class="pa-4 flex items-center justify-between"
       >
         <div>
           <div class="flex items-center gap-2">
             <p class="text-sm font-bold text-navy">{{ cycle.name }}</p>
-            <span
-              v-if="cycle.isActive"
-              class="text-xs px-2 py-0.5 rounded-full bg-success-light text-success-dark font-semibold border border-success/20"
-            >
-              Active
-            </span>
+            <v-chip v-if="cycle.isActive" color="success" class="font-semibold">Active</v-chip>
           </div>
           <p class="text-xs text-slate-400 mt-0.5">
             {{ new Date(cycle.openDate).toLocaleDateString() }} –
@@ -198,23 +177,17 @@ async function save() {
           </p>
         </div>
         <div class="flex gap-2">
-          <RouterLink
-            :to="`/admin/cycles/${cycle.id}/questions`"
-            class="inline-flex items-center text-sm font-semibold border border-[#E9EDF7] bg-white text-navy px-3 py-1.5 rounded-xl hover:bg-[#F4F7FE] transition-colors"
-          >
-            <span class="mdi mdi-format-list-bulleted mr-1.5"></span>
+          <v-btn variant="outlined" size="small" prepend-icon="mdi-format-list-bulleted" :to="`/admin/cycles/${cycle.id}/questions`">
             Questions
-          </RouterLink>
-          <BaseButton variant="secondary" size="sm" :disabled="!!editing" @click="startCreate(cycle)">
-            <span class="mdi mdi-content-copy mr-1.5"></span>
+          </v-btn>
+          <v-btn variant="outlined" size="small" prepend-icon="mdi-content-copy" :disabled="!!editing" @click="startCreate(cycle)">
             Duplicate
-          </BaseButton>
-          <BaseButton variant="secondary" size="sm" @click="editCycle(cycle)">
-            <span class="mdi mdi-pencil mr-1.5"></span>
+          </v-btn>
+          <v-btn variant="outlined" size="small" prepend-icon="mdi-pencil" @click="editCycle(cycle)">
             Edit
-          </BaseButton>
+          </v-btn>
         </div>
-      </div>
+      </v-card>
     </div>
   </div>
 </template>

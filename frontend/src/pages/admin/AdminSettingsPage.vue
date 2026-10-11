@@ -1,10 +1,6 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import api from '../../services/api'
-import BaseButton from '../../components/common/BaseButton.vue'
-import BaseAlert from '../../components/common/BaseAlert.vue'
-import BaseInput from '../../components/common/BaseInput.vue'
-import BaseModal from '../../components/common/BaseModal.vue'
 
 const activeTab = ref('users')
 
@@ -16,6 +12,22 @@ function showAlert(type, message) {
 }
 
 // ── Users ────────────────────────────────────────────────────────────────────
+const ROLES = [
+  { title: 'Applicant', value: 'applicant' },
+  { title: 'Scorer', value: 'scorer' },
+  { title: 'App Admin', value: 'app_admin' },
+  { title: 'School Admin', value: 'school_admin' },
+  { title: 'Counselor', value: 'counselor' },
+]
+
+const userHeaders = [
+  { title: 'Name', key: 'name', value: (u) => `${u.FirstName} ${u.LastName}` },
+  { title: 'Email', key: 'Email' },
+  { title: 'Role', key: 'Role' },
+  { title: 'School', key: 'SchoolName' },
+  { title: '', key: 'actions', sortable: false, align: 'end' },
+]
+
 const users = ref([])
 const usersLoading = ref(false)
 const showAddUser = ref(false)
@@ -102,6 +114,10 @@ async function submitResetPassword() {
 
 // ── Schools ──────────────────────────────────────────────────────────────────
 const schools = ref([])
+const schoolItems = computed(() => [
+  { title: '— No School —', value: '' },
+  ...schools.value.map((s) => ({ title: s.name, value: s.id })),
+])
 const schoolsLoading = ref(false)
 const editingSchool = ref(null)
 const schoolSaving = ref(false)
@@ -157,6 +173,13 @@ async function saveSchool() {
 }
 
 // ── Invites ───────────────────────────────────────────────────────────────────
+const inviteHeaders = [
+  { title: 'School', key: 'SchoolName' },
+  { title: 'Created', key: 'CreatedAt' },
+  { title: 'Expires', key: 'ExpiresAt' },
+  { title: 'Used', key: 'UsedAt' },
+]
+
 const invites = ref([])
 const invitesLoading = ref(false)
 const generatingInvite = ref(false)
@@ -202,10 +225,9 @@ function formatDate(d) {
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-function switchTab(tab) {
-  activeTab.value = tab
+watch(activeTab, (tab) => {
   if (tab === 'invites') loadInvites()
-}
+})
 
 onMounted(() => { loadUsers(); loadSchools() })
 </script>
@@ -217,91 +239,72 @@ onMounted(() => { loadUsers(); loadSchools() })
       <p class="page-subtitle">Manage users, schools, and registration links</p>
     </div>
 
-    <BaseAlert v-if="alert" :type="alert.type" :message="alert.message" />
+    <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
     <!-- Tabs -->
-    <div class="flex gap-1 border-b border-[#E9EDF7]">
-      <button
-        v-for="tab in [{ key: 'users', label: 'Users' }, { key: 'schools', label: 'Schools' }, { key: 'invites', label: 'School Admin Invites' }]"
-        :key="tab.key"
-        @click="switchTab(tab.key)"
-        class="px-5 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px"
-        :class="activeTab === tab.key
-          ? 'border-primary text-primary'
-          : 'border-transparent text-slate-400 hover:text-navy'"
-      >
-        {{ tab.label }}
-      </button>
-    </div>
+    <v-tabs v-model="activeTab" color="primary" class="border-b">
+      <v-tab value="users" class="text-none">Users</v-tab>
+      <v-tab value="schools" class="text-none">Schools</v-tab>
+      <v-tab value="invites" class="text-none">School Admin Invites</v-tab>
+    </v-tabs>
 
     <!-- ── Users Tab ─────────────────────────────────────────────────────── -->
     <div v-if="activeTab === 'users'" class="space-y-4">
       <div class="flex justify-between items-center">
         <p class="text-sm text-slate-400">{{ users.length }} user{{ users.length !== 1 ? 's' : '' }}</p>
-        <BaseButton size="sm" @click="openAddUser">Add User</BaseButton>
+        <v-btn color="primary" size="small" prepend-icon="mdi-plus" @click="openAddUser">Add User</v-btn>
       </div>
 
-      <div class="card overflow-hidden">
-        <div v-if="usersLoading" class="p-8 text-center text-slate-400 text-sm">Loading…</div>
-        <table v-else class="dialect-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>School</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="!users.length">
-              <td colspan="5" class="text-center text-slate-400">No users found.</td>
-            </tr>
-            <tr v-for="u in users" :key="u.Id">
-              <td class="font-medium text-navy">{{ u.FirstName }} {{ u.LastName }}</td>
-              <td class="text-slate-400">{{ u.Email }}</td>
-              <td>
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                  {{ u.Role }}
-                </span>
-              </td>
-              <td class="text-slate-400">{{ u.SchoolName ?? '—' }}</td>
-              <td class="text-right">
-                <button
-                  @click="openResetPassword(u)"
-                  class="text-xs text-primary hover:underline"
-                >
-                  Reset Password
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <v-card class="overflow-hidden">
+        <v-data-table
+          :headers="userHeaders"
+          :items="users"
+          :loading="usersLoading"
+          no-data-text="No users found."
+        >
+          <template #item.name="{ value }">
+            <span class="font-medium text-navy">{{ value }}</span>
+          </template>
+          <template #item.Email="{ value }">
+            <span class="text-slate-400">{{ value }}</span>
+          </template>
+          <template #item.Role="{ value }">
+            <v-chip color="primary">{{ value }}</v-chip>
+          </template>
+          <template #item.SchoolName="{ value }">
+            <span class="text-slate-400">{{ value ?? '—' }}</span>
+          </template>
+          <template #item.actions="{ item }">
+            <v-btn variant="text" color="primary" size="small" @click="openResetPassword(item)">Reset Password</v-btn>
+          </template>
+        </v-data-table>
+      </v-card>
     </div>
 
     <!-- ── Schools Tab ───────────────────────────────────────────────────── -->
     <div v-if="activeTab === 'schools'" class="space-y-4">
-      <div v-if="schoolsLoading" class="text-center text-slate-400 text-sm py-8">Loading…</div>
+      <div v-if="schoolsLoading" class="flex justify-center py-8">
+        <v-progress-circular indeterminate color="primary" />
+      </div>
 
       <div v-else class="space-y-3">
-        <div v-if="!schools.length" class="section-card text-slate-400 text-sm text-center">No schools found.</div>
+        <v-card v-if="!schools.length" class="pa-6 text-slate-400 text-sm text-center">No schools found.</v-card>
 
-        <div v-for="school in schools" :key="school.id" class="section-card space-y-4">
+        <v-card v-for="school in schools" :key="school.id" class="pa-6">
           <div v-if="editingSchool?.id === school.id" class="space-y-3">
-            <BaseInput v-model="editingSchool.name" label="School Name" :required="true" />
+            <v-text-field v-model="editingSchool.name" label="School Name" required hide-details="auto" />
             <div class="grid grid-cols-2 gap-3">
-              <BaseInput v-model="editingSchool.addressLine1" label="Address Line 1" />
-              <BaseInput v-model="editingSchool.addressLine2" label="Address Line 2" />
+              <v-text-field v-model="editingSchool.addressLine1" label="Address Line 1" hide-details="auto" />
+              <v-text-field v-model="editingSchool.addressLine2" label="Address Line 2" hide-details="auto" />
             </div>
             <div class="grid grid-cols-3 gap-3">
-              <BaseInput v-model="editingSchool.city" label="City" />
-              <BaseInput v-model="editingSchool.state" label="State" />
-              <BaseInput v-model="editingSchool.zip" label="ZIP" />
+              <v-text-field v-model="editingSchool.city" label="City" hide-details="auto" />
+              <v-text-field v-model="editingSchool.state" label="State" hide-details="auto" />
+              <v-text-field v-model="editingSchool.zip" label="ZIP" hide-details="auto" />
             </div>
             <div class="flex gap-2">
-              <BaseButton size="sm" :loading="schoolSaving" @click="saveSchool">Save</BaseButton>
-              <BaseButton size="sm" variant="ghost" @click="cancelEditSchool">Cancel</BaseButton>
+              <v-btn color="primary" size="small" :loading="schoolSaving" @click="saveSchool">Save</v-btn>
+              <v-btn variant="text" size="small" @click="cancelEditSchool">Cancel</v-btn>
             </div>
           </div>
           <div v-else class="flex items-start justify-between">
@@ -311,9 +314,9 @@ onMounted(() => { loadUsers(); loadSchools() })
                 {{ [school.addressLine1, school.city, school.state, school.zip].filter(Boolean).join(', ') || 'No address set' }}
               </p>
             </div>
-            <BaseButton size="sm" variant="secondary" @click="startEditSchool(school)">Edit</BaseButton>
+            <v-btn variant="outlined" size="small" @click="startEditSchool(school)">Edit</v-btn>
           </div>
-        </div>
+        </v-card>
       </div>
     </div>
 
@@ -321,110 +324,105 @@ onMounted(() => { loadUsers(); loadSchools() })
     <div v-if="activeTab === 'invites'" class="space-y-6">
 
       <!-- Generate invite -->
-      <div class="section-card flex items-center justify-between gap-4">
+      <v-card class="pa-6 flex items-center justify-between gap-4">
         <div>
           <p class="text-sm font-semibold text-navy">Generate Registration Link</p>
           <p class="text-xs text-slate-400 mt-0.5">The school admin will enter their school information when they register. Valid for 7 days.</p>
         </div>
-        <BaseButton size="sm" :loading="generatingInvite" @click="generateInvite">Generate Link</BaseButton>
-      </div>
+        <v-btn color="primary" size="small" :loading="generatingInvite" @click="generateInvite">Generate Link</v-btn>
+      </v-card>
 
       <!-- New invite link result -->
-      <div v-if="newInviteLink" class="section-card border border-success/20 bg-success-light space-y-2">
-        <p class="text-sm font-semibold text-success-dark">Link ready — share with the school admin</p>
-        <div class="flex items-center gap-2">
-          <input
+      <v-alert v-if="newInviteLink" type="success" title="Link ready — share with the school admin">
+        <div class="flex items-center gap-2 mt-2">
+          <v-text-field
+            :model-value="newInviteLink.url"
             readonly
-            :value="newInviteLink.url"
-            class="form-input flex-1 text-xs font-mono"
+            density="compact"
+            bg-color="surface"
+            hide-details
+            class="flex-1 font-mono"
           />
-          <BaseButton size="sm" variant="secondary" @click="copyLink">Copy</BaseButton>
+          <v-btn variant="outlined" prepend-icon="mdi-content-copy" @click="copyLink">Copy</v-btn>
         </div>
-      </div>
+      </v-alert>
 
       <!-- Existing invites -->
-      <div class="card overflow-hidden">
-        <div class="px-5 py-3 border-b border-[#E9EDF7]">
-          <p class="text-sm font-semibold text-navy">Invite History</p>
-        </div>
-        <div v-if="invitesLoading" class="p-8 text-center text-slate-400 text-sm">Loading…</div>
-        <table v-else class="dialect-table">
-          <thead>
-            <tr>
-              <th>School</th>
-              <th>Created</th>
-              <th>Expires</th>
-              <th>Used</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="!invites.length">
-              <td colspan="4" class="text-center text-slate-400">No invites yet.</td>
-            </tr>
-            <tr v-for="invite in invites" :key="invite.Id">
-              <td class="font-medium text-navy">{{ invite.SchoolName }}</td>
-              <td class="text-slate-400">{{ formatDate(invite.CreatedAt) }}</td>
-              <td class="text-slate-400">{{ formatDate(invite.ExpiresAt) }}</td>
-              <td>
-                <span
-                  class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
-                  :class="invite.UsedAt ? 'bg-success-light text-success-dark' : 'bg-warning-light text-[#8C6500]'"
-                >
-                  {{ invite.UsedAt ? 'Used' : 'Pending' }}
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <v-card class="overflow-hidden">
+        <v-card-title class="text-sm font-semibold text-navy px-5 py-3 border-b">Invite History</v-card-title>
+        <v-data-table
+          :headers="inviteHeaders"
+          :items="invites"
+          :loading="invitesLoading"
+          no-data-text="No invites yet."
+        >
+          <template #item.SchoolName="{ value }">
+            <span class="font-medium text-navy">{{ value }}</span>
+          </template>
+          <template #item.CreatedAt="{ value }">
+            <span class="text-slate-400">{{ formatDate(value) }}</span>
+          </template>
+          <template #item.ExpiresAt="{ value }">
+            <span class="text-slate-400">{{ formatDate(value) }}</span>
+          </template>
+          <template #item.UsedAt="{ value }">
+            <v-chip :color="value ? 'success' : 'warning'">{{ value ? 'Used' : 'Pending' }}</v-chip>
+          </template>
+        </v-data-table>
+      </v-card>
     </div>
   </div>
 
-  <!-- ── Add User Modal ──────────────────────────────────────────────────── -->
-  <BaseModal :show="showAddUser" title="Add User" @close="showAddUser = false">
-    <form @submit.prevent="submitAddUser" class="space-y-4">
-      <div class="grid grid-cols-2 gap-3">
-        <BaseInput v-model="addUserForm.firstName" label="First Name" :required="true" :error="addUserErrors.firstName" />
-        <BaseInput v-model="addUserForm.lastName" label="Last Name" :required="true" :error="addUserErrors.lastName" />
-      </div>
-      <BaseInput v-model="addUserForm.email" type="email" label="Email" :required="true" :error="addUserErrors.email" />
-      <BaseInput v-model="addUserForm.password" type="password" label="Password" :required="true" :error="addUserErrors.password" />
+  <!-- ── Add User Dialog ─────────────────────────────────────────────────── -->
+  <v-dialog v-model="showAddUser">
+    <v-card title="Add User">
+      <template #append>
+        <v-btn icon="mdi-close" variant="text" size="small" @click="showAddUser = false" />
+      </template>
+      <v-card-text>
+        <v-form class="space-y-4" @submit.prevent="submitAddUser">
+          <div class="grid grid-cols-2 gap-3">
+            <v-text-field v-model="addUserForm.firstName" label="First Name" :error-messages="addUserErrors.firstName || []" hide-details="auto" />
+            <v-text-field v-model="addUserForm.lastName" label="Last Name" :error-messages="addUserErrors.lastName || []" hide-details="auto" />
+          </div>
+          <v-text-field v-model="addUserForm.email" type="email" label="Email" :error-messages="addUserErrors.email || []" hide-details="auto" />
+          <v-text-field v-model="addUserForm.password" type="password" label="Password" :error-messages="addUserErrors.password || []" hide-details="auto" />
 
-      <div>
-        <label class="block text-sm font-medium text-navy mb-1">Role</label>
-        <select v-model="addUserForm.role" class="form-select w-full">
-          <option value="applicant">Applicant</option>
-          <option value="scorer">Scorer</option>
-          <option value="app_admin">App Admin</option>
-          <option value="school_admin">School Admin</option>
-          <option value="counselor">Counselor</option>
-        </select>
-      </div>
+          <v-select v-model="addUserForm.role" :items="ROLES" label="Role" hide-details />
 
-      <div v-if="addUserForm.role === 'school_admin' || addUserForm.role === 'counselor'">
-        <label class="block text-sm font-medium text-navy mb-1">School</label>
-        <select v-model="addUserForm.schoolId" class="form-select w-full">
-          <option value="">— No School —</option>
-          <option v-for="s in schools" :key="s.id" :value="s.id">{{ s.name }}</option>
-        </select>
-      </div>
+          <v-select
+            v-if="addUserForm.role === 'school_admin' || addUserForm.role === 'counselor'"
+            v-model="addUserForm.schoolId"
+            :items="schoolItems"
+            label="School"
+            hide-details
+          />
 
-      <div class="flex justify-end gap-2 pt-2">
-        <BaseButton type="button" variant="ghost" @click="showAddUser = false">Cancel</BaseButton>
-        <BaseButton type="submit" :loading="addUserLoading">Create User</BaseButton>
-      </div>
-    </form>
-  </BaseModal>
+          <div class="flex justify-end gap-2 pt-2">
+            <v-btn variant="text" @click="showAddUser = false">Cancel</v-btn>
+            <v-btn type="submit" color="primary" :loading="addUserLoading">Create User</v-btn>
+          </div>
+        </v-form>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
 
-  <!-- ── Reset Password Modal ────────────────────────────────────────────── -->
-  <BaseModal :show="showResetPassword" :title="`Reset Password — ${resetUser?.FirstName} ${resetUser?.LastName}`" @close="showResetPassword = false">
-    <form @submit.prevent="submitResetPassword" class="space-y-4">
-      <BaseInput v-model="resetPasswordForm.newPassword" type="password" label="New Password" :required="true" />
-      <BaseInput v-model="resetPasswordForm.confirm" type="password" label="Confirm Password" :required="true" />
-      <div class="flex justify-end gap-2 pt-2">
-        <BaseButton type="button" variant="ghost" @click="showResetPassword = false">Cancel</BaseButton>
-        <BaseButton type="submit" :loading="resetPasswordLoading">Reset Password</BaseButton>
-      </div>
-    </form>
-  </BaseModal>
+  <!-- ── Reset Password Dialog ───────────────────────────────────────────── -->
+  <v-dialog v-model="showResetPassword">
+    <v-card :title="`Reset Password — ${resetUser?.FirstName} ${resetUser?.LastName}`">
+      <template #append>
+        <v-btn icon="mdi-close" variant="text" size="small" @click="showResetPassword = false" />
+      </template>
+      <v-card-text>
+        <v-form class="space-y-4" @submit.prevent="submitResetPassword">
+          <v-text-field v-model="resetPasswordForm.newPassword" type="password" label="New Password" required hide-details="auto" />
+          <v-text-field v-model="resetPasswordForm.confirm" type="password" label="Confirm Password" required hide-details="auto" />
+          <div class="flex justify-end gap-2 pt-2">
+            <v-btn variant="text" @click="showResetPassword = false">Cancel</v-btn>
+            <v-btn type="submit" color="primary" :loading="resetPasswordLoading">Reset Password</v-btn>
+          </div>
+        </v-form>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
 </template>

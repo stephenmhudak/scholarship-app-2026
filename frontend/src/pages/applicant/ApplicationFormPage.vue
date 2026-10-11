@@ -6,8 +6,6 @@ import { useApplicationStore } from '../../stores/application'
 import { validateForm } from '../../utils/validate'
 import QuestionRenderer from '../../components/application/QuestionRenderer.vue'
 import ApplicationProgress from '../../components/application/ApplicationProgress.vue'
-import BaseButton from '../../components/common/BaseButton.vue'
-import BaseAlert from '../../components/common/BaseAlert.vue'
 import NoApplicationCard from '../../components/application/NoApplicationCard.vue'
 
 const route = useRoute()
@@ -24,7 +22,7 @@ const noApplication = ref(false)
 
 // Other applications (different cycles) whose matching answers can be copied in.
 const copySources = ref([])
-const copySourceId = ref('')
+const copySourceId = ref(null)
 const copying = ref(false)
 const validationErrors = ref({})
 
@@ -115,7 +113,7 @@ async function copyAnswers() {
     await appStore.saveDraft(id)
     const { data } = await api.post(`/applications/${id}/copy-answers`, { sourceApplicationId: copySourceId.value })
     await appStore.loadApplicationForm(id)
-    copySourceId.value = ''
+    copySourceId.value = null
 
     const parts = []
     if (data.copied) parts.push(`Copied ${data.copied} answer${data.copied === 1 ? '' : 's'}.`)
@@ -170,8 +168,8 @@ async function submit() {
       </p>
     </div>
 
-    <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
-      <span class="mdi mdi-loading animate-spin text-xl"></span>
+    <div v-if="loading" class="flex items-center gap-3 text-slate-400 py-4">
+      <v-progress-circular indeterminate color="primary" size="22" width="2" />
       Loading…
     </div>
 
@@ -180,26 +178,31 @@ async function submit() {
     <template v-else>
       <ApplicationProgress :answered="answeredCount" :total="appStore.questions.length" />
 
-      <BaseAlert v-if="alert" :type="alert.type" :message="alert.message" />
+      <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
       <!-- Reuse answers from another cycle's application -->
-      <div v-if="copySources.length" class="section-card space-y-3">
+      <v-card v-if="copySources.length" class="pa-6 space-y-3">
         <div>
           <h2 class="text-base font-bold text-navy">Reuse previous answers</h2>
           <p class="text-sm text-slate-400 mt-0.5">
             Copies answers for questions that match exactly. Questions you've already answered aren't changed.
           </p>
         </div>
-        <div class="flex gap-3">
-          <select v-model="copySourceId" class="form-select flex-1">
-            <option value="">Choose an application…</option>
-            <option v-for="a in copySources" :key="a.id" :value="a.id">{{ sourceLabel(a) }}</option>
-          </select>
-          <BaseButton variant="secondary" :loading="copying" :disabled="!copySourceId" @click="copyAnswers">
-            <span class="mdi mdi-content-copy mr-1.5"></span>Copy Answers
-          </BaseButton>
+        <div class="flex items-center gap-3">
+          <v-select
+            v-model="copySourceId"
+            :items="copySources"
+            :item-title="sourceLabel"
+            item-value="id"
+            placeholder="Choose an application…"
+            hide-details
+            class="flex-1"
+          />
+          <v-btn variant="outlined" prepend-icon="mdi-content-copy" :loading="copying" :disabled="!copySourceId" @click="copyAnswers">
+            Copy Answers
+          </v-btn>
         </div>
-      </div>
+      </v-card>
 
       <!-- Sections + questions -->
       <template v-for="group in groupedSections" :key="group.id ?? '__ungrouped'">
@@ -207,7 +210,7 @@ async function submit() {
         <div v-if="group.title" class="pt-2">
           <h2 class="text-base font-bold text-navy">{{ group.title }}</h2>
           <p v-if="group.description" class="text-sm text-slate-400 mt-0.5">{{ group.description }}</p>
-          <hr class="mt-2 border-[#E9EDF7]" />
+          <v-divider class="mt-2" />
         </div>
 
         <div class="space-y-4">
@@ -222,13 +225,14 @@ async function submit() {
         </div>
       </template>
 
-      <div class="flex items-center gap-3 pt-4 border-t border-[#E9EDF7]">
-        <BaseButton variant="secondary" :loading="saving" @click="saveDraft">
-          <span class="mdi mdi-content-save mr-1.5"></span>Save Draft
-        </BaseButton>
-        <BaseButton :loading="submitting" @click="submit">
-          <span class="mdi mdi-send mr-1.5"></span>Submit Application
-        </BaseButton>
+      <v-divider />
+      <div class="flex items-center gap-3">
+        <v-btn variant="outlined" prepend-icon="mdi-content-save" :loading="saving" @click="saveDraft">
+          Save Draft
+        </v-btn>
+        <v-btn color="primary" prepend-icon="mdi-send" :loading="submitting" @click="submit">
+          Submit Application
+        </v-btn>
       </div>
     </template>
   </div>

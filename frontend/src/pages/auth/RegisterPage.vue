@@ -3,9 +3,6 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import api from '../../services/api'
-import BaseButton from '../../components/common/BaseButton.vue'
-import BaseAlert from '../../components/common/BaseAlert.vue'
-import BaseInput from '../../components/common/BaseInput.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -93,9 +90,9 @@ async function resend() {
 
 <template>
   <div v-if="registeredEmail" class="space-y-5 text-center">
-    <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-primary-50">
-      <span class="mdi mdi-email-check-outline text-primary text-2xl"></span>
-    </div>
+    <v-avatar color="primary" variant="tonal" size="48" rounded="xl">
+      <v-icon icon="mdi-email-check-outline" size="26" />
+    </v-avatar>
     <div>
       <h2 class="text-xl font-bold text-navy">Check your email</h2>
       <p class="text-sm text-slate-400 mt-1">
@@ -104,11 +101,11 @@ async function resend() {
       </p>
     </div>
 
-    <BaseAlert v-if="resendMessage" type="info" :message="resendMessage" />
+    <v-alert v-if="resendMessage" type="info" :text="resendMessage" closable class="text-left" @click:close="resendMessage = null" />
 
-    <BaseButton variant="secondary" :loading="resending" class="w-full" @click="resend">
+    <v-btn variant="outlined" block :loading="resending" @click="resend">
       Resend verification email
-    </BaseButton>
+    </v-btn>
 
     <p class="text-sm text-slate-400">
       Already verified?
@@ -123,66 +120,59 @@ async function resend() {
       <p v-else class="text-sm text-slate-400 mt-0.5">Register to apply for the scholarship</p>
     </div>
 
-    <BaseAlert v-if="inviteError" type="error" :message="inviteError" />
-    <BaseAlert v-if="error" type="error" :message="error" />
+    <v-alert v-if="inviteError" type="error" :text="inviteError" />
+    <v-alert v-if="error" type="error" :text="error" closable @click:close="error = null" />
 
-    <form @submit.prevent="register" class="space-y-4">
+    <v-form class="space-y-4" @submit.prevent="register">
       <div class="grid grid-cols-2 gap-3">
-        <BaseInput
-          v-model="form.firstName"
-          label="First Name"
-          placeholder="Jane"
-          :required="true"
-        />
-        <BaseInput
-          v-model="form.lastName"
-          label="Last Name"
-          placeholder="Smith"
-          :required="true"
-        />
+        <v-text-field v-model="form.firstName" label="First Name" placeholder="Jane" required hide-details="auto" />
+        <v-text-field v-model="form.lastName" label="Last Name" placeholder="Smith" required hide-details="auto" />
       </div>
 
-      <BaseInput
+      <v-text-field
         v-model="form.email"
         type="email"
         label="Email address"
         placeholder="you@example.com"
-        :required="true"
+        required
+        hide-details="auto"
       />
 
-      <BaseInput
+      <v-text-field
         v-model="form.password"
         type="password"
         label="Password"
-        placeholder="At least 8 characters"
-        :required="true"
+        hint="At least 8 characters"
+        required
+        hide-details="auto"
       />
 
-      <BaseInput
+      <v-text-field
         v-model="form.passwordConfirmation"
         type="password"
         label="Confirm Password"
         placeholder="Repeat password"
-        :required="true"
+        required
+        hide-details="auto"
       />
 
       <template v-if="inviteToken">
-        <hr class="border-[#E9EDF7]" />
+        <v-divider />
         <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest">School Information</p>
-        <BaseInput v-model="form.schoolName" label="School Name" placeholder="Lincoln High School" :required="true" />
-        <BaseInput v-model="form.schoolAddressLine1" label="Address Line 1" placeholder="123 Main St" />
-        <BaseInput v-model="form.schoolAddressLine2" label="Address Line 2" placeholder="Suite 100 (optional)" />
+        <v-text-field v-model="form.schoolName" label="School Name" placeholder="Lincoln High School" required hide-details="auto" />
+        <v-text-field v-model="form.schoolAddressLine1" label="Address Line 1" placeholder="123 Main St" hide-details="auto" />
+        <v-text-field v-model="form.schoolAddressLine2" label="Address Line 2" placeholder="Suite 100 (optional)" hide-details="auto" />
         <div class="grid grid-cols-3 gap-3">
-          <BaseInput v-model="form.schoolCity" label="City" placeholder="Springfield" class="col-span-1" />
-          <BaseInput v-model="form.schoolState" label="State" placeholder="IL" />
-          <BaseInput v-model="form.schoolZip" label="ZIP Code" placeholder="62701" />
+          <v-text-field v-model="form.schoolCity" label="City" placeholder="Springfield" hide-details="auto" />
+          <v-text-field v-model="form.schoolState" label="State" placeholder="IL" hide-details="auto" />
+          <v-text-field v-model="form.schoolZip" label="ZIP Code" placeholder="62701" hide-details="auto" />
         </div>
       </template>
 
-      <BaseButton type="submit" :loading="loading" :disabled="!!inviteError" class="w-full mt-1">
+      <v-btn type="submit" color="primary" size="large" block :loading="loading" :disabled="!!inviteError">
         Create Account
-      </BaseButton>
-    </form>
+      </v-btn>
+    </v-form>
 
     <p class="text-sm text-center text-slate-400">
       Already have an account?

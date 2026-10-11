@@ -9,5 +9,7 @@ const layout = computed(() => route.meta.layout === 'auth' ? AuthLayout : Defaul
 </script>
 
 <template>
-  <component :is="layout" />
+  <v-app>
+    <component :is="layout" />
+  </v-app>
 </template>

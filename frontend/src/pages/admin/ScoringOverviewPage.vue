@@ -1,27 +1,23 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../../services/api'
-import { useTableSort } from '../../composables/useTableSort'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
-import SortTh from '../../components/common/SortTh.vue'
-import BaseAlert from '../../components/common/BaseAlert.vue'
 
 const router = useRouter()
 const loading = ref(true)
 const alert = ref(null)
 const applications = ref([])
-const expanded = ref(new Set())
+const expanded = ref([])
 
-const { sortKey, sortDir, setSort, applySort } = useTableSort('submitted', 'desc')
-
-const sortedApplications = computed(() => applySort(applications.value, {
-  applicant: (a) => `${a.lastName} ${a.firstName}`.toLowerCase(),
-  status: (a) => a.status,
-  scorers: (a) => a.scoredCount,
-  avgScore: (a) => a.overallAverage ?? -1,
-  submitted: (a) => a.submittedAt ?? '',
-}))
+const headers = [
+  { title: '', key: 'data-table-expand', width: 48 },
+  { title: 'Applicant', key: 'applicant', value: (a) => `${a.lastName} ${a.firstName}` },
+  { title: 'Status', key: 'status' },
+  { title: 'Scorers', key: 'scoredCount' },
+  { title: 'Avg Score', key: 'overallAverage', value: (a) => a.overallAverage ?? -1 },
+  { title: 'Action', key: 'actions', sortable: false, align: 'end' },
+]
 
 onMounted(async () => {
   try {
@@ -34,17 +30,9 @@ onMounted(async () => {
   }
 })
 
-function toggleExpand(id) {
-  if (expanded.value.has(id)) {
-    expanded.value.delete(id)
-  } else {
-    expanded.value.add(id)
-  }
-}
-
 function scoringProgress(app) {
   if (app.scoredCount === 0) return { label: 'No scores', color: 'text-slate-400' }
-  return { label: `${app.scoredCount} scored`, color: 'text-success-dark' }
+  return { label: `${app.scoredCount} scored`, color: 'text-success' }
 }
 </script>
 
@@ -55,98 +43,83 @@ function scoringProgress(app) {
       <p class="page-subtitle">Track scoring progress and averages across all submitted applications.</p>
     </div>
 
-    <BaseAlert v-if="alert" :type="alert.type" :message="alert.message" />
+    <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
-    <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
-      <span class="mdi mdi-loading animate-spin text-xl"></span>
-      Loading overview…
-    </div>
+    <v-card v-if="!loading && !applications.length">
+      <v-empty-state icon="mdi-clipboard-text-outline" text="No submitted applications yet." />
+    </v-card>
 
-    <div v-else-if="!applications.length" class="section-card text-center py-10">
-      <span class="mdi mdi-clipboard-text-outline text-4xl text-slate-400 block mb-2"></span>
-      <p class="text-sm text-slate-400">No submitted applications yet.</p>
-    </div>
+    <v-card v-else class="overflow-hidden">
+      <v-data-table
+        v-model:expanded="expanded"
+        :headers="headers"
+        :items="applications"
+        item-value="applicationId"
+        :loading="loading"
+        loading-text="Loading overview…"
+        show-expand
+        expand-on-click
+        class="clickable-rows"
+      >
+        <template #item.applicant="{ item }">
+          <p class="font-semibold text-navy">{{ item.firstName }} {{ item.lastName }}</p>
+          <p class="text-xs text-slate-400">
+            {{ item.submittedAt ? new Date(item.submittedAt).toLocaleDateString() : '—' }}
+          </p>
+        </template>
+        <template #item.status="{ item }">
+          <StatusBadge :status="item.status" />
+        </template>
+        <template #item.scoredCount="{ item }">
+          <span :class="`text-sm font-medium ${scoringProgress(item).color}`">
+            {{ scoringProgress(item).label }}
+          </span>
+        </template>
+        <template #item.overallAverage="{ item }">
+          <span v-if="item.overallAverage != null" class="text-sm font-bold text-navy">{{ item.overallAverage }}</span>
+          <span v-else class="text-sm text-slate-400">—</span>
+        </template>
+        <template #item.actions="{ item }">
+          <v-btn
+            variant="text"
+            color="primary"
+            size="small"
+            append-icon="mdi-arrow-right"
+            @click.stop="router.push(`/admin/applications/${item.applicationId}`)"
+          >
+            View
+          </v-btn>
+        </template>
 
-    <div v-else class="card overflow-hidden">
-      <table class="dialect-table">
-        <thead>
+        <!-- Expanded section averages -->
+        <template #expanded-row="{ columns, item }">
           <tr>
-            <th class="w-8"></th>
-            <SortTh column="applicant" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Applicant</SortTh>
-            <SortTh column="status" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Status</SortTh>
-            <SortTh column="scorers" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Scorers</SortTh>
-            <SortTh column="avgScore" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Avg Score</SortTh>
-            <th class="text-right">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          <template v-for="app in sortedApplications" :key="app.applicationId">
-            <tr
-              class="cursor-pointer"
-              @click="toggleExpand(app.applicationId)"
-            >
-              <td>
-                <span
-                  :class="`mdi text-slate-400 text-base transition-transform ${expanded.has(app.applicationId) ? 'mdi-chevron-down' : 'mdi-chevron-right'}`"
-                ></span>
-              </td>
-              <td>
-                <p class="font-semibold text-navy">{{ app.firstName }} {{ app.lastName }}</p>
-                <p class="text-xs text-slate-400">
-                  {{ app.submittedAt ? new Date(app.submittedAt).toLocaleDateString() : '—' }}
-                </p>
-              </td>
-              <td><StatusBadge :status="app.status" /></td>
-              <td>
-                <span :class="`text-sm font-medium ${scoringProgress(app).color}`">
-                  {{ scoringProgress(app).label }}
-                </span>
-              </td>
-              <td>
-                <span v-if="app.overallAverage != null" class="text-sm font-bold text-navy">
-                  {{ app.overallAverage }}
-                </span>
-                <span v-else class="text-sm text-slate-400">—</span>
-              </td>
-              <td class="text-right" @click.stop>
-                <button
-                  @click="router.push(`/admin/applications/${app.applicationId}`)"
-                  class="text-sm font-semibold text-primary hover:text-primary-700 transition-colors"
-                >
-                  View
-                  <span class="mdi mdi-arrow-right ml-0.5"></span>
-                </button>
-              </td>
-            </tr>
-
-            <!-- Expanded section averages -->
-            <tr v-if="expanded.has(app.applicationId)" class="bg-[#F4F7FE]">
-              <td colspan="6" class="px-6 pb-4 pt-2">
-                <div v-if="app.sectionAverages.length" class="space-y-2">
-                  <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Section Averages</p>
-                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    <div
-                      v-for="section in app.sectionAverages"
-                      :key="section.sectionId ?? 'overall'"
-                      class="bg-white rounded-xl border border-[#E9EDF7] px-4 py-3 shadow-card"
-                    >
-                      <p class="text-xs font-semibold text-slate-400 truncate mb-1">{{ section.sectionTitle }}</p>
-                      <div class="flex items-end gap-2">
-                        <span class="text-2xl font-bold text-navy">{{ section.average }}</span>
-                        <span class="text-xs text-slate-400 mb-0.5">/ 100</span>
-                      </div>
-                      <p class="text-xs text-slate-400 mt-1">
-                        {{ section.scorerCount }} scorer{{ section.scorerCount !== 1 ? 's' : '' }}
-                      </p>
+            <td :colspan="columns.length" class="bg-[#F4F7FE] px-6 pb-4 pt-2">
+              <div v-if="item.sectionAverages.length">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Section Averages</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <v-card
+                    v-for="section in item.sectionAverages"
+                    :key="section.sectionId ?? 'overall'"
+                    rounded="lg"
+                    class="px-4 py-3"
+                  >
+                    <p class="text-xs font-semibold text-slate-400 truncate mb-1">{{ section.sectionTitle }}</p>
+                    <div class="flex items-end gap-2">
+                      <span class="text-2xl font-bold text-navy">{{ section.average }}</span>
+                      <span class="text-xs text-slate-400 mb-0.5">/ 100</span>
                     </div>
-                  </div>
+                    <p class="text-xs text-slate-400 mt-1">
+                      {{ section.scorerCount }} scorer{{ section.scorerCount !== 1 ? 's' : '' }}
+                    </p>
+                  </v-card>
                 </div>
-                <p v-else class="text-sm text-slate-400 py-2">No scores submitted yet.</p>
-              </td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-    </div>
+              </div>
+              <p v-else class="text-sm text-slate-400 py-2">No scores submitted yet.</p>
+            </td>
+          </tr>
+        </template>
+      </v-data-table>
+    </v-card>
   </div>
 </template>

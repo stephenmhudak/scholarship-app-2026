@@ -8,7 +8,7 @@ defineProps({
 </script>
 
 <template>
-  <div class="card p-5 space-y-3">
+  <v-card class="pa-5 space-y-3">
     <div class="flex items-center justify-between">
       <div>
         <p class="text-xs font-bold text-slate-400 uppercase tracking-wide">Reviewer</p>
@@ -24,7 +24,8 @@ defineProps({
       Section: <span class="font-semibold text-navy">{{ score.section }}</span>
     </div>
 
-    <div v-if="score.comments" class="pt-3 border-t border-[#E9EDF7]">
+    <v-divider v-if="score.comments" />
+    <div v-if="score.comments">
       <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">Comments</p>
       <p class="text-sm text-navy whitespace-pre-wrap">{{ score.comments }}</p>
     </div>
@@ -32,5 +33,5 @@ defineProps({
     <div v-if="score.created_at" class="text-xs text-slate-400">
       Submitted {{ new Date(score.created_at).toLocaleDateString() }}
     </div>
-  </div>
+  </v-card>
 </template>

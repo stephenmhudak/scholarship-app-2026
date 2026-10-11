@@ -2,21 +2,20 @@
 </script>
 
 <template>
-  <div class="min-h-screen bg-page flex items-center justify-center px-4">
+  <v-main class="flex items-center justify-center px-4 py-10">
     <div class="w-full max-w-md">
       <!-- Brand header -->
       <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-14 h-14 bg-primary rounded-2xl shadow-card-md mb-4">
-          <span class="mdi mdi-school text-white text-3xl"></span>
-        </div>
+        <v-avatar color="primary" size="56" rounded="xl" class="shadow-card-md mb-4">
+          <v-icon icon="mdi-school" size="32" />
+        </v-avatar>
         <h1 class="text-2xl font-bold text-navy">Scholarship Portal</h1>
         <p class="text-slate-400 text-sm mt-1">Empowering Students to Succeed</p>
       </div>
 
-      <!-- Card -->
-      <div class="card p-8">
+      <v-card class="pa-8">
         <RouterView />
-      </div>
+      </v-card>
     </div>
-  </div>
+  </v-main>
 </template>

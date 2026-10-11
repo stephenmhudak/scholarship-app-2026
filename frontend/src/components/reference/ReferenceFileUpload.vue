@@ -1,7 +1,6 @@
 <script setup>
 import { ref } from 'vue'
 import { uploadFile, ACCEPTED_REFERENCE_TYPES, MAX_FILE_SIZE } from '../../utils/fileUpload'
-import BaseButton from '../common/BaseButton.vue'
 
 const props = defineProps({
   referenceCode: {
@@ -16,13 +15,12 @@ const file = ref(null)
 const uploading = ref(false)
 const error = ref(null)
 
-function onFileChange(e) {
-  const selected = e.target.files?.[0] || null
+function onFileChange(value) {
+  const selected = (Array.isArray(value) ? value[0] : value) || null
   error.value = null
   if (selected && selected.size > MAX_FILE_SIZE) {
     error.value = 'File must be 5 MB or less.'
     file.value = null
-    e.target.value = ''
     return
   }
   file.value = selected
@@ -58,27 +56,27 @@ async function upload() {
       </p>
     </div>
 
-    <div class="border-2 border-dashed border-[#E9EDF7] bg-[#F4F7FE] rounded-xl p-6 text-center hover:border-primary/40 transition-colors">
-      <span class="mdi mdi-file-upload-outline text-4xl text-slate-400 block mb-2"></span>
-      <label class="cursor-pointer">
-        <span class="text-sm font-semibold text-primary hover:text-primary-700 transition-colors">
-          {{ file ? file.name : 'Click to select a file' }}
-        </span>
-        <input
-          type="file"
-          :accept="ACCEPTED_REFERENCE_TYPES.join(',')"
-          @change="onFileChange"
-          class="sr-only"
-        />
-      </label>
-      <p class="text-xs text-slate-400 mt-1">{{ ACCEPTED_REFERENCE_TYPES.join(', ') }} up to 5MB</p>
-    </div>
+    <v-file-input
+      :model-value="file"
+      label="Reference letter"
+      :accept="ACCEPTED_REFERENCE_TYPES.join(',')"
+      :hint="`${ACCEPTED_REFERENCE_TYPES.join(', ')} up to 5MB`"
+      persistent-hint
+      prepend-inner-icon="mdi-file-upload-outline"
+      :error-messages="error || []"
+      @update:model-value="onFileChange"
+    />
 
-    <p v-if="error" class="text-sm font-medium text-danger">{{ error }}</p>
-
-    <BaseButton @click="upload" :loading="uploading" :disabled="!file || uploading" class="w-full">
-      <span class="mdi mdi-upload mr-1.5"></span>
+    <v-btn
+      color="primary"
+      size="large"
+      block
+      prepend-icon="mdi-upload"
+      :loading="uploading"
+      :disabled="!file || uploading"
+      @click="upload"
+    >
       Upload Reference Letter
-    </BaseButton>
+    </v-btn>
   </div>
 </template>

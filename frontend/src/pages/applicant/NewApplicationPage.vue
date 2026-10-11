@@ -19,8 +19,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex items-center gap-2 text-slate-400 p-8">
-    <span class="mdi mdi-loading animate-spin text-xl"></span>
+  <div class="flex items-center gap-3 text-slate-400 p-8">
+    <v-progress-circular indeterminate color="primary" size="22" width="2" />
     Starting your application…
   </div>
 </template>

@@ -2,8 +2,6 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useScoringStore } from '../../stores/scoring'
-import BaseAlert from '../../components/common/BaseAlert.vue'
-import BaseButton from '../../components/common/BaseButton.vue'
 import RichTextAnswer from '../../components/application/RichTextAnswer.vue'
 import { isRichText } from '../../utils/richText'
 
@@ -70,7 +68,7 @@ function buildScores() {
     return {
       sectionId: s.id,
       label: s.label,
-      score: existing?.scoreValue ?? '',
+      score: existing?.scoreValue ?? null,
       comments: existing?.comments ?? '',
     }
   })
@@ -117,12 +115,12 @@ async function handleSave() {
       <p v-if="applicantName" class="page-subtitle">{{ applicantName }}</p>
     </div>
 
-    <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
-      <span class="mdi mdi-loading animate-spin text-xl"></span>
+    <div v-if="loading" class="flex items-center gap-3 text-slate-400 py-4">
+      <v-progress-circular indeterminate color="primary" size="22" width="2" />
       Loading application…
     </div>
 
-    <BaseAlert v-if="alert" :type="alert.type" :message="alert.message" />
+    <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
     <template v-if="!loading && scoringStore.currentApplication">
       <div class="space-y-8">
@@ -133,13 +131,13 @@ async function handleSave() {
 
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
             <!-- Answers -->
-            <div class="card p-5 space-y-4">
+            <v-card class="pa-5 space-y-4">
               <template v-if="section.answers.length">
                 <div
                   v-for="answer in section.answers"
                   :key="answer.questionId"
                 >
-                  <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">
+                  <p class="eyebrow mb-1.5">
                     {{ answer.questionText || answer.questionId }}
                   </p>
                   <RichTextAnswer v-if="answer.richText" :html="answer.textValue" />
@@ -149,42 +147,35 @@ async function handleSave() {
                 </div>
               </template>
               <p v-else class="text-sm text-slate-400">No answers for this section.</p>
-            </div>
+            </v-card>
 
             <!-- Score input -->
-            <div class="card p-5 space-y-4">
-              <div class="space-y-1.5">
-                <label class="block text-sm font-semibold text-navy">
-                  Score <span class="text-slate-400 font-normal">(1–100)</span>
-                </label>
-                <input
-                  v-model.number="scores[section.idx].score"
-                  type="number"
-                  min="1"
-                  max="100"
-                  placeholder="Enter score…"
-                  class="form-input w-36"
-                />
-              </div>
-              <div class="space-y-1.5">
-                <label class="block text-sm font-semibold text-navy">Comments</label>
-                <textarea
-                  v-model="scores[section.idx].comments"
-                  rows="3"
-                  placeholder="Enter your comments…"
-                  class="form-input resize-y"
-                />
-              </div>
-            </div>
+            <v-card class="pa-5 space-y-4">
+              <v-number-input
+                v-model="scores[section.idx].score"
+                label="Score (1–100)"
+                :min="1"
+                :max="100"
+                control-variant="split"
+                class="max-w-[14rem]"
+                hide-details
+              />
+              <v-textarea
+                v-model="scores[section.idx].comments"
+                label="Comments"
+                rows="3"
+                placeholder="Enter your comments…"
+                hide-details
+              />
+            </v-card>
           </div>
         </div>
       </div>
 
       <div class="flex justify-end">
-        <BaseButton :loading="saving" @click="handleSave">
-          <span class="mdi mdi-content-save-outline mr-1.5"></span>
+        <v-btn color="primary" prepend-icon="mdi-content-save-outline" :loading="saving" @click="handleSave">
           Save Scores
-        </BaseButton>
+        </v-btn>
       </div>
     </template>
   </div>
