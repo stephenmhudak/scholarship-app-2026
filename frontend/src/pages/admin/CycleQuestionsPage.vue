@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import api from '../../services/api'
 import BaseButton from '../../components/common/BaseButton.vue'
 import BaseAlert from '../../components/common/BaseAlert.vue'
+import { isRichText } from '../../utils/richText'
 
 const route = useRoute()
 const cycleId = route.params.cycleId
@@ -17,6 +18,9 @@ const alert = ref(null)
 
 const editing = ref(null)
 const isNew = ref(false)
+// Section id (null = ungrouped) whose list shows the new-question form; set by startAdd.
+const addingToGroupId = ref(null)
+const NEW_ROW = { id: '__new' }
 
 // editingSection: { id?, title, description } — id present = editing existing, absent = creating
 // insertAfterSectionId: string id = after that section, null = before all (first position)
@@ -28,7 +32,6 @@ const insertAfterSectionId = ref(null)
 const QUESTION_TYPES = [
   { value: 'short_answer',    label: 'Short Answer' },
   { value: 'long_answer',     label: 'Long Answer' },
-  { value: 'rich_text',       label: 'Rich Text' },
   { value: 'multiple_choice', label: 'Multiple Choice' },
   { value: 'single_choice',   label: 'Single Choice' },
   { value: 'file_upload',     label: 'File Upload' },
@@ -36,9 +39,7 @@ const QUESTION_TYPES = [
   { value: 'date',            label: 'Date' },
 ]
 
-const TEXT_TYPES = ['short_answer', 'long_answer', 'rich_text']
-// Rich text only supports length rules — format checks make no sense on formatted HTML.
-const FORMAT_RULE_TYPES = ['short_answer', 'long_answer']
+const TEXT_TYPES = ['short_answer', 'long_answer']
 
 const hasOptions = computed(() =>
   editing.value && ['multiple_choice', 'single_choice'].includes(editing.value.type)
@@ -48,8 +49,11 @@ const showValidationRules = computed(() =>
   editing.value && TEXT_TYPES.includes(editing.value.type)
 )
 
+const canBeRichText = computed(() => editing.value?.type === 'long_answer')
+
+// Rich text only supports length rules — format checks make no sense on formatted HTML.
 const showFormatRules = computed(() =>
-  editing.value && FORMAT_RULE_TYPES.includes(editing.value.type)
+  showValidationRules.value && !(canBeRichText.value && editing.value.validationRules.richText)
 )
 
 const groupedQuestions = computed(() => {
@@ -111,12 +115,25 @@ function blankQuestion() {
     sectionId: '',
     options: [],
     newOption: '',
-    validationRules: { numberOnly: false, phoneFormat: false, emailFormat: false, minLength: null, maxLength: null },
+    validationRules: { numberOnly: false, phoneFormat: false, emailFormat: false, minLength: null, maxLength: null, richText: false },
   }
+}
+
+// A group's questions, plus a placeholder row for the form when adding a question to it.
+function groupRows(group) {
+  return isNew.value && addingToGroupId.value === group.id
+    ? [...group.questions, NEW_ROW]
+    : group.questions
+}
+
+function isEditingRow(q) {
+  if (!editing.value) return false
+  return isNew.value ? q === NEW_ROW : q.id === editing.value.id
 }
 
 function startAdd(sectionId = '') {
   isNew.value = true
+  addingToGroupId.value = sectionId || null
   editing.value = { ...blankQuestion(), sectionId }
 }
 
@@ -139,6 +156,7 @@ function startEdit(q) {
       emailFormat: vr.emailFormat ?? false,
       minLength: vr.minLength ?? null,
       maxLength: vr.maxLength ?? null,
+      richText: vr.richText ?? false,
     },
   }
 }
@@ -170,8 +188,9 @@ async function save() {
 
   const vr = editing.value.validationRules
   const isTextType = TEXT_TYPES.includes(editing.value.type)
-  const allowsFormat = FORMAT_RULE_TYPES.includes(editing.value.type)
-  const hasRules = isTextType && ((allowsFormat && (vr.numberOnly || vr.phoneFormat || vr.emailFormat)) || vr.minLength || vr.maxLength)
+  const richText = (canBeRichText.value && vr.richText) || false
+  const allowsFormat = showFormatRules.value
+  const hasRules = isTextType && ((allowsFormat && (vr.numberOnly || vr.phoneFormat || vr.emailFormat)) || vr.minLength || vr.maxLength || richText)
   const validationRules = hasRules
     ? {
         numberOnly: (allowsFormat && vr.numberOnly) || false,
@@ -179,6 +198,7 @@ async function save() {
         emailFormat: (allowsFormat && vr.emailFormat) || false,
         minLength: vr.minLength ? Number(vr.minLength) : null,
         maxLength: vr.maxLength ? Number(vr.maxLength) : null,
+        richText,
       }
     : null
 
@@ -376,142 +396,6 @@ function globalIndex(q) {
 
     <BaseAlert v-if="alert" :type="alert.type" :message="alert.message" />
 
-    <!-- Add / Edit Question Form -->
-    <div v-if="editing" class="section-card space-y-5">
-      <h2 class="text-base font-bold text-navy">
-        {{ isNew ? 'New Question' : 'Edit Question' }}
-      </h2>
-
-      <!-- Question text -->
-      <div class="space-y-1.5">
-        <label class="block text-sm font-semibold text-navy">Question Text <span class="text-danger">*</span></label>
-        <textarea
-          v-model="editing.text"
-          rows="2"
-          placeholder="Enter your question…"
-          class="form-input resize-none"
-        />
-      </div>
-
-      <!-- Additional information -->
-      <div class="space-y-1.5">
-        <label class="block text-sm font-semibold text-navy">Additional Information</label>
-        <textarea
-          v-model="editing.description"
-          rows="2"
-          placeholder="Optional help text shown below the question…"
-          class="form-input resize-none"
-        />
-      </div>
-
-      <!-- Type + Required -->
-      <div class="flex items-end gap-4">
-        <div class="space-y-1.5 flex-1">
-          <label class="block text-sm font-semibold text-navy">Type</label>
-          <select v-model="editing.type" class="form-select w-full">
-            <option v-for="t in QUESTION_TYPES" :key="t.value" :value="t.value">{{ t.label }}</option>
-          </select>
-        </div>
-        <label class="flex items-center gap-2 pb-2.5 cursor-pointer">
-          <input
-            id="q-required"
-            v-model="editing.isRequired"
-            type="checkbox"
-            class="w-4 h-4 rounded border-[#E9EDF7] text-primary focus:ring-primary/30"
-          />
-          <span class="text-sm font-semibold text-navy">Required</span>
-        </label>
-      </div>
-
-      <!-- Section assignment -->
-      <div v-if="sections.length > 0" class="space-y-1.5">
-        <label class="block text-sm font-semibold text-navy">Section</label>
-        <select v-model="editing.sectionId" class="form-select w-full">
-          <option value="">No section (ungrouped)</option>
-          <option v-for="s in sections" :key="s.id" :value="s.id">{{ s.title }}</option>
-        </select>
-      </div>
-
-      <!-- Options (MC / SC only) -->
-      <div v-if="hasOptions" class="space-y-3">
-        <label class="block text-sm font-semibold text-navy">Answer Options</label>
-
-        <div v-if="editing.options.length" class="space-y-2">
-          <div
-            v-for="(opt, i) in editing.options"
-            :key="i"
-            class="flex items-center gap-2 bg-[#F4F7FE] border border-[#E9EDF7] rounded-xl px-3 py-2"
-          >
-            <span class="text-sm text-navy flex-1">{{ opt }}</span>
-            <button type="button" @click="removeOption(i)" class="text-slate-400 hover:text-danger transition-colors">
-              <span class="mdi mdi-close text-lg"></span>
-            </button>
-          </div>
-        </div>
-
-        <div class="flex gap-2">
-          <input
-            v-model="editing.newOption"
-            type="text"
-            placeholder="Add an option…"
-            class="form-input flex-1"
-            @keydown.enter.prevent="addOption"
-          />
-          <button
-            type="button"
-            @click="addOption"
-            class="px-3.5 py-2.5 text-sm font-semibold border border-[#E9EDF7] rounded-xl hover:bg-[#F4F7FE] transition-colors text-navy"
-          >
-            <span class="mdi mdi-plus"></span> Add
-          </button>
-        </div>
-
-        <p v-if="editing.options.length === 0" class="text-xs font-medium text-warning-dark">
-          Add at least one option for this question type.
-        </p>
-      </div>
-
-      <!-- Validation rules -->
-      <div v-if="showValidationRules" class="space-y-4 border-t border-[#E9EDF7] pt-4">
-        <p class="text-sm font-bold text-navy">Validation Rules</p>
-
-        <div v-if="showFormatRules" class="grid grid-cols-3 gap-3">
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input v-model="editing.validationRules.numberOnly" type="checkbox" class="w-4 h-4 rounded border-[#E9EDF7] text-primary focus:ring-primary/30" />
-            <span class="text-sm text-navy">Numbers only</span>
-          </label>
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input v-model="editing.validationRules.phoneFormat" type="checkbox" class="w-4 h-4 rounded border-[#E9EDF7] text-primary focus:ring-primary/30" />
-            <span class="text-sm text-navy">Phone format</span>
-          </label>
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input v-model="editing.validationRules.emailFormat" type="checkbox" class="w-4 h-4 rounded border-[#E9EDF7] text-primary focus:ring-primary/30" />
-            <span class="text-sm text-navy">Email format</span>
-          </label>
-        </div>
-
-        <div class="flex gap-4">
-          <div class="space-y-1.5 flex-1">
-            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide">Min Length</label>
-            <input v-model.number="editing.validationRules.minLength" type="number" min="0" placeholder="—" class="form-input" />
-          </div>
-          <div class="space-y-1.5 flex-1">
-            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide">Max Length</label>
-            <input v-model.number="editing.validationRules.maxLength" type="number" min="0" placeholder="—" class="form-input" />
-          </div>
-        </div>
-      </div>
-
-      <!-- Actions -->
-      <div class="flex gap-3 pt-2 border-t border-[#E9EDF7]">
-        <BaseButton :loading="saving" @click="save">
-          <span class="mdi mdi-content-save mr-1.5"></span>
-          {{ isNew ? 'Add Question' : 'Save Changes' }}
-        </BaseButton>
-        <BaseButton variant="secondary" @click="cancel">Cancel</BaseButton>
-      </div>
-    </div>
-
     <!-- Questions List -->
     <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
       <span class="mdi mdi-loading animate-spin text-xl"></span>
@@ -608,66 +492,207 @@ function globalIndex(q) {
 
       <!-- Questions + add question button -->
       <div class="space-y-2">
-        <div v-if="group.questions.length === 0 && group.id !== null" class="text-xs text-slate-400 pl-1">
+        <div v-if="groupRows(group).length === 0 && group.id !== null" class="text-xs text-slate-400 pl-1">
           No questions in this section.
         </div>
 
-        <div
-          v-for="q in group.questions"
-          :key="q.id"
-          class="card p-4 flex items-start gap-3"
-        >
-          <!-- Order controls -->
-          <div class="flex flex-col gap-0.5 pt-0.5">
-            <button
-              @click="moveUp(globalIndex(q))"
-              :disabled="globalIndex(q) === 0"
-              class="text-slate-400 hover:text-navy disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <span class="mdi mdi-chevron-up text-xl leading-none"></span>
-            </button>
-            <button
-              @click="moveDown(globalIndex(q))"
-              :disabled="globalIndex(q) === questions.length - 1"
-              class="text-slate-400 hover:text-navy disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <span class="mdi mdi-chevron-down text-xl leading-none"></span>
-            </button>
-          </div>
+        <template v-for="q in groupRows(group)" :key="q.id">
+          <!-- Add / Edit Question Form (inline, in place of the question) -->
+          <div v-if="isEditingRow(q)" class="section-card space-y-5 border-primary/30">
+            <h2 class="text-base font-bold text-navy">
+              {{ isNew ? 'New Question' : 'Edit Question' }}
+            </h2>
 
-          <!-- Content -->
-          <div class="flex-1 min-w-0">
-            <div class="flex items-start justify-between gap-2">
-              <p class="text-sm font-semibold text-navy leading-snug">{{ q.text }}</p>
-              <div class="flex gap-1.5 shrink-0">
-                <button @click="startEdit(q)" class="text-slate-400 hover:text-primary transition-colors p-1" title="Edit">
-                  <span class="mdi mdi-pencil text-base"></span>
-                </button>
-                <button @click="deleteQuestion(q)" class="text-slate-400 hover:text-danger transition-colors p-1" title="Delete">
-                  <span class="mdi mdi-trash-can text-base"></span>
+            <!-- Question text -->
+            <div class="space-y-1.5">
+              <label class="block text-sm font-semibold text-navy">Question Text <span class="text-danger">*</span></label>
+              <textarea
+                v-model="editing.text"
+                rows="2"
+                placeholder="Enter your question…"
+                class="form-input resize-none"
+              />
+            </div>
+
+            <!-- Additional information -->
+            <div class="space-y-1.5">
+              <label class="block text-sm font-semibold text-navy">Additional Information</label>
+              <textarea
+                v-model="editing.description"
+                rows="2"
+                placeholder="Optional help text shown below the question…"
+                class="form-input resize-none"
+              />
+            </div>
+
+            <!-- Type + Required -->
+            <div class="flex items-end gap-4">
+              <div class="space-y-1.5 flex-1">
+                <label class="block text-sm font-semibold text-navy">Type</label>
+                <select v-model="editing.type" class="form-select w-full">
+                  <option v-for="t in QUESTION_TYPES" :key="t.value" :value="t.value">{{ t.label }}</option>
+                </select>
+              </div>
+              <label class="flex items-center gap-2 pb-2.5 cursor-pointer">
+                <input
+                  id="q-required"
+                  v-model="editing.isRequired"
+                  type="checkbox"
+                  class="w-4 h-4 rounded border-[#E9EDF7] text-primary focus:ring-primary/30"
+                />
+                <span class="text-sm font-semibold text-navy">Required</span>
+              </label>
+            </div>
+
+            <!-- Section assignment -->
+            <div v-if="sections.length > 0" class="space-y-1.5">
+              <label class="block text-sm font-semibold text-navy">Section</label>
+              <select v-model="editing.sectionId" class="form-select w-full">
+                <option value="">No section (ungrouped)</option>
+                <option v-for="s in sections" :key="s.id" :value="s.id">{{ s.title }}</option>
+              </select>
+            </div>
+
+            <!-- Options (MC / SC only) -->
+            <div v-if="hasOptions" class="space-y-3">
+              <label class="block text-sm font-semibold text-navy">Answer Options</label>
+
+              <div v-if="editing.options.length" class="space-y-2">
+                <div
+                  v-for="(opt, i) in editing.options"
+                  :key="i"
+                  class="flex items-center gap-2 bg-[#F4F7FE] border border-[#E9EDF7] rounded-xl px-3 py-2"
+                >
+                  <span class="text-sm text-navy flex-1">{{ opt }}</span>
+                  <button type="button" @click="removeOption(i)" class="text-slate-400 hover:text-danger transition-colors">
+                    <span class="mdi mdi-close text-lg"></span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="flex gap-2">
+                <input
+                  v-model="editing.newOption"
+                  type="text"
+                  placeholder="Add an option…"
+                  class="form-input flex-1"
+                  @keydown.enter.prevent="addOption"
+                />
+                <button
+                  type="button"
+                  @click="addOption"
+                  class="px-3.5 py-2.5 text-sm font-semibold border border-[#E9EDF7] rounded-xl hover:bg-[#F4F7FE] transition-colors text-navy"
+                >
+                  <span class="mdi mdi-plus"></span> Add
                 </button>
               </div>
+
+              <p v-if="editing.options.length === 0" class="text-xs font-medium text-warning-dark">
+                Add at least one option for this question type.
+              </p>
             </div>
-            <div class="flex items-center gap-2 mt-1.5 flex-wrap">
-              <span class="text-xs bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full font-semibold">{{ typLabel(q.type) }}</span>
-              <span v-if="q.isRequired" class="text-xs text-danger font-semibold">Required</span>
-              <span v-if="q.options?.length" class="text-xs text-slate-400">
-                {{ q.options.length }} option{{ q.options.length !== 1 ? 's' : '' }}
-              </span>
+
+            <!-- Validation rules -->
+            <div v-if="showValidationRules" class="space-y-4 border-t border-[#E9EDF7] pt-4">
+              <p class="text-sm font-bold text-navy">Validation Rules</p>
+
+              <label v-if="canBeRichText" class="flex items-center gap-2 cursor-pointer">
+                <input v-model="editing.validationRules.richText" type="checkbox" class="w-4 h-4 rounded border-[#E9EDF7] text-primary focus:ring-primary/30" />
+                <span class="text-sm text-navy">Rich text</span>
+                <span class="text-xs text-slate-400">— applicants can use bold, lists, headings and links</span>
+              </label>
+
+              <div v-if="showFormatRules" class="grid grid-cols-3 gap-3">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input v-model="editing.validationRules.numberOnly" type="checkbox" class="w-4 h-4 rounded border-[#E9EDF7] text-primary focus:ring-primary/30" />
+                  <span class="text-sm text-navy">Numbers only</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input v-model="editing.validationRules.phoneFormat" type="checkbox" class="w-4 h-4 rounded border-[#E9EDF7] text-primary focus:ring-primary/30" />
+                  <span class="text-sm text-navy">Phone format</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input v-model="editing.validationRules.emailFormat" type="checkbox" class="w-4 h-4 rounded border-[#E9EDF7] text-primary focus:ring-primary/30" />
+                  <span class="text-sm text-navy">Email format</span>
+                </label>
+              </div>
+
+              <div class="flex gap-4">
+                <div class="space-y-1.5 flex-1">
+                  <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide">Min Length</label>
+                  <input v-model.number="editing.validationRules.minLength" type="number" min="0" placeholder="—" class="form-input" />
+                </div>
+                <div class="space-y-1.5 flex-1">
+                  <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide">Max Length</label>
+                  <input v-model.number="editing.validationRules.maxLength" type="number" min="0" placeholder="—" class="form-input" />
+                </div>
+              </div>
             </div>
-            <div v-if="q.options?.length" class="mt-2 flex flex-wrap gap-1.5">
-              <span
-                v-for="opt in q.options"
-                :key="opt.id"
-                class="text-xs border border-[#E9EDF7] bg-[#F4F7FE] text-navy/70 px-2 py-0.5 rounded-lg"
-              >
-                {{ opt.text }}
-              </span>
+
+            <!-- Actions -->
+            <div class="flex gap-3 pt-2 border-t border-[#E9EDF7]">
+              <BaseButton :loading="saving" @click="save">
+                <span class="mdi mdi-content-save mr-1.5"></span>
+                {{ isNew ? 'Add Question' : 'Save Changes' }}
+              </BaseButton>
+              <BaseButton variant="secondary" @click="cancel">Cancel</BaseButton>
             </div>
           </div>
 
-          <span class="text-xs font-mono text-slate-400/60 pt-0.5">{{ globalIndex(q) + 1 }}</span>
-        </div>
+          <div v-else class="card p-4 flex items-start gap-3">
+            <!-- Order controls -->
+            <div class="flex flex-col gap-0.5 pt-0.5">
+              <button
+                @click="moveUp(globalIndex(q))"
+                :disabled="globalIndex(q) === 0"
+                class="text-slate-400 hover:text-navy disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <span class="mdi mdi-chevron-up text-xl leading-none"></span>
+              </button>
+              <button
+                @click="moveDown(globalIndex(q))"
+                :disabled="globalIndex(q) === questions.length - 1"
+                class="text-slate-400 hover:text-navy disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <span class="mdi mdi-chevron-down text-xl leading-none"></span>
+              </button>
+            </div>
+
+            <!-- Content -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-start justify-between gap-2">
+                <p class="text-sm font-semibold text-navy leading-snug">{{ q.text }}</p>
+                <div class="flex gap-1.5 shrink-0">
+                  <button @click="startEdit(q)" class="text-slate-400 hover:text-primary transition-colors p-1" title="Edit">
+                    <span class="mdi mdi-pencil text-base"></span>
+                  </button>
+                  <button @click="deleteQuestion(q)" class="text-slate-400 hover:text-danger transition-colors p-1" title="Delete">
+                    <span class="mdi mdi-trash-can text-base"></span>
+                  </button>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+                <span class="text-xs bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full font-semibold">{{ typLabel(q.type) }}</span>
+                <span v-if="isRichText(q)" class="text-xs bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full font-semibold">Rich Text</span>
+                <span v-if="q.isRequired" class="text-xs text-danger font-semibold">Required</span>
+                <span v-if="q.options?.length" class="text-xs text-slate-400">
+                  {{ q.options.length }} option{{ q.options.length !== 1 ? 's' : '' }}
+                </span>
+              </div>
+              <div v-if="q.options?.length" class="mt-2 flex flex-wrap gap-1.5">
+                <span
+                  v-for="opt in q.options"
+                  :key="opt.id"
+                  class="text-xs border border-[#E9EDF7] bg-[#F4F7FE] text-navy/70 px-2 py-0.5 rounded-lg"
+                >
+                  {{ opt.text }}
+                </span>
+              </div>
+            </div>
+
+            <span class="text-xs font-mono text-slate-400/60 pt-0.5">{{ globalIndex(q) + 1 }}</span>
+          </div>
+        </template>
 
         <!-- Add question to this group -->
         <button
