@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import api from '../../services/api'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
 import RichTextAnswer from '../../components/application/RichTextAnswer.vue'
+import NoApplicationCard from '../../components/application/NoApplicationCard.vue'
 import { isRichText } from '../../utils/richText'
 
 const route = useRoute()
@@ -13,6 +14,8 @@ const application = ref(null)
 const questions = ref([])
 const loading = ref(true)
 const error = ref(null)
+// /application/current/status 404s when the applicant hasn't started one — not an error.
+const noApplication = ref(false)
 
 const answersMap = computed(() =>
   Object.fromEntries((application.value?.answers ?? []).map((a) => [a.questionId, a]))
@@ -26,8 +29,9 @@ onMounted(async () => {
       const qRes = await api.get(`/cycles/${response.data.cycleId}/questions`)
       questions.value = qRes.data
     }
-  } catch {
-    error.value = 'Failed to load application status.'
+  } catch (err) {
+    if (appId === 'current' && err.response?.status === 404) noApplication.value = true
+    else error.value = 'Failed to load application status.'
   } finally {
     loading.value = false
   }
@@ -45,6 +49,8 @@ onMounted(async () => {
       <span class="mdi mdi-loading animate-spin text-xl"></span>
       Loading application…
     </div>
+
+    <NoApplicationCard v-else-if="noApplication" />
 
     <div v-else-if="error" class="text-sm font-medium text-danger">{{ error }}</div>
 

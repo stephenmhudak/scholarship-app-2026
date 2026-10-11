@@ -8,6 +8,7 @@ import QuestionRenderer from '../../components/application/QuestionRenderer.vue'
 import ApplicationProgress from '../../components/application/ApplicationProgress.vue'
 import BaseButton from '../../components/common/BaseButton.vue'
 import BaseAlert from '../../components/common/BaseAlert.vue'
+import NoApplicationCard from '../../components/application/NoApplicationCard.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,6 +19,8 @@ const loading = ref(true)
 const saving = ref(false)
 const submitting = ref(false)
 const alert = ref(null)
+// /application/current 404s when the applicant hasn't started one — not an error.
+const noApplication = ref(false)
 const validationErrors = ref({})
 
 // Sections loaded alongside questions
@@ -32,8 +35,9 @@ onMounted(async () => {
       const res = await api.get(`/cycles/${appStore.cycleId}/sections`)
       sections.value = res.data
     }
-  } catch {
-    alert.value = { type: 'error', message: 'Failed to load application.' }
+  } catch (err) {
+    if (appId === 'current' && err.response?.status === 404) noApplication.value = true
+    else alert.value = { type: 'error', message: 'Failed to load application.' }
   } finally {
     loading.value = false
   }
@@ -120,6 +124,8 @@ async function submit() {
       <span class="mdi mdi-loading animate-spin text-xl"></span>
       Loading…
     </div>
+
+    <NoApplicationCard v-else-if="noApplication" />
 
     <template v-else>
       <ApplicationProgress :answered="answeredCount" :total="appStore.questions.length" />
