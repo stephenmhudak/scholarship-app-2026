@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import { htmlToText, sanitizeHtml } from '../../utils/richText'
@@ -71,10 +71,20 @@ function apply(tool) {
     tool.run(editor.value.chain().focus()).run()
     return
   }
-  // Link: prompt for a URL; empty input removes the link.
-  const previous = editor.value.getAttributes('link').href || ''
-  const url = window.prompt('Link URL', previous)
-  if (url === null) return
+  // Link: ask for a URL in a dialog; the editor keeps its selection while it's open.
+  linkUrl.value = editor.value.getAttributes('link').href || ''
+  linkIsExisting.value = linkUrl.value !== ''
+  linkDialog.value = true
+}
+
+const linkDialog = ref(false)
+const linkUrl = ref('')
+const linkIsExisting = ref(false)
+
+// An empty URL removes the link.
+function saveLink(url = linkUrl.value) {
+  linkDialog.value = false
+  if (!editor.value) return
   const chain = editor.value.chain().focus().extendMarkRange('link')
   if (url.trim() === '') chain.unsetLink().run()
   else chain.setLink({ href: url.trim() }).run()
@@ -120,5 +130,24 @@ function apply(tool) {
       <p v-if="error" class="text-xs font-medium text-danger">{{ error }}</p>
       <p v-if="maxLength" class="text-xs text-slate-400 ml-auto">{{ charCount }} / {{ maxLength }}</p>
     </div>
+
+    <v-dialog v-model="linkDialog" max-width="440">
+      <v-card :title="linkIsExisting ? 'Edit link' : 'Add link'">
+        <template #append>
+          <v-btn icon="mdi-close" variant="text" size="small" @click="linkDialog = false" />
+        </template>
+        <v-card-text>
+          <v-form @submit.prevent="saveLink()">
+            <v-text-field v-model="linkUrl" label="URL" placeholder="https://example.com" autofocus hide-details />
+          </v-form>
+        </v-card-text>
+        <v-card-actions>
+          <v-btn v-if="linkIsExisting" color="error" variant="text" @click="saveLink('')">Remove link</v-btn>
+          <v-spacer />
+          <v-btn variant="outlined" @click="linkDialog = false">Cancel</v-btn>
+          <v-btn color="primary" variant="flat" @click="saveLink()">Save</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>

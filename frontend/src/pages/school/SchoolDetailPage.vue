@@ -4,8 +4,10 @@ import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import api from '../../services/api'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
+import { useConfirm } from '../../composables/useConfirm'
 
 const route = useRoute()
+const confirm = useConfirm()
 const authStore = useAuthStore()
 const schoolId = route.params.id
 const canManageStaff = authStore.hasPermission('manage_school_staff')
@@ -92,7 +94,12 @@ async function submitAddCounselor() {
 
 // ── Remove counselor ──────────────────────────────────────────────────────────
 async function removeCounselor(counselor) {
-  if (!confirm(`Remove ${counselor.FirstName} ${counselor.LastName} as a counselor?`)) return
+  if (!await confirm({
+    title: 'Remove counselor',
+    text: `Remove ${counselor.FirstName} ${counselor.LastName} as a counselor?`,
+    confirmText: 'Remove',
+    color: 'error',
+  })) return
   try {
     await api.delete(`/schools/${schoolId}/counselors/${counselor.Id}`)
     counselors.value = counselors.value.filter(c => c.Id !== counselor.Id)
