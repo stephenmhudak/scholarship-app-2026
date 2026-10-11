@@ -44,7 +44,7 @@ export default createVuetify({
     VDataTable: { hover: true, itemsPerPage: 25 },
     VDataTableServer: { hover: true },
     VDateInput: { variant: 'outlined', density: 'comfortable', color: 'primary', prependIcon: '', prependInnerIcon: '$calendar' },
-    VDialog: { maxWidth: 512 },
+    VDialog: { maxWidth: 512, VCard: { rounded: 'lg' } },
     VFileInput: { variant: 'outlined', density: 'comfortable', color: 'primary', prependIcon: '', prependInnerIcon: '$file' },
     VNumberInput: { variant: 'outlined', density: 'comfortable', color: 'primary' },
     VRadioGroup: { color: 'primary', density: 'compact', hideDetails: 'auto' },
