@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useScoringStore } from '../../stores/scoring'
 import BaseAlert from '../../components/common/BaseAlert.vue'
 import BaseButton from '../../components/common/BaseButton.vue'
+import RichTextAnswer from '../../components/application/RichTextAnswer.vue'
 
 const route = useRoute()
 const scoringStore = useScoringStore()
@@ -44,7 +45,7 @@ const answersGroupedBySections = computed(() => {
       const section = sectionId ? sectionMap[sectionId] : null
       groups[key] = { sectionId, title: section?.title ?? null, order: section?.order ?? 9999, answers: [] }
     }
-    groups[key].answers.push({ ...answer, questionText: q.text })
+    groups[key].answers.push({ ...answer, questionText: q.text, questionType: q.type })
   }
 
   return Object.values(groups).sort((a, b) => a.order - b.order)
@@ -140,7 +141,8 @@ async function handleSave() {
                   <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">
                     {{ answer.questionText || answer.questionId }}
                   </p>
-                  <p class="text-sm text-navy whitespace-pre-wrap">
+                  <RichTextAnswer v-if="answer.questionType === 'rich_text'" :html="answer.textValue" />
+                  <p v-else class="text-sm text-navy whitespace-pre-wrap">
                     {{ answer.selectedOptions?.length ? answer.selectedOptions.join(', ') : (answer.textValue || '—') }}
                   </p>
                 </div>

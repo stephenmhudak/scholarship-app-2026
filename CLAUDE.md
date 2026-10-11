@@ -150,7 +150,7 @@ Shadows:  shadow-card | shadow-card-md | shadow-card-lg
 **Sections:** Id, CycleId, Title, Description, Order
 
 **Questions:** Id, CycleId, SectionId (nullable), Text, Type, Order, IsRequired, ValidationRules (JSON)
-- Types: `short_answer`, `long_answer`, `multiple_choice`, `single_choice`, `file_upload`, `school_select`, `date`
+- Types: `short_answer`, `long_answer`, `rich_text` (HTML from Tiptap editor — sanitized on save by `RichTextSanitizer` and again on render by `RichTextAnswer` (DOMPurify); keep their tag allow-lists in sync), `multiple_choice`, `single_choice`, `file_upload`, `school_select`, `date`
 - ValidationRules: `{ numberOnly, phoneFormat, emailFormat, minLength, maxLength }`
 
 **Applications:** Id, ApplicantId, CycleId, Status (`draft`→`submitted`→`under_review`→`awarded`/`rejected`)
