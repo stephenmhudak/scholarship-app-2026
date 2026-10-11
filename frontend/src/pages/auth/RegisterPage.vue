@@ -1,13 +1,12 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import api from '../../services/api'
 import BaseButton from '../../components/common/BaseButton.vue'
 import BaseAlert from '../../components/common/BaseAlert.vue'
 import BaseInput from '../../components/common/BaseInput.vue'
 
-const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
@@ -26,7 +25,9 @@ const form = ref({
 })
 const loading = ref(false)
 const error = ref(null)
-const success = ref(null)
+const registeredEmail = ref(null)
+const resending = ref(false)
+const resendMessage = ref(null)
 
 const inviteToken = ref(null)
 const inviteInfo = ref(null)
@@ -68,19 +69,54 @@ async function register() {
       schoolState: inviteToken.value ? form.value.schoolState : undefined,
       schoolZip: inviteToken.value ? form.value.schoolZip : undefined,
     })
-    success.value = 'Account created! Signing you in…'
-    await authStore.login({ email: form.value.email, password: form.value.password })
-    router.push('/dashboard')
+    registeredEmail.value = form.value.email
   } catch (err) {
     error.value = err.response?.data?.error || 'Registration failed. Please try again.'
   } finally {
     loading.value = false
   }
 }
+
+async function resend() {
+  resending.value = true
+  resendMessage.value = null
+  try {
+    await authStore.resendVerification(registeredEmail.value)
+    resendMessage.value = 'If your account still needs verifying, a new link is on its way.'
+  } catch {
+    resendMessage.value = 'Could not resend the email. Please try again shortly.'
+  } finally {
+    resending.value = false
+  }
+}
 </script>
 
 <template>
-  <div class="space-y-5">
+  <div v-if="registeredEmail" class="space-y-5 text-center">
+    <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-primary-50">
+      <span class="mdi mdi-email-check-outline text-primary text-2xl"></span>
+    </div>
+    <div>
+      <h2 class="text-xl font-bold text-navy">Check your email</h2>
+      <p class="text-sm text-slate-400 mt-1">
+        We sent a verification link to <span class="font-semibold text-navy">{{ registeredEmail }}</span>.
+        Click it to activate your account. The link expires in 24 hours.
+      </p>
+    </div>
+
+    <BaseAlert v-if="resendMessage" type="info" :message="resendMessage" />
+
+    <BaseButton variant="secondary" :loading="resending" class="w-full" @click="resend">
+      Resend verification email
+    </BaseButton>
+
+    <p class="text-sm text-slate-400">
+      Already verified?
+      <RouterLink to="/login" class="text-primary font-semibold hover:underline">Sign in</RouterLink>
+    </p>
+  </div>
+
+  <div v-else class="space-y-5">
     <div>
       <h2 class="text-xl font-bold text-navy">Create an account</h2>
       <p v-if="inviteInfo" class="text-sm text-slate-400 mt-0.5">You're registering as a school admin. Enter your school information below.</p>
@@ -89,7 +125,6 @@ async function register() {
 
     <BaseAlert v-if="inviteError" type="error" :message="inviteError" />
     <BaseAlert v-if="error" type="error" :message="error" />
-    <BaseAlert v-if="success" type="success" :message="success" />
 
     <form @submit.prevent="register" class="space-y-4">
       <div class="grid grid-cols-2 gap-3">

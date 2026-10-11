@@ -52,6 +52,12 @@ builder.Services.AddScoped<IApplicationService, ApplicationService>();
 builder.Services.AddScoped<IScoringService, ScoringService>();
 builder.Services.AddScoped<IReferenceService, ReferenceService>();
 
+// Email: Resend when an API key is configured, otherwise log emails to the console
+if (!string.IsNullOrEmpty(builder.Configuration["Email:Resend:ApiKey"]))
+    builder.Services.AddHttpClient<IEmailService, ResendEmailService>();
+else
+    builder.Services.AddSingleton<IEmailService, LogEmailService>();
+
 // File storage: swap between Local, Azure, and Cloudflare R2 via appsettings
 var storageProvider = builder.Configuration["Storage:Provider"];
 if (storageProvider == "AzureBlob")

@@ -120,7 +120,9 @@ Shadows:  shadow-card | shadow-card-md | shadow-card-lg
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
 | POST | `/api/auth/login` | Public | Returns `{ token, userId, role, ... }` |
-| POST | `/api/auth/register` | Public | Creates applicant |
+| POST | `/api/auth/register` | Public | Creates applicant, emails verification link (no token returned) |
+| POST | `/api/auth/verify-email` | Public | `{ token }` → same payload as login |
+| POST | `/api/auth/resend-verification` | Public | `{ email }` → 204 always (no enumeration, 1 min cooldown) |
 | GET | `/api/auth/me` | Bearer | Current user |
 | GET | `/api/applications/my` | applicant | Own applications |
 | GET | `/api/applications/current` | applicant | Most recent |
@@ -163,6 +165,7 @@ Shadows:  shadow-card | shadow-card-md | shadow-card-lg
 
 - **No EF** — raw SqlKata + Dapper. Write explicit UPDATE queries.
 - **File upload is two-step:** upload → `fileId` → store in answer. Files have `ApplicationId = "pending"` until submit.
+- **Email verification:** self-registered users can't log in until `Users.EmailVerifiedAt` is set (login → 403 `{ code: "email_not_verified" }`). Admin/school-created users are pre-verified. Emails go through `IEmailService` — Resend if `Email:Resend:ApiKey` is set, otherwise logged to console.
 - **Reference codes are hashed** — store SHA-256, compare hash on lookup. Plaintext returned once.
 - **Both frontend routing AND backend auth enforce roles** — check both when adding features.
 - **Status transitions are manual** — no state machine. Admin can set any valid status.

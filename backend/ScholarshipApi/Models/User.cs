@@ -9,5 +9,6 @@ public class User
     public string LastName { get; set; } = null!;
     public string Role { get; set; } = null!;
     public string? SchoolId { get; set; }
+    public DateTime? EmailVerifiedAt { get; set; }
     public DateTime CreatedAt { get; set; }
 }

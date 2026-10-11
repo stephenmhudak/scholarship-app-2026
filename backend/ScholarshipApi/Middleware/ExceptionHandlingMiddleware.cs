@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using ScholarshipApi.Services;
 
 namespace ScholarshipApi.Middleware;
 
@@ -10,6 +11,10 @@ public class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Exception
         try
         {
             await next(context);
+        }
+        catch (EmailNotVerifiedException ex)
+        {
+            await WriteErrorResponse(context, HttpStatusCode.Forbidden, ex.Message, "email_not_verified");
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -33,11 +38,13 @@ public class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Exception
         }
     }
 
-    private static async Task WriteErrorResponse(HttpContext context, HttpStatusCode statusCode, string message)
+    private static async Task WriteErrorResponse(HttpContext context, HttpStatusCode statusCode, string message, string? code = null)
     {
         context.Response.StatusCode = (int)statusCode;
         context.Response.ContentType = "application/json";
-        var body = JsonSerializer.Serialize(new { error = message });
+        var body = code is null
+            ? JsonSerializer.Serialize(new { error = message })
+            : JsonSerializer.Serialize(new { error = message, code });
         await context.Response.WriteAsync(body);
     }
 }

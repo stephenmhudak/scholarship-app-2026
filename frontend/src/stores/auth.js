@@ -22,6 +22,15 @@ export const useAuthStore = defineStore('auth', {
       this._applyAuthResponse(response.data)
     },
 
+    async verifyEmail(token) {
+      const response = await api.post('/auth/verify-email', { token })
+      this._applyAuthResponse(response.data)
+    },
+
+    async resendVerification(email) {
+      await api.post('/auth/resend-verification', { email })
+    },
+
     logout() {
       this.token = null
       this.user = null
