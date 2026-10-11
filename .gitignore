@@ -9,3 +9,4 @@ frontend.tar
 .env
 k8s/r2-secret.yaml
 k8s/email-secret.yaml
+secrets/*.env

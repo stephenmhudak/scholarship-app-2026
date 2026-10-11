@@ -17,14 +17,13 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      Storage__Provider: ${STORAGE_PROVIDER:-Local}
-      Storage__R2__AccountId: ${R2_ACCOUNT_ID:-}
-      Storage__R2__AccessKeyId: ${R2_ACCESS_KEY_ID:-}
-      Storage__R2__SecretAccessKey: ${R2_SECRET_ACCESS_KEY:-}
-      Storage__R2__BucketName: ${R2_BUCKET_NAME:-scholarship-files}
-      App__BaseUrl: ${APP_BASE_URL:-https://scholarships.shudak.com}
-      Email__From: ${EMAIL_FROM:-Scholarship App <onboarding@resend.dev>}
-      Email__Resend__ApiKey: ${RESEND_API_KEY:-}
+      App__BaseUrl: https://scholarships.shudak.com
+    # Credentials live in gitignored env files (see secrets/*.env.example); missing files fall back to defaults
+    env_file:
+      - path: ./secrets/r2.env
+        required: false
+      - path: ./secrets/email.env
+        required: false
     depends_on:
       mysql:
         condition: service_healthy

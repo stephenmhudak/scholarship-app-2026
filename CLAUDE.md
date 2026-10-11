@@ -165,7 +165,7 @@ Shadows:  shadow-card | shadow-card-md | shadow-card-lg
 
 - **No EF** — raw SqlKata + Dapper. Write explicit UPDATE queries.
 - **File upload is two-step:** upload → `fileId` → store in answer. Files have `ApplicationId = "pending"` until submit.
-- **Email verification:** self-registered users can't log in until `Users.EmailVerifiedAt` is set (login → 403 `{ code: "email_not_verified" }`). Admin/school-created users are pre-verified. Emails go through `IEmailService` — Resend if `Email:Resend:ApiKey` is set, otherwise logged to console.
+- **Email verification:** self-registered users can't log in until `Users.EmailVerifiedAt` is set (login → 403 `{ code: "email_not_verified" }`). Admin/school-created users are pre-verified. Emails go through `IEmailService` — Resend if `Email:Resend:ApiKey` is set, otherwise logged to console. In Docker, credentials go in `secrets/email.env` and `secrets/r2.env` (copy the `.example` files).
 - **Reference codes are hashed** — store SHA-256, compare hash on lookup. Plaintext returned once.
 - **Both frontend routing AND backend auth enforce roles** — check both when adding features.
 - **Status transitions are manual** — no state machine. Admin can set any valid status.
