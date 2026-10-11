@@ -3,8 +3,10 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../../services/api'
 import { isRichText } from '../../utils/richText'
+import { useConfirm } from '../../composables/useConfirm'
 
 const route = useRoute()
+const confirm = useConfirm()
 const cycleId = route.params.cycleId
 
 const cycleName = ref('')
@@ -235,12 +237,17 @@ async function save() {
 }
 
 async function deleteQuestion(q) {
-  if (!confirm(`Delete "${q.text}"?`)) return
+  if (!await confirm({ title: 'Delete question', text: `Delete "${q.text}"?`, confirmText: 'Delete', color: 'error' })) return
   try {
     await api.delete(`/cycles/${cycleId}/questions/${q.id}`).catch(async (err) => {
       const count = err.response?.status === 409 && err.response.data.answerCount
       if (!count) throw err
-      if (!confirm(`${count} application(s) have answered this question. Deleting it also deletes their answers. Continue?`)) return
+      if (!await confirm({
+        title: 'Delete answers too?',
+        text: `${count} application(s) have answered this question. Deleting it also deletes their answers.`,
+        confirmText: 'Delete question and answers',
+        color: 'error',
+      })) return
       await api.delete(`/cycles/${cycleId}/questions/${q.id}`, { params: { force: true } })
     })
     await loadQuestions()
@@ -339,7 +346,12 @@ async function saveSection() {
 }
 
 async function deleteSection(s) {
-  if (!confirm(`Delete section "${s.title}"? Questions in this section will become ungrouped.`)) return
+  if (!await confirm({
+    title: 'Delete section',
+    text: `Delete section "${s.title}"? Questions in this section will become ungrouped.`,
+    confirmText: 'Delete',
+    color: 'error',
+  })) return
   try {
     await api.delete(`/cycles/${cycleId}/sections/${s.id}`)
     await Promise.all([loadSections(), loadQuestions()])

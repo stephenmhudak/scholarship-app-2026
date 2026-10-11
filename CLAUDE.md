@@ -77,6 +77,7 @@ backend/ScholarshipApi/
 - **Page shell:** `<div class="space-y-6">` → `page-title` + `page-subtitle` → `<v-alert v-if="alert" :type :text closable @click:close="alert = null">` → `<v-card class="pa-6">` sections.
 - **Tables:** `<v-card class="overflow-hidden"><v-data-table :headers :items :loading no-data-text>`; cell slots `#item.<key>="{ item, value }"`; row click `@click:row="(e, { item }) => …"`. Sorting only works on header keys (use a header `value` fn for computed sorts). Server paging: `v-data-table-server` + `@update:options` (see `ApplicationsListPage`).
 - **Dialogs:** `<v-dialog v-model><v-card title>` with a close `v-btn` in `#append`, form in `v-card-text`.
+- **Confirmations:** never `window.confirm`/`alert`/`prompt`. Use `const confirm = useConfirm()` (`composables/useConfirm.js`) → `if (!await confirm({ title, text, confirmText: 'Delete', color: 'error' })) return`. It drives the single `ConfirmDialog` mounted in `App.vue`.
 - **Dates:** use `DateField` (wraps `v-date-input`, v-model is a `'YYYY-MM-DD'` string parsed in local time).
 - **Loading:** `v-progress-circular indeterminate` + text; empty states: `v-empty-state` inside a `v-card`.
 - **Store:** Pinia setup store — `defineStore('name', () => { ... })` with `api.get/post` calls. See any existing store for reference.
@@ -88,6 +89,7 @@ backend/ScholarshipApi/
 | Component | Key Props |
 |-----------|-----------|
 | `StatusBadge` | `status` (draft\|submitted\|under_review\|awarded\|rejected\|archived) → `v-chip` |
+| `ConfirmDialog` | none — mounted once in `App.vue`, driven by `useConfirm()` |
 | `DateField` | `modelValue` (`'YYYY-MM-DD'`), passes other props to `v-date-input` |
 | `QuestionRenderer` | `question`, `modelValue`, `error` — picks the per-type question component |
 
