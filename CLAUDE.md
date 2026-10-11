@@ -19,7 +19,7 @@ Vite proxies `/api/*` → `http://localhost:5098`. No CORS needed in dev.
 | Backend | ASP.NET Core 10, SqlKata + Dapper (no EF), DbUp migrations |
 | Database | MySQL — UUID (CHAR(36)) PKs, DATETIME timestamps, JSON columns |
 | Auth | JWT Bearer (60 min), BCrypt passwords, role claims |
-| Files | Cloudflare R2, Azure Blob, or local (`wwwroot/uploads`) via `Storage:Provider`, 10 MB max |
+| Files | Cloudflare R2, Azure Blob, or local (`wwwroot/uploads`) via `Storage:Provider`, 5 MB max (`FileUploadLimits`) |
 | Icons | Material Design Icons (`mdi-*`) |
 
 ---

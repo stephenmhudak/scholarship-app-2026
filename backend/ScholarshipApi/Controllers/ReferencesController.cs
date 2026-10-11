@@ -15,11 +15,13 @@ public class ReferencesController(IReferenceService referenceService) : Controll
     }
 
     [HttpPost("{code}/upload")]
-    [RequestSizeLimit(10_485_760)]
+    [RequestSizeLimit(FileUploadLimits.MaxRequestSizeBytes)]
     public async Task<IActionResult> Upload(string code, IFormFile file)
     {
         if (file is null || file.Length == 0)
             return BadRequest(new { error = "No file provided." });
+        if (file.Length > FileUploadLimits.MaxFileSizeBytes)
+            return BadRequest(new { error = FileUploadLimits.TooLargeMessage });
 
         var result = await referenceService.UploadDocumentAsync(code, file);
         return Ok(result);
