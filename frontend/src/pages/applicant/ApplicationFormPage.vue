@@ -218,6 +218,7 @@ async function submit() {
             v-for="question in group.questions"
             :key="question.id"
             :question="question"
+            :applicationId="appStore.currentApplication?.id"
             :modelValue="appStore.answers[question.id]"
             :error="validationErrors[question.id] ?? null"
             @answer="(val) => handleAnswer(question.id, val)"

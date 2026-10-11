@@ -59,6 +59,8 @@ export const useApplicationStore = defineStore('application', {
     async uploadFile(questionId, file) {
       const formData = new FormData()
       formData.append('file', file)
+      formData.append('applicationId', this.currentApplication.id)
+      formData.append('questionId', questionId)
       const response = await api.post('/files/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })

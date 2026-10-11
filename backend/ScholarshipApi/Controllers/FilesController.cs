@@ -19,12 +19,23 @@ public class FilesController(IFileStorageService fileStorage, QueryFactory db) :
 
     [HttpPost("upload")]
     [RequestSizeLimit(FileUploadLimits.MaxRequestSizeBytes)]
-    public async Task<IActionResult> Upload(IFormFile file)
+    public async Task<IActionResult> Upload(IFormFile file, [FromForm] string applicationId, [FromForm] string? questionId)
     {
         if (file is null || file.Length == 0)
             return BadRequest(new { error = "No file provided." });
         if (file.Length > FileUploadLimits.MaxFileSizeBytes)
             return BadRequest(new { error = FileUploadLimits.TooLargeMessage });
+
+        // ApplicationFiles.ApplicationId is a foreign key, so the file must belong to a real application.
+        var application = await db.Query("Applications").Where("Id", applicationId).FirstOrDefaultAsync<Application>()
+            ?? throw new KeyNotFoundException("Application not found.");
+        if (application.ApplicantId != UserId || application.Status != "draft")
+            throw new UnauthorizedAccessException("You do not have permission to upload files to this application.");
+        var cycle = await db.Query("ScholarshipCycles").Where("Id", application.CycleId).FirstOrDefaultAsync<ScholarshipCycle>();
+        if (cycle is null || !CycleWindow.IsOpen(cycle, DateTime.UtcNow))
+            throw new ArgumentException("This scholarship cycle has closed.");
+        if (questionId is not null && !await db.Query("Questions").Where("Id", questionId).Where("CycleId", application.CycleId).ExistsAsync())
+            throw new ArgumentException("Question not found in this application's cycle.");
 
         var storagePath = await fileStorage.StoreAsync(file, "application-files");
 
@@ -34,7 +45,8 @@ public class FilesController(IFileStorageService fileStorage, QueryFactory db) :
             await db.Query("ApplicationFiles").InsertAsync(new
             {
                 Id = id,
-                ApplicationId = "pending",
+                ApplicationId = applicationId,
+                QuestionId = questionId,
                 FileName = file.FileName,
                 StoragePath = storagePath,
                 UploadedAt = DateTime.UtcNow
