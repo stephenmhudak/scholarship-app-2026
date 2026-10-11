@@ -42,7 +42,7 @@ public class AdminController(IApplicationService applicationService, QueryFactor
         var apps = (await db.Query("Applications as a")
             .Join("Users as u", "u.Id", "a.ApplicantId")
             .Select("a.Id as ApplicationId", "a.Status", "u.FirstName", "u.LastName", "a.SubmittedAt")
-            .WhereNot("a.Status", "draft")
+            .WhereNotIn("a.Status", new[] { "draft", "archived" })
             .OrderByDesc("a.SubmittedAt")
             .GetAsync<AppOverviewRow>()).ToList();
 

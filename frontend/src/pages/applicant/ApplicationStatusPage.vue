@@ -42,7 +42,7 @@ onMounted(async () => {
   <div class="space-y-6 max-w-3xl">
     <div>
       <h1 class="page-title">Application Status</h1>
-      <p class="page-subtitle">View your submission and current status.</p>
+      <p class="page-subtitle">{{ application?.cycleName || 'View your submission and current status.' }}</p>
     </div>
 
     <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
@@ -66,6 +66,18 @@ onMounted(async () => {
             <p>Submitted: {{ application.submittedAt ? new Date(application.submittedAt).toLocaleDateString() : '—' }}</p>
             <p>Created: {{ new Date(application.createdAt).toLocaleDateString() }}</p>
           </div>
+        </div>
+        <p v-if="application.status === 'archived'" class="text-sm text-slate-400 mt-4">
+          This application wasn't submitted before the scholarship closed. You can still copy its answers into an application for another scholarship.
+        </p>
+        <div v-else-if="application.status === 'draft' && application.isCycleOpen" class="mt-4">
+          <RouterLink
+            :to="`/application/${application.id}`"
+            class="inline-flex items-center gap-1.5 text-sm font-semibold bg-primary text-white px-4 py-2.5 rounded-xl hover:bg-primary-700 transition-colors shadow-sm"
+          >
+            <span class="mdi mdi-file-document-edit-outline"></span>
+            Continue Application
+          </RouterLink>
         </div>
       </div>
 

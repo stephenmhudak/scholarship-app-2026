@@ -16,7 +16,7 @@ const exporting = ref(false)
 const alert = ref(null)
 const statusFilter = ref('')
 
-const statuses = ['draft', 'submitted', 'under_review', 'awarded', 'rejected']
+const statuses = ['draft', 'submitted', 'under_review', 'awarded', 'rejected', 'archived']
 
 const { sortKey, sortDir, setSort, applySort } = useTableSort('submitted', 'desc')
 

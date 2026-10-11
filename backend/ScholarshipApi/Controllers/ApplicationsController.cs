@@ -34,11 +34,15 @@ public class ApplicationsController(IApplicationService applicationService, IRef
         return Ok(app);
     }
 
+    [HttpGet("open-cycles")]
+    [Authorize(Policy = "Applicant")]
+    public async Task<IActionResult> GetOpenCycles() => Ok(await applicationService.ListOpenCyclesAsync());
+
     [HttpPost]
     [Authorize(Policy = "Applicant")]
-    public async Task<IActionResult> Create()
+    public async Task<IActionResult> Create([FromBody] CreateApplicationRequest? request)
     {
-        var id = await applicationService.CreateAsync(UserId);
+        var id = await applicationService.CreateAsync(UserId, request?.CycleId);
         return CreatedAtAction(nameof(Get), new { id }, new { id });
     }
 
@@ -65,6 +69,11 @@ public class ApplicationsController(IApplicationService applicationService, IRef
         return NoContent();
     }
 
+    [HttpPost("{id}/copy-answers")]
+    [Authorize(Policy = "Applicant")]
+    public async Task<IActionResult> CopyAnswers(string id, [FromBody] CopyAnswersRequest request) =>
+        Ok(await applicationService.CopyAnswersAsync(id, request.SourceApplicationId, UserId));
+
     [HttpGet("{id}/references")]
     public async Task<IActionResult> GetReferences(string id)
     {
@@ -79,6 +88,17 @@ public class ApplicationsController(IApplicationService applicationService, IRef
         var result = await referenceService.CreateAsync(id, UserId, request.Label);
         return Ok(result);
     }
+}
+
+public class CreateApplicationRequest
+{
+    /// <summary>Optional when exactly one cycle is open.</summary>
+    public string? CycleId { get; set; }
+}
+
+public class CopyAnswersRequest
+{
+    public string SourceApplicationId { get; set; } = null!;
 }
 
 public class CreateReferenceRequest

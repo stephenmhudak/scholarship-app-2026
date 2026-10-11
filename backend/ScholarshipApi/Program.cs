@@ -51,6 +51,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IApplicationService, ApplicationService>();
 builder.Services.AddScoped<IScoringService, ScoringService>();
 builder.Services.AddScoped<IReferenceService, ReferenceService>();
+builder.Services.AddHostedService<ApplicationArchiveService>();
 
 // Email: Resend when an API key is configured, otherwise log emails to the console
 if (!string.IsNullOrEmpty(builder.Configuration["Email:Resend:ApiKey"]))

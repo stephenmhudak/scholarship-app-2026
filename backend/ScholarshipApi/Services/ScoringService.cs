@@ -12,7 +12,7 @@ public class ScoringService(QueryFactory db, IApplicationService applicationServ
         var apps = (await db.Query("Applications as a")
             .Join("Users as u", "u.Id", "a.ApplicantId")
             .Select("a.Id", "a.CycleId", "a.Status", "u.FirstName", "u.LastName", "a.SubmittedAt")
-            .WhereNot("a.Status", "draft")
+            .WhereNotIn("a.Status", new[] { "draft", "archived" })
             .OrderByDesc("a.SubmittedAt")
             .GetAsync<ScoringQueueItemDto>()).ToList();
 

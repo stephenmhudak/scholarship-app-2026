@@ -8,8 +8,6 @@ const schoolId = computed(() => authStore.user?.schoolId)
 const navLinks = computed(() => {
   const all = [
     { label: 'Dashboard',             icon: 'mdi-view-dashboard-outline',      to: '/dashboard',                  permission: 'view_dashboard' },
-    { label: 'My Application',        icon: 'mdi-file-document-edit-outline',  to: '/application/current',        permission: 'manage_application' },
-    { label: 'Status',                icon: 'mdi-clipboard-check-outline',     to: '/application/current/status', permission: 'manage_application' },
     { label: 'Scoring Queue',         icon: 'mdi-format-list-checks',          to: '/scoring',                    permission: 'view_scoring_queue' },
     { label: 'Applications',          icon: 'mdi-folder-multiple-outline',     to: '/admin/applications',         permission: 'admin_applications' },
     { label: 'Scoring',               icon: 'mdi-chart-bar',                   to: '/admin/scoring',              permission: 'view_scoring_overview' },

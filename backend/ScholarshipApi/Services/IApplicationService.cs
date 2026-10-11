@@ -6,7 +6,9 @@ public interface IApplicationService
 {
     Task<IEnumerable<ApplicationDto>> ListForApplicantAsync(string applicantId);
     Task<ApplicationDto> GetAsync(string id, string requestingUserId, string requestingRole);
-    Task<string> CreateAsync(string applicantId);
+    Task<IEnumerable<OpenCycleDto>> ListOpenCyclesAsync();
+    Task<string> CreateAsync(string applicantId, string? cycleId);
+    Task<CopyAnswersResult> CopyAnswersAsync(string targetId, string sourceId, string applicantId);
     Task SaveDraftAsync(string id, string applicantId, SubmitApplicationRequest request);
     Task SubmitAsync(string id, string applicantId);
     Task<IEnumerable<ApplicationListDto>> AdminListAsync(string? status, string? search, int page, int pageSize);
