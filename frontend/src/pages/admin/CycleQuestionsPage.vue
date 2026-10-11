@@ -28,6 +28,7 @@ const insertAfterSectionId = ref(null)
 const QUESTION_TYPES = [
   { value: 'short_answer',    label: 'Short Answer' },
   { value: 'long_answer',     label: 'Long Answer' },
+  { value: 'rich_text',       label: 'Rich Text' },
   { value: 'multiple_choice', label: 'Multiple Choice' },
   { value: 'single_choice',   label: 'Single Choice' },
   { value: 'file_upload',     label: 'File Upload' },
@@ -35,7 +36,9 @@ const QUESTION_TYPES = [
   { value: 'date',            label: 'Date' },
 ]
 
-const TEXT_TYPES = ['short_answer', 'long_answer']
+const TEXT_TYPES = ['short_answer', 'long_answer', 'rich_text']
+// Rich text only supports length rules — format checks make no sense on formatted HTML.
+const FORMAT_RULE_TYPES = ['short_answer', 'long_answer']
 
 const hasOptions = computed(() =>
   editing.value && ['multiple_choice', 'single_choice'].includes(editing.value.type)
@@ -43,6 +46,10 @@ const hasOptions = computed(() =>
 
 const showValidationRules = computed(() =>
   editing.value && TEXT_TYPES.includes(editing.value.type)
+)
+
+const showFormatRules = computed(() =>
+  editing.value && FORMAT_RULE_TYPES.includes(editing.value.type)
 )
 
 const groupedQuestions = computed(() => {
@@ -163,12 +170,13 @@ async function save() {
 
   const vr = editing.value.validationRules
   const isTextType = TEXT_TYPES.includes(editing.value.type)
-  const hasRules = isTextType && (vr.numberOnly || vr.phoneFormat || vr.emailFormat || vr.minLength || vr.maxLength)
+  const allowsFormat = FORMAT_RULE_TYPES.includes(editing.value.type)
+  const hasRules = isTextType && ((allowsFormat && (vr.numberOnly || vr.phoneFormat || vr.emailFormat)) || vr.minLength || vr.maxLength)
   const validationRules = hasRules
     ? {
-        numberOnly: vr.numberOnly || false,
-        phoneFormat: vr.phoneFormat || false,
-        emailFormat: vr.emailFormat || false,
+        numberOnly: (allowsFormat && vr.numberOnly) || false,
+        phoneFormat: (allowsFormat && vr.phoneFormat) || false,
+        emailFormat: (allowsFormat && vr.emailFormat) || false,
         minLength: vr.minLength ? Number(vr.minLength) : null,
         maxLength: vr.maxLength ? Number(vr.maxLength) : null,
       }
@@ -467,7 +475,7 @@ function globalIndex(q) {
       <div v-if="showValidationRules" class="space-y-4 border-t border-[#E9EDF7] pt-4">
         <p class="text-sm font-bold text-navy">Validation Rules</p>
 
-        <div class="grid grid-cols-3 gap-3">
+        <div v-if="showFormatRules" class="grid grid-cols-3 gap-3">
           <label class="flex items-center gap-2 cursor-pointer">
             <input v-model="editing.validationRules.numberOnly" type="checkbox" class="w-4 h-4 rounded border-[#E9EDF7] text-primary focus:ring-primary/30" />
             <span class="text-sm text-navy">Numbers only</span>

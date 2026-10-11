@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import ShortAnswerQuestion from './ShortAnswerQuestion.vue'
 import LongAnswerQuestion from './LongAnswerQuestion.vue'
+import RichTextQuestion from './RichTextQuestion.vue'
 import MultipleChoiceQuestion from './MultipleChoiceQuestion.vue'
 import SingleChoiceQuestion from './SingleChoiceQuestion.vue'
 import FileUploadQuestion from './FileUploadQuestion.vue'
@@ -18,6 +19,7 @@ const emit = defineEmits(['answer', 'update:modelValue'])
 const componentMap = {
   short_answer: ShortAnswerQuestion,
   long_answer: LongAnswerQuestion,
+  rich_text: RichTextQuestion,
   multiple_choice: MultipleChoiceQuestion,
   single_choice: SingleChoiceQuestion,
   file_upload: FileUploadQuestion,

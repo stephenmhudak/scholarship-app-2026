@@ -63,6 +63,13 @@ public class ApplicationService(QueryFactory db) : IApplicationService
 
         await db.Query("ApplicationAnswers").Where("ApplicationId", id).DeleteAsync();
 
+        var richTextQuestionIds = (await db.Query("Questions")
+                .Where("CycleId", app.CycleId)
+                .Where("Type", "rich_text")
+                .Select("Id")
+                .GetAsync<string>())
+            .ToHashSet();
+
         foreach (var answer in request.Answers)
         {
             await db.Query("ApplicationAnswers").InsertAsync(new
@@ -70,7 +77,9 @@ public class ApplicationService(QueryFactory db) : IApplicationService
                 Id = Guid.NewGuid().ToString(),
                 ApplicationId = id,
                 QuestionId = answer.QuestionId,
-                TextValue = answer.TextValue,
+                TextValue = richTextQuestionIds.Contains(answer.QuestionId)
+                    ? RichTextSanitizer.Sanitize(answer.TextValue)
+                    : answer.TextValue,
                 SelectedOptions = answer.SelectedOptions is not null
                     ? JsonSerializer.Serialize(answer.SelectedOptions)
                     : null
