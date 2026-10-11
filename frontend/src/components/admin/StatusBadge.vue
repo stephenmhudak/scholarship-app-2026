@@ -6,13 +6,13 @@ defineProps({
   },
 })
 
-const styles = {
-  draft:        'bg-navy-50 text-navy-600 border border-navy-100',
-  submitted:    'bg-primary-50 text-primary-700 border border-primary-100',
-  under_review: 'bg-warning-light text-[#8C6500] border border-warning/30',
-  awarded:      'bg-success-light text-success-dark border border-success/30',
-  rejected:     'bg-danger-light text-danger-dark border border-danger/30',
-  archived:     'bg-[#F4F7FE] text-slate-400 border border-[#E9EDF7]',
+const colors = {
+  draft:        'secondary',
+  submitted:    'primary',
+  under_review: 'warning',
+  awarded:      'success',
+  rejected:     'error',
+  archived:     '#A3AED0',
 }
 
 const labels = {
@@ -26,12 +26,7 @@ const labels = {
 </script>
 
 <template>
-  <span
-    :class="[
-      'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold',
-      styles[status] || 'bg-navy-50 text-navy-600',
-    ]"
-  >
+  <v-chip :color="colors[status] || 'secondary'" class="font-semibold">
     {{ labels[status] || status }}
-  </span>
+  </v-chip>
 </template>

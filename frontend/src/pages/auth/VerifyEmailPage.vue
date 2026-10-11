@@ -2,7 +2,6 @@
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
-import BaseAlert from '../../components/common/BaseAlert.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -41,14 +40,14 @@ onMounted(async () => {
 <template>
   <div class="space-y-5 text-center">
     <template v-if="status === 'verifying'">
-      <span class="mdi mdi-loading mdi-spin text-primary text-3xl"></span>
+      <v-progress-circular indeterminate color="primary" />
       <p class="text-sm text-slate-400">Verifying your email…</p>
     </template>
 
     <template v-else-if="status === 'success'">
-      <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-success-light">
-        <span class="mdi mdi-check-circle-outline text-success text-2xl"></span>
-      </div>
+      <v-avatar color="success" variant="tonal" size="48" rounded="xl">
+        <v-icon icon="mdi-check-circle-outline" size="26" />
+      </v-avatar>
       <div>
         <h2 class="text-xl font-bold text-navy">Email verified</h2>
         <p class="text-sm text-slate-400 mt-1">Your account is active. Signing you in…</p>
@@ -57,11 +56,11 @@ onMounted(async () => {
 
     <template v-else>
       <h2 class="text-xl font-bold text-navy">Verification failed</h2>
-      <BaseAlert type="error" :message="error" :dismissible="false" />
+      <v-alert type="error" :text="error" class="text-left" />
       <p class="text-sm text-slate-400">
         Sign in to request a new verification link.
       </p>
-      <RouterLink to="/login" class="text-primary font-semibold hover:underline text-sm">Go to sign in</RouterLink>
+      <v-btn variant="text" color="primary" to="/login">Go to sign in</v-btn>
     </template>
   </div>
 </template>

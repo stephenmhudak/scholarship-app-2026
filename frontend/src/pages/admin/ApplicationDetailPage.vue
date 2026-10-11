@@ -4,8 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import api from '../../services/api'
 import { useAdminStore } from '../../stores/admin'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
-import BaseButton from '../../components/common/BaseButton.vue'
-import BaseAlert from '../../components/common/BaseAlert.vue'
 import RichTextAnswer from '../../components/application/RichTextAnswer.vue'
 import { isRichText } from '../../utils/richText'
 
@@ -22,6 +20,7 @@ const newStatus = ref('')
 const alert = ref(null)
 
 const statuses = ['submitted', 'under_review', 'awarded', 'rejected', 'archived']
+const statusItems = statuses.map((s) => ({ title: s.replace('_', ' '), value: s }))
 
 const answersMap = computed(() =>
   Object.fromEntries((application.value?.answers ?? []).map((a) => [a.questionId, a]))
@@ -62,27 +61,24 @@ async function updateStatus() {
     updatingStatus.value = false
   }
 }
-
-
 </script>
 
 <template>
   <div class="space-y-6 max-w-4xl">
-    <RouterLink to="/admin/applications" class="inline-flex items-center text-sm font-semibold text-primary hover:text-primary-700 transition-colors">
-      <span class="mdi mdi-arrow-left mr-1"></span>
+    <v-btn variant="text" color="primary" prepend-icon="mdi-arrow-left" to="/admin/applications" class="-ml-4">
       Back to Applications
-    </RouterLink>
+    </v-btn>
 
-    <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
-      <span class="mdi mdi-loading animate-spin text-xl"></span>
+    <div v-if="loading" class="flex items-center gap-3 text-slate-400 py-4">
+      <v-progress-circular indeterminate color="primary" size="22" width="2" />
       Loading application…
     </div>
 
-    <BaseAlert v-if="alert" :type="alert.type" :message="alert.message" />
+    <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
-    <template v-else-if="application">
+    <template v-if="!loading && application">
       <!-- Applicant header card -->
-      <div class="section-card">
+      <v-card class="pa-6">
         <div class="flex items-start justify-between">
           <div>
             <h1 class="text-2xl font-bold text-navy">{{ applicantName }}</h1>
@@ -93,67 +89,64 @@ async function updateStatus() {
 
         <div class="grid grid-cols-2 gap-4 mt-6 text-sm">
           <div>
-            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Submitted</p>
+            <p class="eyebrow mb-1">Submitted</p>
             <p class="font-semibold text-navy">
               {{ application.submittedAt ? new Date(application.submittedAt).toLocaleDateString() : '—' }}
             </p>
           </div>
           <div>
-            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Created</p>
+            <p class="eyebrow mb-1">Created</p>
             <p class="font-semibold text-navy">{{ new Date(application.createdAt).toLocaleDateString() }}</p>
           </div>
         </div>
 
         <!-- Actions -->
-        <div class="flex flex-wrap items-center gap-3 mt-6 pt-5 border-t border-[#E9EDF7]">
+        <v-divider class="mt-6 mb-5" />
+        <div class="flex flex-wrap items-center gap-3">
           <div class="flex items-center gap-2">
             <label class="text-sm font-semibold text-navy">Change Status:</label>
-            <select
+            <v-select
               v-model="newStatus"
-              class="form-select w-44"
-            >
-              <option v-for="s in statuses" :key="s" :value="s" class="capitalize">
-                {{ s.replace('_', ' ') }}
-              </option>
-            </select>
-            <BaseButton size="sm" :loading="updatingStatus" @click="updateStatus">
+              :items="statusItems"
+              density="compact"
+              hide-details
+              class="w-44 capitalize"
+            />
+            <v-btn color="primary" :loading="updatingStatus" @click="updateStatus">
               Update
-            </BaseButton>
+            </v-btn>
           </div>
 
-          <BaseButton
+          <v-btn
             v-if="application.status !== 'draft'"
-            variant="secondary"
-            size="sm"
+            variant="outlined"
+            prepend-icon="mdi-star-outline"
             @click="router.push(`/scoring/${appId}`)"
           >
-            <span class="mdi mdi-star-outline mr-1.5"></span>
             Score Application
-          </BaseButton>
+          </v-btn>
         </div>
-      </div>
+      </v-card>
 
       <!-- Answers card -->
-      <div class="section-card">
+      <v-card class="pa-6">
         <h2 class="text-base font-bold text-navy mb-5">Application Answers</h2>
         <div v-if="questions.length" class="space-y-5">
-          <div
-            v-for="q in questions"
-            :key="q.id"
-            class="border-b border-[#E9EDF7] pb-5 last:border-0 last:pb-0"
-          >
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">{{ q.text }}</p>
-            <RichTextAnswer v-if="isRichText(q)" :html="answersMap[q.id]?.textValue" />
-            <p v-else class="text-sm text-navy whitespace-pre-wrap">
-              {{ answersMap[q.id]?.selectedOptions?.length
-                  ? answersMap[q.id].selectedOptions.join(', ')
-                  : (answersMap[q.id]?.textValue || '—') }}
-            </p>
-          </div>
+          <template v-for="(q, i) in questions" :key="q.id">
+            <v-divider v-if="i > 0" />
+            <div>
+              <p class="eyebrow mb-1.5">{{ q.text }}</p>
+              <RichTextAnswer v-if="isRichText(q)" :html="answersMap[q.id]?.textValue" />
+              <p v-else class="text-sm text-navy whitespace-pre-wrap">
+                {{ answersMap[q.id]?.selectedOptions?.length
+                    ? answersMap[q.id].selectedOptions.join(', ')
+                    : (answersMap[q.id]?.textValue || '—') }}
+              </p>
+            </div>
+          </template>
         </div>
         <p v-else class="text-sm text-slate-400">No answers available.</p>
-      </div>
+      </v-card>
     </template>
-
   </div>
 </template>

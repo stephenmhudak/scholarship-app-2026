@@ -2,9 +2,6 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
-import BaseButton from '../../components/common/BaseButton.vue'
-import BaseAlert from '../../components/common/BaseAlert.vue'
-import BaseInput from '../../components/common/BaseInput.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -64,43 +61,43 @@ async function resend() {
       <p class="text-sm text-slate-400 mt-0.5">Access your scholarship account</p>
     </div>
 
-    <BaseAlert v-if="error" type="error" :message="error" />
+    <v-alert v-if="error" type="error" :text="error" closable @click:close="error = null" />
 
     <div v-if="unverifiedEmail" class="space-y-3">
-      <BaseAlert
+      <v-alert
         type="warning"
-        :dismissible="false"
-        message="Please verify your email address before signing in. Check your inbox for the link we sent."
+        text="Please verify your email address before signing in. Check your inbox for the link we sent."
       />
-      <BaseAlert v-if="resendMessage" type="info" :message="resendMessage" />
-      <BaseButton variant="secondary" size="sm" :loading="resending" class="w-full" @click="resend">
+      <v-alert v-if="resendMessage" type="info" :text="resendMessage" closable @click:close="resendMessage = null" />
+      <v-btn variant="outlined" block :loading="resending" @click="resend">
         Resend verification email
-      </BaseButton>
+      </v-btn>
     </div>
 
-    <form @submit.prevent="login" class="space-y-4">
-      <BaseInput
+    <v-form class="space-y-4" @submit.prevent="login">
+      <v-text-field
         v-model="form.email"
         type="email"
         label="Email address"
         placeholder="you@example.com"
         autocomplete="email"
-        :required="true"
+        required
+        hide-details="auto"
       />
 
-      <BaseInput
+      <v-text-field
         v-model="form.password"
         type="password"
         label="Password"
-        placeholder="••••••••"
         autocomplete="current-password"
-        :required="true"
+        required
+        hide-details="auto"
       />
 
-      <BaseButton type="submit" :loading="loading" class="w-full mt-1">
+      <v-btn type="submit" color="primary" size="large" block :loading="loading">
         Sign in
-      </BaseButton>
-    </form>
+      </v-btn>
+    </v-form>
 
     <p class="text-sm text-center text-slate-400">
       Don't have an account?

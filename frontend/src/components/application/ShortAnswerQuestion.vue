@@ -6,26 +6,25 @@ const props = defineProps({
 })
 const emit = defineEmits(['answer', 'update:modelValue'])
 
-function onInput(e) {
-  emit('answer', e.target.value)
-  emit('update:modelValue', e.target.value)
+function onInput(value) {
+  emit('answer', value)
+  emit('update:modelValue', value)
 }
 </script>
 
 <template>
-  <div class="space-y-1.5">
-    <label class="block text-sm font-semibold text-navy">
+  <div>
+    <label class="field-label">
       {{ question.text }}
       <span v-if="question.isRequired" class="text-danger ml-0.5">*</span>
     </label>
-    <p v-if="question.description" class="text-xs text-slate-400">{{ question.description }}</p>
-    <input
-      type="text"
-      :value="modelValue"
+    <p v-if="question.description" class="text-xs text-slate-400 mb-2">{{ question.description }}</p>
+    <v-text-field
+      :model-value="modelValue"
       placeholder="Your answer…"
-      @input="onInput"
-      :class="['form-input', error && 'is-error']"
+      :error-messages="error || []"
+      hide-details="auto"
+      @update:model-value="onInput"
     />
-    <p v-if="error" class="text-xs font-medium text-danger">{{ error }}</p>
   </div>
 </template>

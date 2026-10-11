@@ -1,14 +1,8 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import api from '../../services/api'
-import { useTableSort } from '../../composables/useTableSort'
-import SortTh from '../../components/common/SortTh.vue'
-import BaseButton from '../../components/common/BaseButton.vue'
-import BaseAlert from '../../components/common/BaseAlert.vue'
-import BaseInput from '../../components/common/BaseInput.vue'
-import BaseModal from '../../components/common/BaseModal.vue'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
 
 const route = useRoute()
@@ -28,13 +22,12 @@ function showAlert(type, message) {
   setTimeout(() => (alert.value = null), 4000)
 }
 
-// ── Applicants sort ───────────────────────────────────────────────────────────
-const { sortKey, sortDir, setSort, applySort } = useTableSort('LastName')
-const sortedApplicants = computed(() => applySort(applicants.value, {
-  LastName: (a) => `${a.LastName ?? ''} ${a.FirstName ?? ''}`.toLowerCase(),
-  Email: (a) => (a.Email ?? '').toLowerCase(),
-  Status: (a) => a.Status ?? '',
-}))
+// ── Applicants table ──────────────────────────────────────────────────────────
+const applicantHeaders = [
+  { title: 'Name', key: 'name', value: (a) => `${a.LastName ?? ''} ${a.FirstName ?? ''}` },
+  { title: 'Email', key: 'Email' },
+  { title: 'Status', key: 'Status' },
+]
 
 // ── Load ──────────────────────────────────────────────────────────────────────
 onMounted(async () => {
@@ -141,122 +134,128 @@ async function submitResetPassword() {
 
 <template>
   <div class="space-y-6 max-w-4xl">
-    <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
-      <span class="mdi mdi-loading animate-spin text-xl"></span>
+    <div v-if="loading" class="flex items-center gap-3 text-slate-400 py-4">
+      <v-progress-circular indeterminate color="primary" size="22" width="2" />
       Loading school details…
     </div>
 
-    <BaseAlert v-if="alert" :type="alert.type" :message="alert.message" />
+    <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
     <template v-if="!loading && school">
       <!-- School Info -->
-      <div class="section-card space-y-4">
+      <v-card class="pa-6 space-y-4">
         <div>
           <h1 class="page-title">{{ school.name }}</h1>
           <p class="page-subtitle">School information</p>
         </div>
 
         <div class="space-y-3">
-          <BaseInput v-model="school.name" label="School Name" :required="true" />
+          <v-text-field v-model="school.name" label="School Name" required hide-details="auto" />
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <BaseInput v-model="school.addressLine1" label="Address Line 1" placeholder="123 Main St" />
-            <BaseInput v-model="school.addressLine2" label="Address Line 2" placeholder="Suite 100 (optional)" />
+            <v-text-field v-model="school.addressLine1" label="Address Line 1" placeholder="123 Main St" hide-details="auto" />
+            <v-text-field v-model="school.addressLine2" label="Address Line 2" placeholder="Suite 100 (optional)" hide-details="auto" />
           </div>
 
           <div class="grid grid-cols-3 gap-3">
-            <BaseInput v-model="school.city" label="City" placeholder="Springfield" class="col-span-1" />
-            <BaseInput v-model="school.state" label="State" placeholder="IL" />
-            <BaseInput v-model="school.zip" label="ZIP Code" placeholder="62701" />
+            <v-text-field v-model="school.city" label="City" placeholder="Springfield" hide-details="auto" />
+            <v-text-field v-model="school.state" label="State" placeholder="IL" hide-details="auto" />
+            <v-text-field v-model="school.zip" label="ZIP Code" placeholder="62701" hide-details="auto" />
           </div>
         </div>
 
-        <BaseButton :loading="saving" @click="saveSchool">
-          <span class="mdi mdi-content-save mr-1.5"></span>
+        <v-btn color="primary" prepend-icon="mdi-content-save" :loading="saving" @click="saveSchool">
           Save Changes
-        </BaseButton>
-      </div>
+        </v-btn>
+      </v-card>
 
       <!-- Counselors (school_admin only) -->
-      <div v-if="canManageStaff" class="section-card space-y-4">
+      <v-card v-if="canManageStaff" class="pa-6 space-y-4">
         <div class="flex items-center justify-between">
           <h2 class="text-base font-bold text-navy">Counselors</h2>
-          <BaseButton size="sm" @click="showAddCounselor = true">
-            <span class="mdi mdi-plus mr-1"></span>
+          <v-btn color="primary" size="small" prepend-icon="mdi-plus" @click="showAddCounselor = true">
             Add Counselor
-          </BaseButton>
+          </v-btn>
         </div>
 
-        <ul v-if="counselors.length" class="divide-y divide-[#E9EDF7]">
-          <li v-for="c in counselors" :key="c.Id" class="flex items-center justify-between py-3">
-            <div>
-              <p class="text-sm font-semibold text-navy">{{ c.FirstName }} {{ c.LastName }}</p>
-              <p class="text-xs text-slate-400">{{ c.Email }}</p>
-            </div>
-            <div class="flex items-center gap-3">
-              <button @click="openResetPassword(c)" class="text-xs text-primary hover:underline">Reset Password</button>
-              <button @click="removeCounselor(c)" class="text-xs text-danger hover:underline">Remove</button>
-            </div>
-          </li>
-        </ul>
+        <v-list v-if="counselors.length" class="py-0">
+          <template v-for="(c, i) in counselors" :key="c.Id">
+            <v-divider v-if="i > 0" />
+            <v-list-item class="px-0" :title="`${c.FirstName} ${c.LastName}`" :subtitle="c.Email">
+              <template #append>
+                <v-btn variant="text" color="primary" size="small" @click="openResetPassword(c)">Reset Password</v-btn>
+                <v-btn variant="text" color="error" size="small" @click="removeCounselor(c)">Remove</v-btn>
+              </template>
+            </v-list-item>
+          </template>
+        </v-list>
         <p v-else class="text-sm text-slate-400">No counselors assigned yet.</p>
-      </div>
+      </v-card>
 
       <!-- Applicants -->
-      <div class="section-card space-y-4">
+      <v-card class="pa-6 space-y-4">
         <h2 class="text-base font-bold text-navy">Applicants</h2>
-        <div v-if="applicants.length" class="card overflow-hidden">
-          <table class="dialect-table">
-            <thead>
-              <tr>
-                <SortTh column="LastName" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Name</SortTh>
-                <SortTh column="Email" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Email</SortTh>
-                <SortTh column="Status" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Status</SortTh>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="a in sortedApplicants" :key="a.Id">
-                <td class="font-semibold text-navy">{{ a.FirstName }} {{ a.LastName }}</td>
-                <td class="text-slate-400">{{ a.Email }}</td>
-                <td><StatusBadge :status="a.Status || 'draft'" /></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <v-card v-if="applicants.length" class="overflow-hidden">
+          <v-data-table
+            :headers="applicantHeaders"
+            :items="applicants"
+            :sort-by="[{ key: 'name', order: 'asc' }]"
+          >
+            <template #item.name="{ item }">
+              <span class="font-semibold text-navy">{{ item.FirstName }} {{ item.LastName }}</span>
+            </template>
+            <template #item.Email="{ value }">
+              <span class="text-slate-400">{{ value }}</span>
+            </template>
+            <template #item.Status="{ value }">
+              <StatusBadge :status="value || 'draft'" />
+            </template>
+          </v-data-table>
+        </v-card>
         <p v-else class="text-sm text-slate-400">No applicants from this school yet.</p>
-      </div>
+      </v-card>
     </template>
   </div>
 
-  <!-- Add Counselor Modal -->
-  <BaseModal :show="showAddCounselor" title="Add Counselor" @close="showAddCounselor = false">
-    <form @submit.prevent="submitAddCounselor" class="space-y-4">
-      <div class="grid grid-cols-2 gap-3">
-        <BaseInput v-model="addCounselorForm.firstName" label="First Name" :required="true" />
-        <BaseInput v-model="addCounselorForm.lastName" label="Last Name" :required="true" />
-      </div>
-      <BaseInput v-model="addCounselorForm.email" type="email" label="Email" :required="true" />
-      <BaseInput v-model="addCounselorForm.password" type="password" label="Password" :required="true" />
-      <div class="flex justify-end gap-2 pt-2">
-        <BaseButton type="button" variant="ghost" @click="showAddCounselor = false">Cancel</BaseButton>
-        <BaseButton type="submit" :loading="addCounselorLoading">Add Counselor</BaseButton>
-      </div>
-    </form>
-  </BaseModal>
+  <!-- Add Counselor Dialog -->
+  <v-dialog v-model="showAddCounselor">
+    <v-card title="Add Counselor">
+      <template #append>
+        <v-btn icon="mdi-close" variant="text" size="small" @click="showAddCounselor = false" />
+      </template>
+      <v-card-text>
+        <v-form class="space-y-4" @submit.prevent="submitAddCounselor">
+          <div class="grid grid-cols-2 gap-3">
+            <v-text-field v-model="addCounselorForm.firstName" label="First Name" required hide-details="auto" />
+            <v-text-field v-model="addCounselorForm.lastName" label="Last Name" required hide-details="auto" />
+          </div>
+          <v-text-field v-model="addCounselorForm.email" type="email" label="Email" required hide-details="auto" />
+          <v-text-field v-model="addCounselorForm.password" type="password" label="Password" required hide-details="auto" />
+          <div class="flex justify-end gap-2 pt-2">
+            <v-btn variant="text" @click="showAddCounselor = false">Cancel</v-btn>
+            <v-btn type="submit" color="primary" :loading="addCounselorLoading">Add Counselor</v-btn>
+          </div>
+        </v-form>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
 
-  <!-- Reset Password Modal -->
-  <BaseModal
-    :show="showResetPassword"
-    :title="`Reset Password — ${resetTarget?.FirstName} ${resetTarget?.LastName}`"
-    @close="showResetPassword = false"
-  >
-    <form @submit.prevent="submitResetPassword" class="space-y-4">
-      <BaseInput v-model="resetPasswordForm.newPassword" type="password" label="New Password" :required="true" />
-      <BaseInput v-model="resetPasswordForm.confirm" type="password" label="Confirm Password" :required="true" />
-      <div class="flex justify-end gap-2 pt-2">
-        <BaseButton type="button" variant="ghost" @click="showResetPassword = false">Cancel</BaseButton>
-        <BaseButton type="submit" :loading="resetPasswordLoading">Reset Password</BaseButton>
-      </div>
-    </form>
-  </BaseModal>
+  <!-- Reset Password Dialog -->
+  <v-dialog v-model="showResetPassword">
+    <v-card :title="`Reset Password — ${resetTarget?.FirstName} ${resetTarget?.LastName}`">
+      <template #append>
+        <v-btn icon="mdi-close" variant="text" size="small" @click="showResetPassword = false" />
+      </template>
+      <v-card-text>
+        <v-form class="space-y-4" @submit.prevent="submitResetPassword">
+          <v-text-field v-model="resetPasswordForm.newPassword" type="password" label="New Password" required hide-details="auto" />
+          <v-text-field v-model="resetPasswordForm.confirm" type="password" label="Confirm Password" required hide-details="auto" />
+          <div class="flex justify-end gap-2 pt-2">
+            <v-btn variant="text" @click="showResetPassword = false">Cancel</v-btn>
+            <v-btn type="submit" color="primary" :loading="resetPasswordLoading">Reset Password</v-btn>
+          </div>
+        </v-form>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
 </template>

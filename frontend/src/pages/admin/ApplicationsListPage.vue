@@ -1,12 +1,8 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAdminStore } from '../../stores/admin'
-import { useTableSort } from '../../composables/useTableSort'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
-import SortTh from '../../components/common/SortTh.vue'
-import BaseButton from '../../components/common/BaseButton.vue'
-import BaseAlert from '../../components/common/BaseAlert.vue'
 
 const router = useRouter()
 const adminStore = useAdminStore()
@@ -15,27 +11,31 @@ const loading = ref(true)
 const exporting = ref(false)
 const alert = ref(null)
 const statusFilter = ref('')
+const page = ref(adminStore.pagination.page)
+const perPage = ref(adminStore.pagination.perPage)
 
 const statuses = ['draft', 'submitted', 'under_review', 'awarded', 'rejected', 'archived']
+const statusItems = [
+  { title: 'All Statuses', value: '' },
+  ...statuses.map((s) => ({ title: s.replace('_', ' '), value: s })),
+]
 
-const { sortKey, sortDir, setSort, applySort } = useTableSort('submitted', 'desc')
+// The API returns applications newest-submitted first and has no sort parameter, so columns aren't sortable.
+const headers = [
+  { title: 'Applicant', key: 'applicant' },
+  { title: 'Status', key: 'status' },
+  { title: 'Submitted', key: 'submittedAt' },
+  { title: 'Actions', key: 'actions', align: 'end' },
+]
 
-const sortedApplications = computed(() => applySort(adminStore.applications, {
-  applicant: (a) => `${a.lastName} ${a.firstName}`.toLowerCase(),
-  status: (a) => a.status,
-  submitted: (a) => a.submittedAt ?? '',
-}))
-
-onMounted(async () => {
-  await loadApplications()
-})
-
-async function loadApplications() {
+// v-data-table-server emits update:options on mount, on paging, and when `search` (the status filter) changes.
+async function loadApplications({ page, itemsPerPage }) {
   loading.value = true
   try {
     await adminStore.fetchApplications({
       status: statusFilter.value || undefined,
-      page: adminStore.pagination.page,
+      page,
+      pageSize: itemsPerPage,
     })
   } catch {
     alert.value = { type: 'error', message: 'Failed to load applications.' }
@@ -55,28 +55,8 @@ async function exportData() {
   }
 }
 
-function onStatusFilterChange() {
-  adminStore.pagination.page = 1
-  loadApplications()
-}
-
 function goToDetail(id) {
   router.push(`/admin/applications/${id}`)
-}
-
-function prevPage() {
-  if (adminStore.pagination.page > 1) {
-    adminStore.pagination.page--
-    loadApplications()
-  }
-}
-
-function nextPage() {
-  const totalPages = Math.ceil(adminStore.pagination.total / adminStore.pagination.perPage)
-  if (adminStore.pagination.page < totalPages) {
-    adminStore.pagination.page++
-    loadApplications()
-  }
 }
 </script>
 
@@ -87,94 +67,55 @@ function nextPage() {
         <h1 class="page-title">Applications</h1>
         <p class="page-subtitle">{{ adminStore.pagination.total }} total applications</p>
       </div>
-      <BaseButton variant="secondary" :loading="exporting" @click="exportData">
-        <span class="mdi mdi-download mr-1.5"></span>
+      <v-btn variant="outlined" prepend-icon="mdi-download" :loading="exporting" @click="exportData">
         Export CSV
-      </BaseButton>
+      </v-btn>
     </div>
 
-    <BaseAlert v-if="alert" :type="alert.type" :message="alert.message" />
+    <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
     <!-- Filters -->
-    <div class="card p-4 flex items-center gap-4">
+    <v-card class="pa-4 flex items-center gap-4">
       <label class="text-sm font-semibold text-navy shrink-0">Filter by status:</label>
-      <select
+      <v-select
         v-model="statusFilter"
-        @change="onStatusFilterChange"
-        class="form-select w-48"
-      >
-        <option value="">All Statuses</option>
-        <option v-for="s in statuses" :key="s" :value="s" class="capitalize">
-          {{ s.replace('_', ' ') }}
-        </option>
-      </select>
-    </div>
-
-    <!-- Loading -->
-    <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
-      <span class="mdi mdi-loading animate-spin text-xl"></span>
-      Loading…
-    </div>
+        :items="statusItems"
+        hide-details
+        density="compact"
+        class="max-w-[14rem] capitalize"
+      />
+    </v-card>
 
     <!-- Table -->
-    <div v-else class="card overflow-hidden">
-      <table class="dialect-table">
-        <thead>
-          <tr>
-            <SortTh column="applicant" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Applicant</SortTh>
-            <SortTh column="status" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Status</SortTh>
-            <SortTh column="submitted" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Submitted</SortTh>
-            <th class="text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="app in sortedApplications"
-            :key="app.id"
-            @click="goToDetail(app.id)"
-          >
-            <td>
-              <p class="font-semibold text-navy">{{ app.firstName }} {{ app.lastName }}</p>
-            </td>
-            <td><StatusBadge :status="app.status" /></td>
-            <td class="text-slate-400">
-              {{ app.submittedAt ? new Date(app.submittedAt).toLocaleDateString() : '—' }}
-            </td>
-            <td class="text-right">
-              <button @click.stop="goToDetail(app.id)" class="text-sm font-semibold text-primary hover:text-primary-700 transition-colors">
-                View
-              </button>
-            </td>
-          </tr>
-          <tr v-if="adminStore.applications.length === 0">
-            <td colspan="4" class="px-6 py-10 text-center text-sm text-slate-400">No applications found.</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <!-- Pagination -->
-      <div class="flex items-center justify-between px-6 py-3 border-t border-[#E9EDF7] bg-[#F4F7FE]">
-        <p class="text-sm text-slate-400">
-          Page {{ adminStore.pagination.page }} of
-          {{ Math.ceil(adminStore.pagination.total / adminStore.pagination.perPage) || 1 }}
-        </p>
-        <div class="flex gap-2">
-          <button
-            @click="prevPage"
-            :disabled="adminStore.pagination.page <= 1"
-            class="pagination-btn"
-          >
-            Previous
-          </button>
-          <button
-            @click="nextPage"
-            :disabled="adminStore.pagination.page >= Math.ceil(adminStore.pagination.total / adminStore.pagination.perPage)"
-            class="pagination-btn"
-          >
-            Next
-          </button>
-        </div>
-      </div>
-    </div>
+    <v-card class="overflow-hidden">
+      <v-data-table-server
+        v-model:page="page"
+        v-model:items-per-page="perPage"
+        :headers="headers"
+        :items="adminStore.applications"
+        :items-length="adminStore.pagination.total"
+        :items-per-page-options="[10, 20, 50, 100]"
+        :search="statusFilter"
+        :loading="loading"
+        disable-sort
+        no-data-text="No applications found."
+        class="clickable-rows"
+        @update:options="loadApplications"
+        @click:row="(e, { item }) => goToDetail(item.id)"
+      >
+        <template #item.applicant="{ item }">
+          <span class="font-semibold text-navy">{{ item.firstName }} {{ item.lastName }}</span>
+        </template>
+        <template #item.status="{ item }">
+          <StatusBadge :status="item.status" />
+        </template>
+        <template #item.submittedAt="{ item }">
+          <span class="text-slate-400">{{ item.submittedAt ? new Date(item.submittedAt).toLocaleDateString() : '—' }}</span>
+        </template>
+        <template #item.actions="{ item }">
+          <v-btn variant="text" color="primary" size="small" @click.stop="goToDetail(item.id)">View</v-btn>
+        </template>
+      </v-data-table-server>
+    </v-card>
   </div>
 </template>

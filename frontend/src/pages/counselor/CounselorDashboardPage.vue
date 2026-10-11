@@ -1,23 +1,19 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import api from '../../services/api'
-import { useTableSort } from '../../composables/useTableSort'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
-import SortTh from '../../components/common/SortTh.vue'
-import BaseAlert from '../../components/common/BaseAlert.vue'
 
 const students = ref([])
 const loading = ref(true)
 const alert = ref(null)
 const nudging = ref({})
 
-const { sortKey, sortDir, setSort, applySort } = useTableSort('name')
-
-const sortedStudents = computed(() => applySort(students.value, {
-  name: (s) => (s.name ?? '').toLowerCase(),
-  status: (s) => s.application_status ?? '',
-  lastActivity: (s) => s.last_activity ?? '',
-}))
+const headers = [
+  { title: 'Student', key: 'name' },
+  { title: 'Application Status', key: 'application_status' },
+  { title: 'Last Activity', key: 'last_activity' },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end' },
+]
 
 onMounted(async () => {
   try {
@@ -50,54 +46,42 @@ async function sendNudge(studentId) {
       <p class="page-subtitle">Track your students' scholarship application progress.</p>
     </div>
 
-    <BaseAlert v-if="alert" :type="alert.type" :message="alert.message" />
+    <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
-    <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
-      <span class="mdi mdi-loading animate-spin text-xl"></span>
-      Loading students…
-    </div>
-
-    <div v-else class="card overflow-hidden">
-      <table class="dialect-table">
-        <thead>
-          <tr>
-            <SortTh column="name" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Student</SortTh>
-            <SortTh column="status" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Application Status</SortTh>
-            <SortTh column="lastActivity" :sort-key="sortKey" :sort-dir="sortDir" @sort="setSort">Last Activity</SortTh>
-            <th class="text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="student in sortedStudents" :key="student.id">
-            <td>
-              <p class="font-semibold text-navy">{{ student.name }}</p>
-              <p class="text-xs text-slate-400">{{ student.email }}</p>
-            </td>
-            <td>
-              <StatusBadge :status="student.application_status || 'draft'" />
-            </td>
-            <td class="text-slate-400">
-              {{ student.last_activity ? new Date(student.last_activity).toLocaleDateString() : 'No activity' }}
-            </td>
-            <td class="text-right">
-              <button
-                @click="sendNudge(student.id)"
-                :disabled="nudging[student.id]"
-                class="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary-700 transition-colors disabled:opacity-50"
-              >
-                <span v-if="nudging[student.id]" class="mdi mdi-loading animate-spin"></span>
-                <span v-else class="mdi mdi-bell-ring-outline"></span>
-                Send Reminder
-              </button>
-            </td>
-          </tr>
-          <tr v-if="students.length === 0">
-            <td colspan="4" class="px-6 py-10 text-center text-sm text-slate-400">
-              No students found in your school.
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <v-card class="overflow-hidden">
+      <v-data-table
+        :headers="headers"
+        :items="students"
+        :sort-by="[{ key: 'name', order: 'asc' }]"
+        :loading="loading"
+        loading-text="Loading students…"
+        no-data-text="No students found in your school."
+      >
+        <template #item.name="{ item }">
+          <p class="font-semibold text-navy">{{ item.name }}</p>
+          <p class="text-xs text-slate-400">{{ item.email }}</p>
+        </template>
+        <template #item.application_status="{ item }">
+          <StatusBadge :status="item.application_status || 'draft'" />
+        </template>
+        <template #item.last_activity="{ item }">
+          <span class="text-slate-400">
+            {{ item.last_activity ? new Date(item.last_activity).toLocaleDateString() : 'No activity' }}
+          </span>
+        </template>
+        <template #item.actions="{ item }">
+          <v-btn
+            variant="text"
+            color="primary"
+            size="small"
+            prepend-icon="mdi-bell-ring-outline"
+            :loading="nudging[item.id]"
+            @click="sendNudge(item.id)"
+          >
+            Send Reminder
+          </v-btn>
+        </template>
+      </v-data-table>
+    </v-card>
   </div>
 </template>

@@ -15,7 +15,7 @@ Vite proxies `/api/*` → `http://localhost:5098`. No CORS needed in dev.
 
 | Layer | Tech |
 |-------|------|
-| Frontend | Vue 3 (Composition API), Vite, Tailwind CSS v3, Pinia, Vue Router, Axios |
+| Frontend | Vue 3 (Composition API), Vite, Vuetify 4 (components), Tailwind CSS v3 (layout only), Pinia, Vue Router, Axios |
 | Backend | ASP.NET Core 10, SqlKata + Dapper (no EF), DbUp migrations |
 | Database | MySQL — UUID (CHAR(36)) PKs, DATETIME timestamps, JSON columns |
 | Auth | JWT Bearer (60 min), BCrypt passwords, role claims |
@@ -28,8 +28,10 @@ Vite proxies `/api/*` → `http://localhost:5098`. No CORS needed in dev.
 
 ```
 frontend/src/
-  assets/main.css          # Tailwind + Dialect Design System utilities
-  components/common/       # BaseButton, BaseInput, BaseAlert, BaseModal, AppHeader, AppSidebar
+  plugins/vuetify.js       # Vuetify theme (Dialect palette) + component defaults
+  assets/layers.css        # CSS cascade-layer order — must be imported first in main.js
+  assets/main.css          # Tailwind + Vuetify overrides + Dialect typography
+  components/common/       # AppHeader, AppSidebar, DateField
   components/application/  # Question type renderers
   components/scoring/      # ScoringForm, ScoreCard
   components/admin/        # StatusBadge, AssignScorerModal
@@ -47,53 +49,47 @@ backend/ScholarshipApi/
 
 ---
 
-## Dialect Design System
+## UI: Vuetify + Tailwind
 
-**Never use** `text-gray-*`, `bg-gray-*`, `border-gray-*`, `text-blue-*`. Use Dialect tokens only.
+**Use Vuetify components for all UI** (`v-btn`, `v-text-field`, `v-select`, `v-alert`, `v-dialog`, `v-data-table`, `v-chip`, …). Components are auto-imported by `vite-plugin-vuetify`; defaults (variants, density, rounding) are set globally in `plugins/vuetify.js`, so don't repeat them per use. Tiptap is the one exception: it stays the rich text editor, wrapped in Vuetify chrome.
 
-### CSS Classes (defined in `main.css`)
+**Tailwind is for layout and text only** (`flex`, `grid`, `gap-*`, `space-y-*`, `p-*`, `text-sm`, `text-navy`). Tailwind's preflight is off — Vuetify 4 ships native CSS layers, and unlayered preflight would override them. `layers.css` declares `dialect-base` below Vuetify; Tailwind utilities are unlayered, so they win over Vuetify.
+
+**Never use** `text-gray-*`, `bg-gray-*`, `border-gray-*`, `text-blue-*`. Use Dialect tokens / theme colors.
+
+### Theme colors (`plugins/vuetify.js`)
+
+`primary` #4361EE · `secondary` navy #2B3674 · `success` #018F5C · `warning` #8C6500 · `error` #C94A3E · `background` #F4F7FE · border #E9EDF7. Status colors are the dark shades so they're readable as text in tonal alerts/chips. Vuetify 4 has no material color-name classes (`grey`, `red-lighten-2`) — use theme names or hex.
+
+### CSS classes (`main.css`)
 
 | Class | Usage |
 |-------|-------|
-| `card` | White surface (`bg-white rounded-2xl shadow-card border border-[#E9EDF7]`) |
-| `section-card` | `card p-6` |
-| `form-input` / `.is-error` | Text inputs/textareas |
-| `form-select` / `.is-error` | Dropdowns |
-| `page-title` | H1 (`text-2xl font-bold text-navy`) |
-| `page-subtitle` | `text-sm text-slate-400` |
-| `dialect-table` | Full-width table with Dialect styles |
-| `pagination-btn` | Prev/Next table buttons |
-
-### Color Tokens
-
-```
-Primary:  text-primary / bg-primary / text-primary-700  (#4361EE)
-Text:     text-navy (#2B3674) | text-slate-400 (#A3AED0)
-Borders:  border-[#E9EDF7]
-BG:       bg-page / bg-[#F4F7FE] / bg-white
-Success:  text-success / bg-success-light / border-success/20
-Danger:   text-danger / bg-danger-light / border-danger/30
-Warning:  bg-warning-light / text-[#8C6500] / border-warning/30
-Shadows:  shadow-card | shadow-card-md | shadow-card-lg
-```
+| `page-title` / `page-subtitle` | Page H1 + subtitle |
+| `field-label` | Question text above a field |
+| `eyebrow` | Small uppercase label for read-only values |
+| `clickable-rows` | On `v-data-table` with `@click:row` — pointer cursor |
+| `rich-text` | Tiptap editor + `RichTextAnswer` content |
+| Tailwind tokens | `text-navy`, `text-slate-400`, `text-danger`, `bg-[#F4F7FE]`, `border-[#E9EDF7]`, `shadow-card` |
 
 ### Patterns
 
-- **Page shell:** `<div class="space-y-6">` → `page-title` + `page-subtitle` → `<BaseAlert>` → `section-card` / `card overflow-hidden` + `dialect-table`
-- **Checkbox:** `class="w-4 h-4 rounded border-[#E9EDF7] text-primary focus:ring-primary/30"`
+- **Page shell:** `<div class="space-y-6">` → `page-title` + `page-subtitle` → `<v-alert v-if="alert" :type :text closable @click:close="alert = null">` → `<v-card class="pa-6">` sections.
+- **Tables:** `<v-card class="overflow-hidden"><v-data-table :headers :items :loading no-data-text>`; cell slots `#item.<key>="{ item, value }"`; row click `@click:row="(e, { item }) => …"`. Sorting only works on header keys (use a header `value` fn for computed sorts). Server paging: `v-data-table-server` + `@update:options` (see `ApplicationsListPage`).
+- **Dialogs:** `<v-dialog v-model><v-card title>` with a close `v-btn` in `#append`, form in `v-card-text`.
+- **Dates:** use `DateField` (wraps `v-date-input`, v-model is a `'YYYY-MM-DD'` string parsed in local time).
+- **Loading:** `v-progress-circular indeterminate` + text; empty states: `v-empty-state` inside a `v-card`.
 - **Store:** Pinia setup store — `defineStore('name', () => { ... })` with `api.get/post` calls. See any existing store for reference.
 
 ---
 
-## Base Components
+## Shared Components
 
 | Component | Key Props |
 |-----------|-----------|
-| `BaseButton` | `variant` (primary\|secondary\|ghost\|danger), `size` (sm\|md\|lg), `loading`, `disabled`, `type` |
-| `BaseInput` | `modelValue`, `type`, `label`, `placeholder`, `error`, `required`, `disabled` |
-| `BaseAlert` | `type` (success\|error\|warning\|info), `message`, `dismissible` |
-| `BaseModal` | `show`, `title` — emits `close` |
-| `StatusBadge` | `status` (draft\|submitted\|under_review\|awarded\|rejected\|archived) |
+| `StatusBadge` | `status` (draft\|submitted\|under_review\|awarded\|rejected\|archived) → `v-chip` |
+| `DateField` | `modelValue` (`'YYYY-MM-DD'`), passes other props to `v-date-input` |
+| `QuestionRenderer` | `question`, `modelValue`, `error` — picks the per-type question component |
 
 ---
 

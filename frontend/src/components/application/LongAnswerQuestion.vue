@@ -9,31 +9,29 @@ const props = defineProps({
 const emit = defineEmits(['answer', 'update:modelValue'])
 
 const maxLength = computed(() => props.question.validationRules?.maxLength ?? null)
-const charCount = computed(() => (props.modelValue || '').length)
 
-function onInput(e) {
-  emit('answer', e.target.value)
-  emit('update:modelValue', e.target.value)
+function onInput(value) {
+  emit('answer', value)
+  emit('update:modelValue', value)
 }
 </script>
 
 <template>
-  <div class="space-y-1.5">
-    <label class="block text-sm font-semibold text-navy">
+  <div>
+    <label class="field-label">
       {{ question.text }}
       <span v-if="question.isRequired" class="text-danger ml-0.5">*</span>
     </label>
-    <p v-if="question.description" class="text-xs text-slate-400">{{ question.description }}</p>
-    <textarea
-      :value="modelValue"
+    <p v-if="question.description" class="text-xs text-slate-400 mb-2">{{ question.description }}</p>
+    <v-textarea
+      :model-value="modelValue"
       placeholder="Your answer…"
       rows="5"
-      @input="onInput"
-      :class="['form-input resize-y', error && 'is-error']"
+      :counter="maxLength || false"
+      :persistent-counter="!!maxLength"
+      :error-messages="error || []"
+      hide-details="auto"
+      @update:model-value="onInput"
     />
-    <div class="flex justify-between">
-      <p v-if="error" class="text-xs font-medium text-danger">{{ error }}</p>
-      <p v-if="maxLength" class="text-xs text-slate-400 ml-auto">{{ charCount }} / {{ maxLength }}</p>
-    </div>
   </div>
 </template>

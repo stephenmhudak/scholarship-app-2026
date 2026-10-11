@@ -82,41 +82,41 @@ function apply(tool) {
 </script>
 
 <template>
-  <div class="space-y-1.5">
-    <label class="block text-sm font-semibold text-navy">
+  <div>
+    <label class="field-label">
       {{ question.text }}
       <span v-if="question.isRequired" class="text-danger ml-0.5">*</span>
     </label>
-    <p v-if="question.description" class="text-xs text-slate-400">{{ question.description }}</p>
-    <div
-      :class="[
-        'rounded-xl border bg-white overflow-hidden transition-colors focus-within:ring-2',
-        error ? 'border-danger focus-within:ring-danger/20' : 'border-[#E9EDF7] focus-within:border-primary focus-within:ring-primary/20',
-      ]"
+    <p v-if="question.description" class="text-xs text-slate-400 mb-2">{{ question.description }}</p>
+    <v-sheet
+      border
+      rounded="lg"
+      :class="['overflow-hidden', error ? 'border-danger' : 'focus-within:border-primary']"
     >
-      <div class="flex flex-wrap items-center gap-0.5 border-b border-[#E9EDF7] bg-[#F4F7FE] px-2 py-1.5">
+      <v-toolbar density="compact" color="surface-light" class="border-b px-1" height="44">
         <template v-for="(tool, i) in tools" :key="i">
-          <span v-if="tool.divider" class="mx-1 h-5 w-px bg-[#E9EDF7]"></span>
-          <button
+          <v-divider v-if="tool.divider" vertical inset class="mx-1" />
+          <v-btn
             v-else
-            type="button"
+            icon
+            size="small"
+            variant="text"
+            rounded="lg"
+            :color="isActive(tool) ? 'primary' : undefined"
+            :active="isActive(tool)"
             :title="tool.title"
             :aria-label="tool.title"
             :aria-pressed="isActive(tool)"
-            :class="[
-              'w-8 h-8 inline-flex items-center justify-center rounded-lg text-lg transition-colors',
-              isActive(tool) ? 'bg-primary/10 text-primary' : 'text-navy hover:bg-white',
-            ]"
             @mousedown.prevent
             @click="apply(tool)"
           >
-            <span :class="['mdi', tool.icon]"></span>
-          </button>
+            <v-icon :icon="tool.icon" size="20" />
+          </v-btn>
         </template>
-      </div>
+      </v-toolbar>
       <EditorContent :editor="editor" class="text-sm text-navy" />
-    </div>
-    <div class="flex justify-between">
+    </v-sheet>
+    <div class="flex justify-between mt-1">
       <p v-if="error" class="text-xs font-medium text-danger">{{ error }}</p>
       <p v-if="maxLength" class="text-xs text-slate-400 ml-auto">{{ charCount }} / {{ maxLength }}</p>
     </div>

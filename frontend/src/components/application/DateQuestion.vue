@@ -1,4 +1,6 @@
 <script setup>
+import DateField from '../common/DateField.vue'
+
 const props = defineProps({
   question: { type: Object, required: true },
   modelValue: { type: String, default: '' },
@@ -6,25 +8,26 @@ const props = defineProps({
 })
 const emit = defineEmits(['answer', 'update:modelValue'])
 
-function onChange(e) {
-  emit('answer', e.target.value)
-  emit('update:modelValue', e.target.value)
+function onChange(value) {
+  emit('answer', value)
+  emit('update:modelValue', value)
 }
 </script>
 
 <template>
-  <div class="space-y-1.5">
-    <label class="block text-sm font-semibold text-navy">
+  <div>
+    <label class="field-label">
       {{ question.text }}
       <span v-if="question.isRequired" class="text-danger ml-0.5">*</span>
     </label>
-    <p v-if="question.description" class="text-xs text-slate-400">{{ question.description }}</p>
-    <input
-      type="date"
-      :value="modelValue"
-      @change="onChange"
-      :class="['form-input', error && 'is-error']"
+    <p v-if="question.description" class="text-xs text-slate-400 mb-2">{{ question.description }}</p>
+    <DateField
+      :model-value="modelValue"
+      placeholder="Select a date…"
+      clearable
+      :error-messages="error || []"
+      hide-details="auto"
+      @update:model-value="onChange"
     />
-    <p v-if="error" class="text-xs font-medium text-danger">{{ error }}</p>
   </div>
 </template>

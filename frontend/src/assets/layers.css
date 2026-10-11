@@ -1,0 +1,3 @@
+/* Imported before Vuetify so this order statement fixes the cascade:
+   dialect-base sits below Vuetify; Tailwind utilities (unlayered) sit above it. */
+@layer dialect-base, vuetify-core, vuetify-components, vuetify-overrides, vuetify-utilities, vuetify-final;

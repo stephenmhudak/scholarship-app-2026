@@ -45,21 +45,21 @@ onMounted(async () => {
       <p class="page-subtitle">{{ application?.cycleName || 'View your submission and current status.' }}</p>
     </div>
 
-    <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
-      <span class="mdi mdi-loading animate-spin text-xl"></span>
+    <div v-if="loading" class="flex items-center gap-3 text-slate-400 py-4">
+      <v-progress-circular indeterminate color="primary" size="22" width="2" />
       Loading application…
     </div>
 
     <NoApplicationCard v-else-if="noApplication" />
 
-    <div v-else-if="error" class="text-sm font-medium text-danger">{{ error }}</div>
+    <v-alert v-else-if="error" type="error" :text="error" />
 
     <template v-else-if="application">
       <!-- Status Summary -->
-      <div class="section-card">
+      <v-card class="pa-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Current Status</p>
+            <p class="eyebrow mb-2">Current Status</p>
             <StatusBadge :status="application.status" />
           </div>
           <div class="text-right text-sm text-slate-400 space-y-0.5">
@@ -71,36 +71,31 @@ onMounted(async () => {
           This application wasn't submitted before the scholarship closed. You can still copy its answers into an application for another scholarship.
         </p>
         <div v-else-if="application.status === 'draft' && application.isCycleOpen" class="mt-4">
-          <RouterLink
-            :to="`/application/${application.id}`"
-            class="inline-flex items-center gap-1.5 text-sm font-semibold bg-primary text-white px-4 py-2.5 rounded-xl hover:bg-primary-700 transition-colors shadow-sm"
-          >
-            <span class="mdi mdi-file-document-edit-outline"></span>
+          <v-btn color="primary" prepend-icon="mdi-file-document-edit-outline" :to="`/application/${application.id}`">
             Continue Application
-          </RouterLink>
+          </v-btn>
         </div>
-      </div>
+      </v-card>
 
       <!-- Submitted Answers -->
-      <div class="section-card">
+      <v-card class="pa-6">
         <h2 class="text-base font-bold text-navy mb-5">Your Answers</h2>
         <div v-if="questions.length" class="space-y-5">
-          <div
-            v-for="q in questions"
-            :key="q.id"
-            class="border-b border-[#E9EDF7] pb-5 last:border-0 last:pb-0"
-          >
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">{{ q.text }}</p>
-            <RichTextAnswer v-if="isRichText(q)" :html="answersMap[q.id]?.textValue" />
-            <p v-else class="text-sm text-navy whitespace-pre-wrap">
-              {{ answersMap[q.id]?.selectedOptions?.length
-                  ? answersMap[q.id].selectedOptions.join(', ')
-                  : (answersMap[q.id]?.textValue || '—') }}
-            </p>
-          </div>
+          <template v-for="(q, i) in questions" :key="q.id">
+            <v-divider v-if="i > 0" />
+            <div>
+              <p class="eyebrow mb-1.5">{{ q.text }}</p>
+              <RichTextAnswer v-if="isRichText(q)" :html="answersMap[q.id]?.textValue" />
+              <p v-else class="text-sm text-navy whitespace-pre-wrap">
+                {{ answersMap[q.id]?.selectedOptions?.length
+                    ? answersMap[q.id].selectedOptions.join(', ')
+                    : (answersMap[q.id]?.textValue || '—') }}
+              </p>
+            </div>
+          </template>
         </div>
         <p v-else class="text-sm text-slate-400">No answers submitted yet.</p>
-      </div>
+      </v-card>
     </template>
   </div>
 </template>

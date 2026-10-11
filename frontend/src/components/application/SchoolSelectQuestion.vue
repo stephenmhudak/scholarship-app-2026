@@ -10,6 +10,7 @@ const props = defineProps({
 const emit = defineEmits(['answer', 'update:modelValue'])
 
 const schools = ref([])
+const loading = ref(true)
 const loadError = ref(null)
 
 onMounted(async () => {
@@ -18,33 +19,35 @@ onMounted(async () => {
     schools.value = res.data
   } catch {
     loadError.value = 'Could not load schools.'
+  } finally {
+    loading.value = false
   }
 })
 
-function onChange(e) {
-  emit('answer', e.target.value)
-  emit('update:modelValue', e.target.value)
+function onChange(value) {
+  emit('answer', value ?? '')
+  emit('update:modelValue', value ?? '')
 }
 </script>
 
 <template>
-  <div class="space-y-1.5">
-    <label class="block text-sm font-semibold text-navy">
+  <div>
+    <label class="field-label">
       {{ question.text }}
       <span v-if="question.isRequired" class="text-danger ml-0.5">*</span>
     </label>
-    <p v-if="question.description" class="text-xs text-slate-400">{{ question.description }}</p>
-    <p v-if="loadError" class="text-xs font-medium text-danger">{{ loadError }}</p>
-    <select
-      :value="modelValue"
-      @change="onChange"
-      :class="['form-select w-full', error && 'is-error']"
-    >
-      <option value="">Select a school…</option>
-      <option v-for="school in schools" :key="school.id" :value="school.id">
-        {{ school.name }}
-      </option>
-    </select>
-    <p v-if="error" class="text-xs font-medium text-danger">{{ error }}</p>
+    <p v-if="question.description" class="text-xs text-slate-400 mb-2">{{ question.description }}</p>
+    <v-autocomplete
+      :model-value="modelValue || null"
+      :items="schools"
+      item-title="name"
+      item-value="id"
+      placeholder="Select a school…"
+      :loading="loading"
+      clearable
+      :error-messages="error || loadError || []"
+      hide-details="auto"
+      @update:model-value="onChange"
+    />
   </div>
 </template>

@@ -33,7 +33,7 @@ const questionComponent = computed(() =>
 </script>
 
 <template>
-  <div class="card p-5">
+  <v-card class="pa-5">
     <component
       :is="questionComponent"
       :question="question"
@@ -42,5 +42,5 @@ const questionComponent = computed(() =>
       @answer="(val) => emit('answer', val)"
       @update:modelValue="(val) => emit('update:modelValue', val)"
     />
-  </div>
+  </v-card>
 </template>

@@ -2,126 +2,131 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  html {
-    font-family: 'Inter', system-ui, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+/* The parts of Tailwind's preflight the layout utilities rely on, kept below Vuetify in the cascade. */
+@layer dialect-base {
+  *,
+  ::before,
+  ::after {
+    border-width: 0;
+    border-style: solid;
+    border-color: #E9EDF7;
   }
 
   body {
-    @apply bg-page text-navy;
+    background: #F4F7FE;
+    color: #2B3674;
+    font-family: var(--v-font-body);
+  }
+
+  h1, h2, h3, h4, h5, h6, p, blockquote, figure, hr, pre, dl, dd {
+    margin: 0;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply text-navy font-semibold;
+    font-size: inherit;
+    font-weight: 600;
+  }
+
+  ol, ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  hr {
+    height: 0;
+    color: inherit;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: inherit;
   }
 }
 
-@layer components {
-  /* Dialect card surface */
-  .card {
-    @apply bg-white rounded-2xl shadow-card border border-[#E9EDF7];
-  }
+:root {
+  --v-font-body: 'Inter', system-ui, sans-serif;
+}
 
-  /* Dialect form input */
-  .form-input {
-    @apply block w-full border border-[#E9EDF7] rounded-xl px-3.5 py-2.5 text-sm text-navy
-           bg-white placeholder:text-slate-400
-           focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary
-           transition-colors duration-150;
-  }
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
-  .form-input.is-error,
-  .form-select.is-error {
-    @apply border-danger focus:ring-danger/20 focus:border-danger;
-  }
+/* ── Vuetify overrides (unlayered, so they win over Vuetify's layers) ────── */
 
-  /* Dialect select */
-  .form-select {
-    @apply form-input appearance-none cursor-pointer;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'%3E%3Cpath fill='%23A3AED0' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 10px center;
-    padding-right: 2.25rem;
-  }
+.v-btn {
+  letter-spacing: normal;
+  font-weight: 600;
+}
 
-  /* Dialect page heading */
-  .page-title {
-    @apply text-2xl font-bold text-navy;
-  }
+/* VCard renders its loader as the first child; don't let Tailwind's space-y-* offset the real first child. */
+.v-card > .v-card__loader + * {
+  margin-top: 0 !important;
+}
 
-  .page-subtitle {
-    @apply text-sm text-slate-400 mt-0.5;
-  }
+.v-data-table .v-data-table__th {
+  background: #F4F7FE;
+  font-size: 0.75rem;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgb(43 54 116 / 0.6);
+}
 
-  /* Dialect section card */
-  .section-card {
-    @apply card p-6;
-  }
+.v-data-table.clickable-rows tbody tr {
+  cursor: pointer;
+}
 
-  /* Dialect table */
-  .dialect-table {
-    @apply min-w-full divide-y divide-[#E9EDF7];
-  }
+/* ── Dialect typography ─────────────────────────────────────────────────── */
 
-  .dialect-table thead {
-    @apply bg-[#F4F7FE];
-  }
+.page-title {
+  @apply text-2xl font-bold text-navy;
+}
 
-  .dialect-table th {
-    @apply px-6 py-3 text-left text-xs font-semibold text-navy/60 uppercase tracking-wider;
-  }
+.page-subtitle {
+  @apply text-sm text-slate-400 mt-0.5;
+}
 
-  .dialect-table tbody {
-    @apply bg-white divide-y divide-[#F4F7FE];
-  }
+/* Question/answer label above a field */
+.field-label {
+  @apply block text-sm font-semibold text-navy mb-1.5;
+}
 
-  .dialect-table td {
-    @apply px-6 py-4 text-sm text-navy;
-  }
+/* Small uppercase label for read-only values */
+.eyebrow {
+  @apply text-xs font-bold text-slate-400 uppercase tracking-wide;
+}
 
-  .dialect-table tbody tr {
-    @apply hover:bg-[#F4F7FE] transition-colors cursor-pointer;
-  }
+/* Rich text answers (editor + read-only display) */
+.rich-text > * + * {
+  @apply mt-2;
+}
 
-  /* Pagination button */
-  .pagination-btn {
-    @apply px-3 py-1.5 text-sm font-medium border border-[#E9EDF7] rounded-lg
-           text-navy hover:bg-[#F4F7FE] transition-colors
-           disabled:opacity-40 disabled:cursor-not-allowed;
-  }
+.rich-text h2 {
+  @apply text-lg font-bold;
+}
 
-  /* Rich text answers (editor + read-only display) — restores styles Tailwind preflight resets */
-  .rich-text > * + * {
-    @apply mt-2;
-  }
+.rich-text h3 {
+  @apply text-base font-bold;
+}
 
-  .rich-text h2 {
-    @apply text-lg font-bold;
-  }
+.rich-text ul {
+  @apply list-disc pl-6;
+}
 
-  .rich-text h3 {
-    @apply text-base font-bold;
-  }
+.rich-text ol {
+  @apply list-decimal pl-6;
+}
 
-  .rich-text ul {
-    @apply list-disc pl-6;
-  }
+.rich-text blockquote {
+  @apply border-l-4 border-[#E9EDF7] pl-4 text-navy/70;
+}
 
-  .rich-text ol {
-    @apply list-decimal pl-6;
-  }
+.rich-text a {
+  @apply text-primary underline;
+}
 
-  .rich-text blockquote {
-    @apply border-l-4 border-[#E9EDF7] pl-4 text-navy/70;
-  }
-
-  .rich-text a {
-    @apply text-primary underline;
-  }
-
-  .rich-text hr {
-    @apply border-[#E9EDF7];
-  }
+.rich-text hr {
+  @apply border-t border-[#E9EDF7];
 }

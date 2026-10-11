@@ -2,6 +2,8 @@ import defaultTheme from 'tailwindcss/defaultTheme'
 
 export default {
   content: ['./index.html', './src/**/*.{vue,js}'],
+  // Vuetify ships its own reset; Tailwind's preflight is unlayered and would override Vuetify's layered styles.
+  corePlugins: { preflight: false },
   theme: {
     extend: {
       fontFamily: {
