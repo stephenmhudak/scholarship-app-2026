@@ -80,6 +80,9 @@ builder.Services.AddControllers();
 
 var app = builder.Build();
 
+if (string.IsNullOrEmpty(app.Configuration["Email:Resend:ApiKey"]))
+    app.Logger.LogWarning("Email:Resend:ApiKey is not set: emails will be written to the console instead of being sent.");
+
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
