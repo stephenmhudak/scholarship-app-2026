@@ -65,6 +65,12 @@ html {
   margin-top: 0 !important;
 }
 
+/* Dialog title bar: blue-accent-4 with white text (the close button in #append inherits it). */
+.v-dialog .v-overlay__content > .v-card > .v-card-item {
+  background: #2962FF;
+  color: #FFFFFF;
+}
+
 .v-data-table .v-data-table__th {
   background: #F4F7FE;
   font-size: 0.75rem;

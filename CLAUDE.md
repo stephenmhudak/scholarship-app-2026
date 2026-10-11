@@ -76,7 +76,7 @@ backend/ScholarshipApi/
 
 - **Page shell:** `<div class="space-y-6">` → `page-title` + `page-subtitle` → `<v-alert v-if="alert" :type :text closable @click:close="alert = null">` → `<v-card class="pa-6">` sections.
 - **Tables:** `<v-card class="overflow-hidden"><v-data-table :headers :items :loading no-data-text>`; cell slots `#item.<key>="{ item, value }"`; row click `@click:row="(e, { item }) => …"`. Sorting only works on header keys (use a header `value` fn for computed sorts). Server paging: `v-data-table-server` + `@update:options` (see `ApplicationsListPage`).
-- **Dialogs:** `<v-dialog v-model><v-card title>` with a close `v-btn` in `#append`, form in `v-card-text`.
+- **Dialogs:** `<v-dialog v-model><v-card title>` with a close `v-btn` in `#append`, form in `v-card-text`. Rounding (`lg`) and the blue-accent-4 (`#2962FF`) title bar with white text are global (`plugins/vuetify.js`, `main.css`) — don't restyle per dialog.
 - **Confirmations:** never `window.confirm`/`alert`/`prompt`. Use `const confirm = useConfirm()` (`composables/useConfirm.js`) → `if (!await confirm({ title, text, confirmText: 'Delete', color: 'error' })) return`. It drives the single `ConfirmDialog` mounted in `App.vue`.
 - **Dates:** use `DateField` (wraps `v-date-input`, v-model is a `'YYYY-MM-DD'` string parsed in local time).
 - **Loading:** `v-progress-circular indeterminate` + text; empty states: `v-empty-state` inside a `v-card`.
