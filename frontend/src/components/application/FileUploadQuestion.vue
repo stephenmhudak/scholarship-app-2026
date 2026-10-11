@@ -5,6 +5,7 @@ import { MAX_FILE_SIZE } from '../../utils/fileUpload'
 
 const props = defineProps({
   question: { type: Object, required: true },
+  applicationId: { type: String, required: true },
   modelValue: { type: String, default: null },
   error: { type: String, default: null },
 })
@@ -28,6 +29,8 @@ async function onChange(value) {
   try {
     const formData = new FormData()
     formData.append('file', selected)
+    formData.append('applicationId', props.applicationId)
+    formData.append('questionId', props.question.id)
     const response = await api.post('/files/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })

@@ -12,6 +12,7 @@ import { isRichText } from '../../utils/richText'
 
 const props = defineProps({
   question: { type: Object, required: true },
+  applicationId: { type: String, default: null },
   modelValue: { type: [String, Array], default: null },
   error: { type: String, default: null },
 })
@@ -37,6 +38,7 @@ const questionComponent = computed(() =>
     <component
       :is="questionComponent"
       :question="question"
+      :applicationId="applicationId"
       :modelValue="modelValue"
       :error="error"
       @answer="(val) => emit('answer', val)"

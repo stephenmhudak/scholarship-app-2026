@@ -132,7 +132,7 @@ backend/ScholarshipApi/
 | PUT | `/api/cycles/{id}/questions/reorder` | app_admin | `[{id, order}]` |
 | GET | `/api/admin/applications` | app_admin | `?status=&page=&pageSize=` → `{data, total, page, pageSize}` |
 | PATCH | `/api/admin/applications/{id}/status` | app_admin | `{ status }` |
-| POST | `/api/files/upload` | auth | Multipart → `{ fileId }` |
+| POST | `/api/files/upload` | auth | Multipart `file`, `applicationId`, `questionId?` → `{ fileId }` |
 | GET/POST | `/api/references/{code}` | **PUBLIC** | Validate / upload reference |
 | GET | `/api/scoring/queue` | scorer | Assigned applications |
 | POST | `/api/scoring/{appId}/score` | scorer | `{ scoreValue, comments? }` |
@@ -163,7 +163,7 @@ backend/ScholarshipApi/
 ## Gotchas
 
 - **No EF** — raw SqlKata + Dapper. Write explicit UPDATE queries.
-- **File upload is two-step:** upload → `fileId` → store in answer. Files have `ApplicationId = "pending"` until submit.
+- **File upload is two-step:** upload (multipart `file`, `applicationId`, `questionId`) → `fileId` → store in answer. `ApplicationFiles.ApplicationId` is a FK, so uploads must name the applicant's own draft application.
 - **Email verification:** self-registered users can't log in until `Users.EmailVerifiedAt` is set (login → 403 `{ code: "email_not_verified" }`). Admin/school-created users are pre-verified. Emails go through `IEmailService` — Resend if `Email:Resend:ApiKey` is set, otherwise logged to console. In Docker, credentials go in `secrets/email.env` and `secrets/r2.env` (copy the `.example` files).
 - **Reference codes are hashed** — store SHA-256, compare hash on lookup. Plaintext returned once.
 - **Both frontend routing AND backend auth enforce roles** — check both when adding features.
