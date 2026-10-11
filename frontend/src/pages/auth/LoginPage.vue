@@ -15,6 +15,9 @@ const form = ref({
 })
 const loading = ref(false)
 const error = ref(null)
+const unverifiedEmail = ref(null)
+const resending = ref(false)
+const resendMessage = ref(null)
 
 const roleHome = {
   applicant:    '/dashboard',
@@ -27,14 +30,29 @@ const roleHome = {
 async function login() {
   loading.value = true
   error.value = null
+  unverifiedEmail.value = null
+  resendMessage.value = null
 
   try {
     await authStore.login(form.value)
     router.push(roleHome[authStore.role] ?? '/dashboard')
   } catch (err) {
-    error.value = err.response?.data?.error || 'Invalid email or password. Please try again.'
+    if (err.response?.data?.code === 'email_not_verified') unverifiedEmail.value = form.value.email
+    else error.value = err.response?.data?.error || 'Invalid email or password. Please try again.'
   } finally {
     loading.value = false
+  }
+}
+
+async function resend() {
+  resending.value = true
+  try {
+    await authStore.resendVerification(unverifiedEmail.value)
+    resendMessage.value = 'A new verification link is on its way. Check your inbox.'
+  } catch {
+    resendMessage.value = 'Could not resend the email. Please try again shortly.'
+  } finally {
+    resending.value = false
   }
 }
 </script>
@@ -47,6 +65,18 @@ async function login() {
     </div>
 
     <BaseAlert v-if="error" type="error" :message="error" />
+
+    <div v-if="unverifiedEmail" class="space-y-3">
+      <BaseAlert
+        type="warning"
+        :dismissible="false"
+        message="Please verify your email address before signing in. Check your inbox for the link we sent."
+      />
+      <BaseAlert v-if="resendMessage" type="info" :message="resendMessage" />
+      <BaseButton variant="secondary" size="sm" :loading="resending" class="w-full" @click="resend">
+        Resend verification email
+      </BaseButton>
+    </div>
 
     <form @submit.prevent="login" class="space-y-4">
       <BaseInput

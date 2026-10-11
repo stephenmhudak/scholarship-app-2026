@@ -131,6 +131,7 @@ public class SchoolsController(QueryFactory db) : ControllerBase
             LastName = request.LastName,
             Role = "counselor",
             SchoolId = id,
+            EmailVerifiedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
         });
 

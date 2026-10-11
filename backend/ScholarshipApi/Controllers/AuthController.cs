@@ -24,6 +24,20 @@ public class AuthController(IAuthService authService) : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("verify-email")]
+    public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailRequest request)
+    {
+        var result = await authService.VerifyEmailAsync(request.Token);
+        return Ok(result);
+    }
+
+    [HttpPost("resend-verification")]
+    public async Task<IActionResult> ResendVerification([FromBody] ResendVerificationRequest request)
+    {
+        await authService.ResendVerificationAsync(request.Email);
+        return NoContent();
+    }
+
     [HttpGet("invite/{token}")]
     public async Task<IActionResult> GetInvite(string token)
     {

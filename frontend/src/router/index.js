@@ -29,6 +29,12 @@ const routes = [
     meta: { layout: 'auth', public: true },
   },
   {
+    path: '/verify-email',
+    name: 'VerifyEmail',
+    component: () => import('../pages/auth/VerifyEmailPage.vue'),
+    meta: { layout: 'auth', public: true },
+  },
+  {
     path: '/dashboard',
     name: 'Dashboard',
     component: () => import('../pages/applicant/DashboardPage.vue'),

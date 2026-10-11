@@ -152,6 +152,7 @@ public class AdminController(IApplicationService applicationService, QueryFactor
             LastName = request.LastName,
             Role = request.Role,
             SchoolId = string.IsNullOrEmpty(request.SchoolId) ? null : request.SchoolId,
+            EmailVerifiedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
         });
         return CreatedAtAction(nameof(ListUsers), new { }, new { id });
