@@ -18,11 +18,13 @@ public class FilesController(IFileStorageService fileStorage, QueryFactory db) :
     private string UserRole => User.FindFirstValue(ClaimTypes.Role)!;
 
     [HttpPost("upload")]
-    [RequestSizeLimit(10_485_760)]
+    [RequestSizeLimit(FileUploadLimits.MaxRequestSizeBytes)]
     public async Task<IActionResult> Upload(IFormFile file)
     {
         if (file is null || file.Length == 0)
             return BadRequest(new { error = "No file provided." });
+        if (file.Length > FileUploadLimits.MaxFileSizeBytes)
+            return BadRequest(new { error = FileUploadLimits.TooLargeMessage });
 
         var storagePath = await fileStorage.StoreAsync(file, "application-files");
 

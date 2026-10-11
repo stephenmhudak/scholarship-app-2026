@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import { uploadFile, ACCEPTED_REFERENCE_TYPES } from '../../utils/fileUpload'
+import { uploadFile, ACCEPTED_REFERENCE_TYPES, MAX_FILE_SIZE } from '../../utils/fileUpload'
 import BaseButton from '../common/BaseButton.vue'
 
 const props = defineProps({
@@ -17,8 +17,15 @@ const uploading = ref(false)
 const error = ref(null)
 
 function onFileChange(e) {
-  file.value = e.target.files?.[0] || null
+  const selected = e.target.files?.[0] || null
   error.value = null
+  if (selected && selected.size > MAX_FILE_SIZE) {
+    error.value = 'File must be 5 MB or less.'
+    file.value = null
+    e.target.value = ''
+    return
+  }
+  file.value = selected
 }
 
 async function upload() {
@@ -64,7 +71,7 @@ async function upload() {
           class="sr-only"
         />
       </label>
-      <p class="text-xs text-slate-400 mt-1">{{ ACCEPTED_REFERENCE_TYPES.join(', ') }} up to 10MB</p>
+      <p class="text-xs text-slate-400 mt-1">{{ ACCEPTED_REFERENCE_TYPES.join(', ') }} up to 5MB</p>
     </div>
 
     <p v-if="error" class="text-sm font-medium text-danger">{{ error }}</p>

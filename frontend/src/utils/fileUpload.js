@@ -1,5 +1,8 @@
 import api from '../services/api'
 
+// Must match FileUploadLimits.MaxFileSizeBytes on the backend
+export const MAX_FILE_SIZE = 5 * 1024 * 1024
+
 export const ACCEPTED_REFERENCE_TYPES = ['.jpg', '.jpeg', '.doc', '.docx', '.pdf', '.png']
 
 /**

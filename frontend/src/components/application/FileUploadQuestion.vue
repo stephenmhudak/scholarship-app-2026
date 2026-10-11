@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import api from '../../services/api'
+import { MAX_FILE_SIZE } from '../../utils/fileUpload'
 
 const props = defineProps({
   question: { type: Object, required: true },
@@ -12,8 +13,6 @@ const emit = defineEmits(['answer', 'update:modelValue'])
 const uploading = ref(false)
 const uploadError = ref(null)
 const uploadedName = ref(null)
-
-const MAX_FILE_SIZE = 5 * 1024 * 1024
 
 async function onChange(e) {
   const file = e.target.files?.[0]
