@@ -237,7 +237,12 @@ async function save() {
 async function deleteQuestion(q) {
   if (!confirm(`Delete "${q.text}"?`)) return
   try {
-    await api.delete(`/cycles/${cycleId}/questions/${q.id}`)
+    await api.delete(`/cycles/${cycleId}/questions/${q.id}`).catch(async (err) => {
+      const count = err.response?.status === 409 && err.response.data.answerCount
+      if (!count) throw err
+      if (!confirm(`${count} application(s) have answered this question. Deleting it also deletes their answers. Continue?`)) return
+      await api.delete(`/cycles/${cycleId}/questions/${q.id}`, { params: { force: true } })
+    })
     await loadQuestions()
   } catch {
     alert.value = { type: 'error', message: 'Failed to delete question.' }

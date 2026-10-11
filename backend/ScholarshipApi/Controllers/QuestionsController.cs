@@ -98,9 +98,19 @@ public class QuestionsController(QueryFactory db) : ControllerBase
 
     [HttpDelete("{questionId}")]
     [Authorize(Policy = "AppAdmin")]
-    public async Task<IActionResult> Delete(string cycleId, string questionId)
+    public async Task<IActionResult> Delete(string cycleId, string questionId, [FromQuery] bool force = false)
     {
-        await db.Query("Questions").Where("Id", questionId).Where("CycleId", cycleId).DeleteAsync();
+        // ApplicationAnswers.QuestionId has no ON DELETE rule, so answers must go first — only when the admin confirms.
+        var answerCount = await db.Query("ApplicationAnswers").Where("QuestionId", questionId).CountAsync<int>();
+        if (answerCount > 0 && !force)
+            return Conflict(new { error = $"{answerCount} application(s) have answered this question.", answerCount });
+
+        if (db.Connection.State != System.Data.ConnectionState.Open) db.Connection.Open();
+        using var transaction = db.Connection.BeginTransaction();
+        await db.Query("ApplicationAnswers").Where("QuestionId", questionId).DeleteAsync(transaction);
+        await db.Query("Questions").Where("Id", questionId).Where("CycleId", cycleId).DeleteAsync(transaction);
+        transaction.Commit();
+
         return NoContent();
     }
 
