@@ -17,6 +17,7 @@ const blank = () => ({
   openDate: '',
   closeDate: '',
   isActive: false,
+  copyFromCycleId: '',
 })
 
 onMounted(async () => {
@@ -35,9 +36,13 @@ async function loadCycles() {
   }
 }
 
-function startCreate() {
+function startCreate(source = null) {
   creating.value = true
   editing.value = blank()
+  if (source) {
+    editing.value.name = `${source.name} (copy)`
+    editing.value.copyFromCycleId = source.id
+  }
 }
 
 function editCycle(cycle) {
@@ -68,7 +73,7 @@ async function save() {
     }
 
     if (creating.value) {
-      await api.post('/admin/cycles', payload)
+      await api.post('/admin/cycles', { ...payload, copyFromCycleId: editing.value.copyFromCycleId || null })
       alert.value = { type: 'success', message: 'Cycle created.' }
     } else {
       await api.put(`/admin/cycles/${editing.value.id}`, payload)
@@ -93,7 +98,7 @@ async function save() {
         <h1 class="page-title">Scholarship Settings</h1>
         <p class="page-subtitle">Manage scholarship cycles and application windows.</p>
       </div>
-      <BaseButton v-if="!editing" @click="startCreate">
+      <BaseButton v-if="!editing" @click="startCreate()">
         <span class="mdi mdi-plus mr-1.5"></span>
         New Cycle
       </BaseButton>
@@ -124,6 +129,19 @@ async function save() {
           type="date"
           label="Close Date"
         />
+      </div>
+
+      <div v-if="creating" class="space-y-1.5">
+        <label for="copy_from" class="block text-sm font-semibold text-navy">Questions</label>
+        <select id="copy_from" v-model="editing.copyFromCycleId" class="form-select">
+          <option value="">Default application questions</option>
+          <option v-for="cycle in cycles" :key="cycle.id" :value="cycle.id">
+            Copy from {{ cycle.name }}
+          </option>
+        </select>
+        <p class="text-xs text-slate-400">
+          Sections and questions are copied; applications and scores are not.
+        </p>
       </div>
 
       <label class="flex items-center gap-3 cursor-pointer">
@@ -187,6 +205,10 @@ async function save() {
             <span class="mdi mdi-format-list-bulleted mr-1.5"></span>
             Questions
           </RouterLink>
+          <BaseButton variant="secondary" size="sm" :disabled="!!editing" @click="startCreate(cycle)">
+            <span class="mdi mdi-content-copy mr-1.5"></span>
+            Duplicate
+          </BaseButton>
           <BaseButton variant="secondary" size="sm" @click="editCycle(cycle)">
             <span class="mdi mdi-pencil mr-1.5"></span>
             Edit

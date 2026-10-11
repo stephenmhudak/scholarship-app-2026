@@ -11,6 +11,9 @@ namespace ScholarshipApi.Controllers;
 [Authorize]
 public class QuestionsController(QueryFactory db) : ControllerBase
 {
+    // camelCase keys — the frontend reads validationRules.numberOnly etc. straight from the stored JSON
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     [HttpGet]
     public async Task<IActionResult> List(string cycleId)
     {
@@ -61,7 +64,7 @@ public class QuestionsController(QueryFactory db) : ControllerBase
             request.SectionId,
             request.Description,
             ValidationRules = request.ValidationRules != null
-                ? JsonSerializer.Serialize(request.ValidationRules)
+                ? JsonSerializer.Serialize(request.ValidationRules, JsonOptions)
                 : null
         });
 
@@ -83,7 +86,7 @@ public class QuestionsController(QueryFactory db) : ControllerBase
             request.SectionId,
             request.Description,
             ValidationRules = request.ValidationRules != null
-                ? JsonSerializer.Serialize(request.ValidationRules)
+                ? JsonSerializer.Serialize(request.ValidationRules, JsonOptions)
                 : null
         });
 

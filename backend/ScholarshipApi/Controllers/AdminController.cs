@@ -239,6 +239,9 @@ public class AdminController(IApplicationService applicationService, QueryFactor
     public async Task<IActionResult> CreateCycle([FromBody] CycleRequest request)
     {
         var id = Guid.NewGuid().ToString();
+        if (db.Connection.State != System.Data.ConnectionState.Open) db.Connection.Open();
+        using var transaction = db.Connection.BeginTransaction();
+
         await db.Query("ScholarshipCycles").InsertAsync(new
         {
             Id = id,
@@ -246,7 +249,13 @@ public class AdminController(IApplicationService applicationService, QueryFactor
             OpenDate = request.OpenDate,
             CloseDate = request.CloseDate,
             IsActive = request.IsActive
-        });
+        }, transaction);
+        if (string.IsNullOrEmpty(request.CopyFromCycleId))
+            await DefaultCycleQuestions.SeedAsync(db, id, transaction);
+        else
+            await CycleQuestionCopier.CopyAsync(db, request.CopyFromCycleId, id, transaction);
+
+        transaction.Commit();
         return CreatedAtAction(nameof(ListCycles), new { }, new { id });
     }
 
@@ -296,6 +305,8 @@ public class CycleRequest
     public DateTime OpenDate { get; set; }
     public DateTime CloseDate { get; set; }
     public bool IsActive { get; set; }
+    /// <summary>Create only: copy questions from this cycle instead of seeding the defaults.</summary>
+    public string? CopyFromCycleId { get; set; }
 }
 
 internal class AppOverviewRow
