@@ -141,6 +141,8 @@ public class ValidationRulesRequest
     public int? MaxLength { get; set; }
     public bool PhoneFormat { get; set; }
     public bool EmailFormat { get; set; }
+    // long_answer only: answer with the Tiptap editor; HTML is sanitized on save.
+    public bool RichText { get; set; }
 }
 
 public class QuestionRequest

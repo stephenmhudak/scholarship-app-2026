@@ -65,7 +65,8 @@ public class ApplicationService(QueryFactory db) : IApplicationService
 
         var richTextQuestionIds = (await db.Query("Questions")
                 .Where("CycleId", app.CycleId)
-                .Where("Type", "rich_text")
+                .Where("Type", "long_answer")
+                .WhereRaw("JSON_EXTRACT(ValidationRules, '$.richText') = CAST('true' AS JSON)")
                 .Select("Id")
                 .GetAsync<string>())
             .ToHashSet();

@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import api from '../../services/api'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
 import RichTextAnswer from '../../components/application/RichTextAnswer.vue'
+import { isRichText } from '../../utils/richText'
 
 const route = useRoute()
 const appId = route.params.id
@@ -72,7 +73,7 @@ onMounted(async () => {
             class="border-b border-[#E9EDF7] pb-5 last:border-0 last:pb-0"
           >
             <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">{{ q.text }}</p>
-            <RichTextAnswer v-if="q.type === 'rich_text'" :html="answersMap[q.id]?.textValue" />
+            <RichTextAnswer v-if="isRichText(q)" :html="answersMap[q.id]?.textValue" />
             <p v-else class="text-sm text-navy whitespace-pre-wrap">
               {{ answersMap[q.id]?.selectedOptions?.length
                   ? answersMap[q.id].selectedOptions.join(', ')

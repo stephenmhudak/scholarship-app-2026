@@ -1,4 +1,4 @@
-import { htmlToText } from './richText'
+import { htmlToText, isRichText } from './richText'
 
 const PHONE_RE = /^\+?[\d\s\-().]{7,20}$/
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -9,7 +9,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  */
 export function validateAnswer(question, value) {
   // Rich text answers are HTML; validate the visible text, not the markup.
-  if (question.type === 'rich_text') value = htmlToText(value)
+  if (isRichText(question)) value = htmlToText(value)
 
   const isEmpty = value === null || value === undefined || value === '' ||
     (Array.isArray(value) && value.length === 0)

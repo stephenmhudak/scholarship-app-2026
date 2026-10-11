@@ -1,12 +1,17 @@
 import DOMPurify from 'dompurify'
 
-// Tags the rich_text editor can produce. Anything else is stripped before display.
+/** Long answer questions with the rich text option use the Tiptap editor and store HTML. */
+export function isRichText(question) {
+  return question?.type === 'long_answer' && !!question.validationRules?.richText
+}
+
+// Tags the rich text editor can produce. Anything else is stripped before display.
 const ALLOWED_TAGS = [
   'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'h2', 'h3',
   'ul', 'ol', 'li', 'blockquote', 'a', 'hr',
 ]
 
-// Answers saved before a question became rich_text are plain text; keep their line breaks.
+// Answers saved before a question became rich text are plain text; keep their line breaks.
 function toHtml(value) {
   if (!value || /<[a-z][\s\S]*>/i.test(value)) return value || ''
   const escaped = value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

@@ -8,6 +8,7 @@ import SingleChoiceQuestion from './SingleChoiceQuestion.vue'
 import FileUploadQuestion from './FileUploadQuestion.vue'
 import SchoolSelectQuestion from './SchoolSelectQuestion.vue'
 import DateQuestion from './DateQuestion.vue'
+import { isRichText } from '../../utils/richText'
 
 const props = defineProps({
   question: { type: Object, required: true },
@@ -19,7 +20,6 @@ const emit = defineEmits(['answer', 'update:modelValue'])
 const componentMap = {
   short_answer: ShortAnswerQuestion,
   long_answer: LongAnswerQuestion,
-  rich_text: RichTextQuestion,
   multiple_choice: MultipleChoiceQuestion,
   single_choice: SingleChoiceQuestion,
   file_upload: FileUploadQuestion,
@@ -27,7 +27,9 @@ const componentMap = {
   date: DateQuestion,
 }
 
-const questionComponent = computed(() => componentMap[props.question.type] ?? ShortAnswerQuestion)
+const questionComponent = computed(() =>
+  isRichText(props.question) ? RichTextQuestion : (componentMap[props.question.type] ?? ShortAnswerQuestion)
+)
 </script>
 
 <template>
