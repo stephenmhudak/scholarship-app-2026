@@ -1,13 +1,15 @@
 <script setup>
 import { onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import api from '../../services/api'
 
+const route = useRoute()
 const router = useRouter()
 
 onMounted(async () => {
   try {
-    const response = await api.post('/applications')
+    // Returns the existing application if one was already started for this cycle.
+    const response = await api.post('/applications', { cycleId: route.query.cycleId || null })
     router.replace(`/application/${response.data.id}`)
   } catch (err) {
     const msg = err.response?.data?.error || 'Could not start application.'

@@ -93,7 +93,7 @@ Shadows:  shadow-card | shadow-card-md | shadow-card-lg
 | `BaseInput` | `modelValue`, `type`, `label`, `placeholder`, `error`, `required`, `disabled` |
 | `BaseAlert` | `type` (success\|error\|warning\|info), `message`, `dismissible` |
 | `BaseModal` | `show`, `title` — emits `close` |
-| `StatusBadge` | `status` (draft\|submitted\|under_review\|awarded\|rejected) |
+| `StatusBadge` | `status` (draft\|submitted\|under_review\|awarded\|rejected\|archived) |
 
 ---
 
@@ -126,7 +126,9 @@ Shadows:  shadow-card | shadow-card-md | shadow-card-lg
 | GET | `/api/auth/me` | Bearer | Current user |
 | GET | `/api/applications/my` | applicant | Own applications |
 | GET | `/api/applications/current` | applicant | Most recent |
-| POST | `/api/applications` | applicant | Create (uses active cycle) |
+| GET | `/api/applications/open-cycles` | applicant | Cycles accepting applications now |
+| POST | `/api/applications` | applicant | `{ cycleId? }` — one per cycle; returns the existing one if already started |
+| POST | `/api/applications/{id}/copy-answers` | applicant | `{ sourceApplicationId }` → `{ copied, alreadyAnswered }` |
 | GET | `/api/applications/{id}` | owner/scorer/admin | Full app + answers |
 | PUT | `/api/applications/{id}/draft` | applicant | `{ answers: [{questionId, textValue?, selectedOptions?}] }` |
 | POST | `/api/applications/{id}/submit` | applicant | Submit |
@@ -154,7 +156,7 @@ Shadows:  shadow-card | shadow-card-md | shadow-card-lg
 - ValidationRules: `{ numberOnly, phoneFormat, emailFormat, minLength, maxLength, richText }`
 - `richText` (long_answer only, check with `isRichText()` in `utils/richText.js`): Tiptap editor, answer stored as HTML — sanitized on save by `RichTextSanitizer` and again on render by `RichTextAnswer` (DOMPurify); keep their tag allow-lists in sync
 
-**Applications:** Id, ApplicantId, CycleId, Status (`draft`→`submitted`→`under_review`→`awarded`/`rejected`)
+**Applications:** Id, ApplicantId, CycleId, Status (`draft`→`submitted`→`under_review`→`awarded`/`rejected`, or `draft`→`archived` when the cycle closes unsubmitted)
 
 **ApplicationAnswers:** ApplicationId, QuestionId, TextValue, SelectedOptions (JSON array of option IDs)
 
@@ -169,6 +171,8 @@ Shadows:  shadow-card | shadow-card-md | shadow-card-lg
 - **Email verification:** self-registered users can't log in until `Users.EmailVerifiedAt` is set (login → 403 `{ code: "email_not_verified" }`). Admin/school-created users are pre-verified. Emails go through `IEmailService` — Resend if `Email:Resend:ApiKey` is set, otherwise logged to console. In Docker, credentials go in `secrets/email.env` and `secrets/r2.env` (copy the `.example` files).
 - **Reference codes are hashed** — store SHA-256, compare hash on lookup. Plaintext returned once.
 - **Both frontend routing AND backend auth enforce roles** — check both when adding features.
-- **Status transitions are manual** — no state machine. Admin can set any valid status.
+- **Status transitions are manual** — no state machine. Admin can set any valid status. Exception: `ApplicationArchiveService` (hourly) archives drafts in closed cycles.
+- **Multiple open cycles** — a cycle is open when `IsActive` and today is within Open/CloseDate, through the end of the close day (`CycleWindow`). One application per applicant per cycle. Save/submit/copy reject closed cycles.
+- **Copying answers** between cycles only fills unanswered questions whose text, type, rich text flag, and option texts match; choice answers are remapped by option text.
 - **Counselors are scoped to SchoolId** — set at creation, no UI to change. Filter lists by school.
 - **Sections are optional** — `SectionId = null` = ungrouped. Form groups them at the end.

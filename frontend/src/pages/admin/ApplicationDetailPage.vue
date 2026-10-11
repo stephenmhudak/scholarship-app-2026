@@ -21,7 +21,7 @@ const updatingStatus = ref(false)
 const newStatus = ref('')
 const alert = ref(null)
 
-const statuses = ['submitted', 'under_review', 'awarded', 'rejected']
+const statuses = ['submitted', 'under_review', 'awarded', 'rejected', 'archived']
 
 const answersMap = computed(() =>
   Object.fromEntries((application.value?.answers ?? []).map((a) => [a.questionId, a]))

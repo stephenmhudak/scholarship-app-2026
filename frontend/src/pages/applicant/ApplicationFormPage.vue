@@ -21,6 +21,11 @@ const submitting = ref(false)
 const alert = ref(null)
 // /application/current 404s when the applicant hasn't started one — not an error.
 const noApplication = ref(false)
+
+// Other applications (different cycles) whose matching answers can be copied in.
+const copySources = ref([])
+const copySourceId = ref('')
+const copying = ref(false)
 const validationErrors = ref({})
 
 // Sections loaded alongside questions
@@ -29,6 +34,18 @@ const sections = ref([])
 onMounted(async () => {
   try {
     await appStore.loadApplicationForm(appId)
+
+    // Submitted, archived, or closed-cycle applications can't be edited — show them read-only.
+    const app = appStore.currentApplication
+    if (app.status !== 'draft' || !app.isCycleOpen) {
+      router.replace(`/application/${app.id}/status`)
+      return
+    }
+
+    const myRes = await api.get('/applications/my')
+    copySources.value = myRes.data
+      .filter((a) => a.cycleId !== app.cycleId)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
 
     // Load sections for the cycle
     if (appStore.cycleId) {
@@ -88,6 +105,36 @@ async function saveDraft() {
   }
 }
 
+async function copyAnswers() {
+  if (!copySourceId.value) return
+  copying.value = true
+  alert.value = null
+  const id = appStore.currentApplication.id
+  try {
+    // Save first so unsaved edits aren't lost when the form reloads; copying only fills unanswered questions.
+    await appStore.saveDraft(id)
+    const { data } = await api.post(`/applications/${id}/copy-answers`, { sourceApplicationId: copySourceId.value })
+    await appStore.loadApplicationForm(id)
+    copySourceId.value = ''
+
+    const parts = []
+    if (data.copied) parts.push(`Copied ${data.copied} answer${data.copied === 1 ? '' : 's'}.`)
+    if (data.alreadyAnswered) parts.push(`${data.alreadyAnswered} matching question${data.alreadyAnswered === 1 ? ' was' : 's were'} already answered and left unchanged.`)
+    alert.value = parts.length
+      ? { type: 'success', message: parts.join(' ') }
+      : { type: 'info', message: 'No answered questions in that application match this one.' }
+  } catch (err) {
+    alert.value = { type: 'error', message: err.response?.data?.error || 'Failed to copy answers.' }
+  } finally {
+    copying.value = false
+  }
+}
+
+function sourceLabel(a) {
+  const status = { draft: 'Incomplete', archived: 'Archived' }[a.status] ?? 'Submitted'
+  return `${a.cycleName || 'Scholarship'} — ${status}`
+}
+
 async function submit() {
   // Run validation
   const errors = validateForm(appStore.questions, appStore.answers)
@@ -116,8 +163,11 @@ async function submit() {
 <template>
   <div class="space-y-6 max-w-3xl">
     <div>
-      <h1 class="page-title">Scholarship Application</h1>
-      <p class="page-subtitle">Complete all sections and submit before the deadline.</p>
+      <h1 class="page-title">{{ appStore.currentApplication?.cycleName || 'Scholarship Application' }}</h1>
+      <p class="page-subtitle">
+        Complete all sections and submit before the deadline<template v-if="appStore.currentApplication?.cycleCloseDate">
+          ({{ new Date(appStore.currentApplication.cycleCloseDate).toLocaleDateString() }})</template>.
+      </p>
     </div>
 
     <div v-if="loading" class="flex items-center gap-2 text-slate-400 py-4">
@@ -131,6 +181,25 @@ async function submit() {
       <ApplicationProgress :answered="answeredCount" :total="appStore.questions.length" />
 
       <BaseAlert v-if="alert" :type="alert.type" :message="alert.message" />
+
+      <!-- Reuse answers from another cycle's application -->
+      <div v-if="copySources.length" class="section-card space-y-3">
+        <div>
+          <h2 class="text-base font-bold text-navy">Reuse previous answers</h2>
+          <p class="text-sm text-slate-400 mt-0.5">
+            Copies answers for questions that match exactly. Questions you've already answered aren't changed.
+          </p>
+        </div>
+        <div class="flex gap-3">
+          <select v-model="copySourceId" class="form-select flex-1">
+            <option value="">Choose an application…</option>
+            <option v-for="a in copySources" :key="a.id" :value="a.id">{{ sourceLabel(a) }}</option>
+          </select>
+          <BaseButton variant="secondary" :loading="copying" :disabled="!copySourceId" @click="copyAnswers">
+            <span class="mdi mdi-content-copy mr-1.5"></span>Copy Answers
+          </BaseButton>
+        </div>
+      </div>
 
       <!-- Sections + questions -->
       <template v-for="group in groupedSections" :key="group.id ?? '__ungrouped'">

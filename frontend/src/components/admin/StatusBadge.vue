@@ -12,6 +12,7 @@ const styles = {
   under_review: 'bg-warning-light text-[#8C6500] border border-warning/30',
   awarded:      'bg-success-light text-success-dark border border-success/30',
   rejected:     'bg-danger-light text-danger-dark border border-danger/30',
+  archived:     'bg-[#F4F7FE] text-slate-400 border border-[#E9EDF7]',
 }
 
 const labels = {
@@ -20,6 +21,7 @@ const labels = {
   under_review: 'Under Review',
   awarded:      'Awarded',
   rejected:     'Rejected',
+  archived:     'Archived',
 }
 </script>
 
