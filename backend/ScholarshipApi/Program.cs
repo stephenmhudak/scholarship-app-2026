@@ -10,8 +10,17 @@ using ScholarshipApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Secrets come from secrets/*.env (Docker) or k8s Secrets; only appsettings.Development.json carries dev values
+var connectionString = builder.Configuration.GetConnectionString("Default");
+if (string.IsNullOrWhiteSpace(connectionString))
+    throw new InvalidOperationException("ConnectionStrings:Default must be configured (see secrets/db.env.example).");
+
+// The key signs every session token, so a missing, short or published key would let anyone mint an admin token
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey) || Encoding.UTF8.GetByteCount(jwtKey) < 32 || jwtKey.StartsWith("REPLACE_", StringComparison.Ordinal))
+    throw new InvalidOperationException("Jwt:Key must be a random secret of at least 32 bytes (see secrets/jwt.env.example).");
+
 // Run DbUp migrations before the host starts
-var connectionString = builder.Configuration.GetConnectionString("Default")!;
 EnsureDatabase.For.MySqlDatabase(connectionString);
 
 var upgrader = DeployChanges.To
@@ -28,7 +37,6 @@ if (!migrationResult.Successful)
 builder.Services.AddSqlKata();
 
 // JWT Authentication
-var jwtKey = builder.Configuration["Jwt:Key"]!;
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -51,6 +59,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITwoFactorService, TwoFactorService>();
 // Built eagerly so a missing or malformed TwoFactor:EncryptionKey stops startup instead of failing at sign-in
 builder.Services.AddSingleton(new TotpSecretProtector(builder.Configuration));
+builder.Services.AddScoped<ApplicationAccess>();
 builder.Services.AddScoped<IApplicationService, ApplicationService>();
 builder.Services.AddScoped<IScoringService, ScoringService>();
 builder.Services.AddScoped<IReferenceService, ReferenceService>();

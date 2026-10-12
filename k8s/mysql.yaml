@@ -1,13 +1,4 @@
 apiVersion: v1
-kind: Secret
-metadata:
-  name: mysql-secret
-type: Opaque
-stringData:
-  MYSQL_ROOT_PASSWORD: App!Password_2026
-  MYSQL_DATABASE: scholarship_db
----
-apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: mysql-pvc
@@ -32,6 +23,7 @@ spec:
       containers:
         - name: mysql
           image: mysql:8.0
+          # Created out-of-band (see k8s/mysql-secret.example.yaml)
           envFrom:
             - secretRef: { name: mysql-secret }
           ports:

@@ -18,9 +18,10 @@ public class SchoolsController(QueryFactory db, ITwoFactorService twoFactorServi
     private string? UserSchoolId => User.FindFirstValue("schoolId");
     private bool IsSchoolAdmin => User.IsInRole("school_admin");
 
+    // App admins see every school; everyone else (school admins, counselors, scorers) only their own.
     private IActionResult? EnforceSchoolOwnership(string schoolId)
     {
-        if (IsSchoolAdmin && UserSchoolId != schoolId)
+        if (!User.IsInRole("app_admin") && UserSchoolId != schoolId)
             return Forbid();
         return null;
     }

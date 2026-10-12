@@ -39,7 +39,7 @@ public class ApplicationService(QueryFactory db) : IApplicationService
             .FirstOrDefaultAsync<ApplicationDto>()
             ?? throw new KeyNotFoundException("Application not found.");
 
-        if (requestingRole == "applicant" && app.ApplicantId != requestingUserId)
+        if (!ApplicationAccess.CanView(app.ApplicantId, app.Status, requestingUserId, requestingRole))
             throw new UnauthorizedAccessException("Access denied.");
 
         await FillCycleInfoAsync([app]);
@@ -101,12 +101,30 @@ public class ApplicationService(QueryFactory db) : IApplicationService
         if (app.Status != "draft") throw new ArgumentException("Only draft applications can be edited.");
         await EnsureCycleOpenAsync(app.CycleId);
 
+        var questions = (await db.Query("Questions").Where("CycleId", app.CycleId).GetAsync<Question>()).ToList();
+        var questionIds = questions.Select(q => q.Id).ToHashSet();
+        var richTextQuestionIds = questions.Where(IsRichText).Select(q => q.Id).ToHashSet();
+        var fileQuestionIds = questions.Where(q => q.Type == "file_upload").Select(q => q.Id).ToHashSet();
+
+        // A file answer grants access to the file (see ApplicationAccess), so it may only name the
+        // applicant's own uploads: from this application, or one they copied answers from.
+        var fileIds = request.Answers
+            .Where(a => fileQuestionIds.Contains(a.QuestionId) && !string.IsNullOrEmpty(a.TextValue))
+            .Select(a => a.TextValue!).Distinct().ToList();
+        if (fileIds.Count > 0)
+        {
+            var ownFileCount = await db.Query("ApplicationFiles as f")
+                .Join("Applications as a", "a.Id", "f.ApplicationId")
+                .WhereIn("f.Id", fileIds)
+                .Where("a.ApplicantId", applicantId)
+                .CountAsync<int>();
+            if (ownFileCount != fileIds.Count)
+                throw new ArgumentException("One of the uploaded files couldn't be found. Please upload it again.");
+        }
+
         await db.Query("ApplicationAnswers").Where("ApplicationId", id).DeleteAsync();
 
-        var richTextQuestionIds = (await db.Query("Questions").Where("CycleId", app.CycleId).GetAsync<Question>())
-            .Where(IsRichText).Select(q => q.Id).ToHashSet();
-
-        foreach (var answer in request.Answers)
+        foreach (var answer in request.Answers.Where(a => questionIds.Contains(a.QuestionId)))
         {
             await db.Query("ApplicationAnswers").InsertAsync(new
             {

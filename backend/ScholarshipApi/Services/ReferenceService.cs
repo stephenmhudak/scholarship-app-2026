@@ -19,7 +19,7 @@ public class ReferenceService(QueryFactory db, IFileStorageService fileStorage) 
         var app = await db.Query("Applications").Where("Id", applicationId).FirstOrDefaultAsync<Application>()
             ?? throw new KeyNotFoundException("Application not found.");
 
-        if (role == "applicant" && app.ApplicantId != userId)
+        if (!ApplicationAccess.CanView(app.ApplicantId, app.Status, userId, role))
             throw new UnauthorizedAccessException("Access denied.");
 
         return await db.Query("References").Where("ApplicationId", applicationId).GetAsync<ReferenceDto>();
