@@ -71,6 +71,22 @@ public class FilesController(IFileStorageService fileStorage, QueryFactory db) :
         return File(stream, contentType, fileName);
     }
 
+    // Lets the application form show which file is already attached when an applicant resumes a draft.
+    [HttpGet("{fileId}/info")]
+    public async Task<IActionResult> Info(string fileId)
+    {
+        var record = await GetRecordAsync(fileId);
+
+        if (UserRole == "applicant")
+        {
+            var application = await db.Query("Applications").Where("Id", record.ApplicationId).FirstOrDefaultAsync<Application>();
+            if (application is null || application.ApplicantId != UserId)
+                throw new UnauthorizedAccessException("You do not have permission to view this file.");
+        }
+
+        return Ok(new { id = record.Id, fileName = record.FileName, uploadedAt = record.UploadedAt });
+    }
+
     [HttpDelete("{fileId}")]
     public async Task<IActionResult> Delete(string fileId)
     {
