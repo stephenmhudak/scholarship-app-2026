@@ -8,13 +8,30 @@ namespace ScholarshipApi.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController(IAuthService authService) : ControllerBase
+public class AuthController(IAuthService authService, ITwoFactorService twoFactorService) : ControllerBase
 {
+    private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)
+        ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)!;
+
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         var result = await authService.LoginAsync(request);
+        return Ok(result.Body);
+    }
+
+    [HttpPost("login/2fa")]
+    public async Task<IActionResult> LoginTwoFactor([FromBody] TwoFactorLoginRequest request)
+    {
+        var result = await authService.CompleteTwoFactorLoginAsync(request);
         return Ok(result);
+    }
+
+    [HttpPost("login/2fa/resend")]
+    public async Task<IActionResult> ResendTwoFactorEmail([FromBody] TwoFactorResendRequest request)
+    {
+        await authService.ResendTwoFactorEmailAsync(request.ChallengeToken);
+        return NoContent();
     }
 
     [HttpPost("register")]
@@ -28,7 +45,7 @@ public class AuthController(IAuthService authService) : ControllerBase
     public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailRequest request)
     {
         var result = await authService.VerifyEmailAsync(request.Token);
-        return Ok(result);
+        return Ok(result.Body);
     }
 
     [HttpPost("resend-verification")]
@@ -36,6 +53,84 @@ public class AuthController(IAuthService authService) : ControllerBase
     {
         await authService.ResendVerificationAsync(request.Email);
         return NoContent();
+    }
+
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        await authService.ForgotPasswordAsync(request.Email);
+        return NoContent();
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordWithCodeRequest request)
+    {
+        var result = await authService.ResetPasswordAsync(request);
+        return Ok(result.Body);
+    }
+
+    [HttpPost("change-password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        await authService.ChangePasswordAsync(UserId, request);
+        return NoContent();
+    }
+
+    [HttpGet("2fa")]
+    [Authorize]
+    public async Task<IActionResult> GetTwoFactorStatus()
+    {
+        var result = await twoFactorService.GetStatusAsync(UserId);
+        return Ok(result);
+    }
+
+    [HttpPost("2fa/setup")]
+    [Authorize]
+    public async Task<IActionResult> BeginTwoFactorSetup()
+    {
+        var result = await twoFactorService.BeginSetupAsync(UserId);
+        return Ok(result);
+    }
+
+    [HttpPost("2fa/enable")]
+    [Authorize]
+    public async Task<IActionResult> EnableTwoFactor([FromBody] TwoFactorEnableRequest request)
+    {
+        var result = await twoFactorService.EnableAsync(UserId, request.Code);
+        return Ok(result);
+    }
+
+    [HttpPost("2fa/email/setup")]
+    [Authorize]
+    public async Task<IActionResult> BeginEmailTwoFactorSetup()
+    {
+        await twoFactorService.BeginEmailSetupAsync(UserId);
+        return NoContent();
+    }
+
+    [HttpPost("2fa/email/enable")]
+    [Authorize]
+    public async Task<IActionResult> EnableEmailTwoFactor([FromBody] TwoFactorEnableRequest request)
+    {
+        await twoFactorService.EnableEmailAsync(UserId, request.Code);
+        return NoContent();
+    }
+
+    [HttpPost("2fa/disable")]
+    [Authorize]
+    public async Task<IActionResult> DisableTwoFactor([FromBody] TwoFactorPasswordRequest request)
+    {
+        await twoFactorService.DisableAsync(UserId, request.Password);
+        return NoContent();
+    }
+
+    [HttpPost("2fa/recovery-codes")]
+    [Authorize]
+    public async Task<IActionResult> RegenerateRecoveryCodes([FromBody] TwoFactorPasswordRequest request)
+    {
+        var result = await twoFactorService.RegenerateRecoveryCodesAsync(UserId, request.Password);
+        return Ok(result);
     }
 
     [HttpGet("invite/{token}")]
@@ -49,9 +144,7 @@ public class AuthController(IAuthService authService) : ControllerBase
     [Authorize]
     public async Task<IActionResult> Me()
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)!;
-        var user = await authService.GetCurrentUserAsync(userId);
+        var user = await authService.GetCurrentUserAsync(UserId);
         var permissions = await authService.GetPermissionsForRoleAsync(user.Role);
         return Ok(new { user.Id, user.Email, user.FirstName, user.LastName, user.Role, user.SchoolId, Permissions = permissions });
     }

@@ -3,13 +3,14 @@ using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using SqlKata.Execution;
 using ScholarshipApi.Models;
+using ScholarshipApi.Services;
 
 namespace ScholarshipApi.Controllers;
 
 [ApiController]
 [Route("api/schools")]
 [Authorize]
-public class SchoolsController(QueryFactory db) : ControllerBase
+public class SchoolsController(QueryFactory db, ITwoFactorService twoFactorService) : ControllerBase
 {
     private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)
         ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)!;
@@ -103,6 +104,7 @@ public class SchoolsController(QueryFactory db) : ControllerBase
             .Where("Role", "counselor")
             .Where("SchoolId", id)
             .Select("Id", "FirstName", "LastName", "Email", "CreatedAt")
+            .SelectRaw("TwoFactorMethod IS NOT NULL AS TwoFactorEnabled")
             .OrderBy("LastName")
             .GetAsync<dynamic>();
         return Ok(counselors);
@@ -174,6 +176,24 @@ public class SchoolsController(QueryFactory db) : ControllerBase
         {
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword)
         });
+        return NoContent();
+    }
+
+    [HttpPost("{id}/counselors/{counselorId}/reset-2fa")]
+    [Authorize(Policy = "SchoolAdmin")]
+    public async Task<IActionResult> ResetCounselorTwoFactor(string id, string counselorId)
+    {
+        var guard = EnforceSchoolOwnership(id);
+        if (guard != null) return guard;
+
+        var exists = await db.Query("Users")
+            .Where("Id", counselorId)
+            .Where("SchoolId", id)
+            .Where("Role", "counselor")
+            .ExistsAsync();
+        if (!exists) throw new KeyNotFoundException("Counselor not found.");
+
+        await twoFactorService.ResetByAdminAsync(counselorId);
         return NoContent();
     }
 }

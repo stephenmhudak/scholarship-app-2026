@@ -1,6 +1,9 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import api from '../../services/api'
+import { useConfirm } from '../../composables/useConfirm'
+
+const confirm = useConfirm()
 
 const activeTab = ref('users')
 
@@ -25,6 +28,7 @@ const userHeaders = [
   { title: 'Email', key: 'Email' },
   { title: 'Role', key: 'Role' },
   { title: 'School', key: 'SchoolName' },
+  { title: '2FA', key: 'TwoFactorEnabled', value: (u) => !!u.TwoFactorEnabled },
   { title: '', key: 'actions', sortable: false, align: 'end' },
 ]
 
@@ -109,6 +113,22 @@ async function submitResetPassword() {
     showAlert('error', err.response?.data?.error || 'Failed to reset password.')
   } finally {
     resetPasswordLoading.value = false
+  }
+}
+
+async function resetTwoFactor(user) {
+  if (!await confirm({
+    title: 'Reset two-factor?',
+    text: `${user.FirstName} ${user.LastName} will be able to sign in with just their password, and can set up two-factor again from their Account page. Only do this after confirming their identity.`,
+    confirmText: 'Reset 2FA',
+    color: 'error',
+  })) return
+  try {
+    await api.post(`/admin/users/${user.Id}/reset-2fa`)
+    user.TwoFactorEnabled = false
+    showAlert('success', 'Two-factor authentication reset.')
+  } catch (err) {
+    showAlert('error', err.response?.data?.error || 'Failed to reset two-factor.')
   }
 }
 
@@ -274,8 +294,13 @@ onMounted(() => { loadUsers(); loadSchools() })
           <template #item.SchoolName="{ value }">
             <span class="text-slate-400">{{ value ?? '—' }}</span>
           </template>
+          <template #item.TwoFactorEnabled="{ value }">
+            <v-chip v-if="value" color="success">On</v-chip>
+            <span v-else class="text-slate-400">—</span>
+          </template>
           <template #item.actions="{ item }">
             <v-btn variant="text" color="primary" size="small" @click="openResetPassword(item)">Reset Password</v-btn>
+            <v-btn v-if="item.TwoFactorEnabled" variant="text" color="error" size="small" @click="resetTwoFactor(item)">Reset 2FA</v-btn>
           </template>
         </v-data-table>
       </v-card>

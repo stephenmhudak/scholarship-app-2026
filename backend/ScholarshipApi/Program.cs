@@ -48,6 +48,9 @@ builder.Services.AddAuthorization(RolePolicies.Configure);
 
 // Application services
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ITwoFactorService, TwoFactorService>();
+// Built eagerly so a missing or malformed TwoFactor:EncryptionKey stops startup instead of failing at sign-in
+builder.Services.AddSingleton(new TotpSecretProtector(builder.Configuration));
 builder.Services.AddScoped<IApplicationService, ApplicationService>();
 builder.Services.AddScoped<IScoringService, ScoringService>();
 builder.Services.AddScoped<IReferenceService, ReferenceService>();

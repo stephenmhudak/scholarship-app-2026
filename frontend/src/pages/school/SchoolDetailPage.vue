@@ -109,6 +109,22 @@ async function removeCounselor(counselor) {
   }
 }
 
+async function resetCounselorTwoFactor(counselor) {
+  if (!await confirm({
+    title: 'Reset two-factor?',
+    text: `${counselor.FirstName} ${counselor.LastName} will be able to sign in with just their password, and can set up two-factor again from their Account page. Only do this after confirming their identity.`,
+    confirmText: 'Reset 2FA',
+    color: 'error',
+  })) return
+  try {
+    await api.post(`/schools/${schoolId}/counselors/${counselor.Id}/reset-2fa`)
+    counselor.TwoFactorEnabled = false
+    showAlert('success', 'Two-factor authentication reset.')
+  } catch (err) {
+    showAlert('error', err.response?.data?.error || 'Failed to reset two-factor.')
+  }
+}
+
 // ── Reset counselor password ──────────────────────────────────────────────────
 const showResetPassword = ref(false)
 const resetTarget = ref(null)
@@ -191,6 +207,7 @@ async function submitResetPassword() {
               <v-list-item class="px-0" :title="`${c.FirstName} ${c.LastName}`" :subtitle="c.Email">
                 <template #append>
                   <v-btn variant="text" color="primary" size="small" @click="openResetPassword(c)">Reset Password</v-btn>
+                  <v-btn v-if="c.TwoFactorEnabled" variant="text" color="error" size="small" @click="resetCounselorTwoFactor(c)">Reset 2FA</v-btn>
                   <v-btn variant="text" color="error" size="small" @click="removeCounselor(c)">Remove</v-btn>
                 </template>
               </v-list-item>

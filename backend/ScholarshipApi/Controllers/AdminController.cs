@@ -11,7 +11,7 @@ namespace ScholarshipApi.Controllers;
 [ApiController]
 [Route("api/admin")]
 [Authorize(Policy = "AppAdmin")]
-public class AdminController(IApplicationService applicationService, QueryFactory db) : ControllerBase
+public class AdminController(IApplicationService applicationService, ITwoFactorService twoFactorService, QueryFactory db) : ControllerBase
 {
     // ── Applications ──────────────────────────────────────────────────────────
 
@@ -131,6 +131,7 @@ public class AdminController(IApplicationService applicationService, QueryFactor
             .LeftJoin("Schools as s", "s.Id", "u.SchoolId")
             .Select("u.Id", "u.Email", "u.FirstName", "u.LastName", "u.Role", "u.SchoolId",
                     "s.Name as SchoolName", "u.CreatedAt")
+            .SelectRaw("u.TwoFactorMethod IS NOT NULL AS TwoFactorEnabled")
             .OrderBy("u.LastName", "u.FirstName")
             .GetAsync<dynamic>();
         return Ok(users);
@@ -168,6 +169,13 @@ public class AdminController(IApplicationService applicationService, QueryFactor
         {
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword)
         });
+        return NoContent();
+    }
+
+    [HttpPost("users/{id}/reset-2fa")]
+    public async Task<IActionResult> ResetTwoFactor(string id)
+    {
+        await twoFactorService.ResetByAdminAsync(id);
         return NoContent();
     }
 

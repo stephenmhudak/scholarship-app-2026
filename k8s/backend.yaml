@@ -31,6 +31,8 @@ spec:
             - secretRef:
                 name: email-credentials
                 optional: true
+            - secretRef:
+                name: twofactor-credentials
 ---
 apiVersion: v1
 kind: Service

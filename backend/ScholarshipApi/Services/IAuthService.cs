@@ -5,10 +5,15 @@ namespace ScholarshipApi.Services;
 
 public interface IAuthService
 {
-    Task<AuthResponse> LoginAsync(LoginRequest request);
+    Task<LoginResult> LoginAsync(LoginRequest request);
+    Task<AuthResponse> CompleteTwoFactorLoginAsync(TwoFactorLoginRequest request);
+    Task ResendTwoFactorEmailAsync(string challengeToken);
     Task<RegisterResponse> RegisterAsync(RegisterRequest request);
-    Task<AuthResponse> VerifyEmailAsync(string token);
+    Task<LoginResult> VerifyEmailAsync(string token);
     Task ResendVerificationAsync(string email);
+    Task ForgotPasswordAsync(string email);
+    Task<LoginResult> ResetPasswordAsync(ResetPasswordWithCodeRequest request);
+    Task ChangePasswordAsync(string userId, ChangePasswordRequest request);
     Task<User> GetCurrentUserAsync(string userId);
     Task<InviteInfoResponse> GetInviteAsync(string token);
     Task<IEnumerable<string>> GetPermissionsForRoleAsync(string roleName);
