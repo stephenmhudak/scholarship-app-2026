@@ -5,14 +5,19 @@ using ScholarshipApi.Models;
 
 namespace ScholarshipApi.Services;
 
-public class ScoringService(QueryFactory db, IApplicationService applicationService) : IScoringService
+public class ScoringService(QueryFactory db, IApplicationService applicationService, ApplicationAccess access) : IScoringService
 {
+    // Mirrors the limits on frontend/src/components/scoring/ScoringForm.vue
+    private const decimal MinScore = 1;
+    private const decimal MaxScore = 100;
+    private const int MaxCommentLength = 5000;
+
     public async Task<IEnumerable<ScoringQueueItemDto>> GetQueueAsync(string scorerId)
     {
         var apps = (await db.Query("Applications as a")
             .Join("Users as u", "u.Id", "a.ApplicantId")
             .Select("a.Id", "a.CycleId", "a.Status", "u.FirstName", "u.LastName", "a.SubmittedAt")
-            .WhereNotIn("a.Status", new[] { "draft", "archived" })
+            .Where(ApplicationAccess.Scoreable(DateTime.UtcNow))
             .OrderByDesc("a.SubmittedAt")
             .GetAsync<ScoringQueueItemDto>()).ToList();
 
@@ -65,13 +70,35 @@ public class ScoringService(QueryFactory db, IApplicationService applicationServ
 
     public async Task SubmitScoreAsync(string applicationId, string scorerId, SubmitScoreRequest request, bool isAdmin = false)
     {
+        var app = await db.Query("Applications").Where("Id", applicationId).FirstOrDefaultAsync<Application>()
+            ?? throw new KeyNotFoundException("Application not found.");
+        if (!await access.IsScoreableAsync(app.Status, app.CycleId))
+            throw new ArgumentException("This application can't be scored until it's submitted or its cycle has ended.");
+
+        var sectionScores = request.SectionScores ?? [];
+        if (sectionScores.Count == 0) throw new ArgumentException("Enter at least one score.");
+        if (sectionScores.GroupBy(s => s.SectionId).Any(g => g.Count() > 1))
+            throw new ArgumentException("Each section can only be scored once.");
+
+        // Cycles with sections are scored per section; cycles without get one overall score (no section)
+        var sectionIds = (await db.Query("Sections").Where("CycleId", app.CycleId).Select("Id").GetAsync<string>()).ToHashSet();
+        foreach (var s in sectionScores)
+        {
+            var validSection = sectionIds.Count == 0 ? s.SectionId is null : s.SectionId is not null && sectionIds.Contains(s.SectionId);
+            if (!validSection) throw new ArgumentException("A score is for a section that isn't part of this application.");
+            if (s.Score < MinScore || s.Score > MaxScore)
+                throw new ArgumentException($"Scores must be between {MinScore} and {MaxScore}.");
+            if (s.Comments?.Length > MaxCommentLength)
+                throw new ArgumentException($"Comments must be at most {MaxCommentLength} characters.");
+        }
+
         await db.Query("Scores")
             .Where("ApplicationId", applicationId)
             .Where("ScoredById", scorerId)
             .DeleteAsync();
 
         var now = DateTime.UtcNow;
-        foreach (var s in request.SectionScores)
+        foreach (var s in sectionScores)
         {
             await db.Query("Scores").InsertAsync(new
             {
@@ -79,8 +106,8 @@ public class ScoringService(QueryFactory db, IApplicationService applicationServ
                 ApplicationId = applicationId,
                 ScoredById = scorerId,
                 SectionId = s.SectionId,
-                Score = s.Score,
-                Comments = s.Comments,
+                Score = Math.Round(s.Score, 2),
+                Comments = string.IsNullOrWhiteSpace(s.Comments) ? null : s.Comments.Trim(),
                 ScoredAt = now
             });
         }

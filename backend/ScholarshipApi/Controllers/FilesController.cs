@@ -11,7 +11,7 @@ namespace ScholarshipApi.Controllers;
 [ApiController]
 [Route("api/files")]
 [Authorize]
-public class FilesController(IFileStorageService fileStorage, QueryFactory db) : ControllerBase
+public class FilesController(IFileStorageService fileStorage, ApplicationAccess access, QueryFactory db) : ControllerBase
 {
     private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)
         ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)!;
@@ -66,9 +66,20 @@ public class FilesController(IFileStorageService fileStorage, QueryFactory db) :
     public async Task<IActionResult> Download(string fileId)
     {
         var record = await GetRecordAsync(fileId);
+        await access.EnsureCanViewFileAsync(record, UserId, UserRole);
 
         var (stream, contentType, fileName) = await fileStorage.RetrieveAsync(record.StoragePath, record.FileName);
         return File(stream, contentType, fileName);
+    }
+
+    // Lets the application form show which file is already attached when an applicant resumes a draft.
+    [HttpGet("{fileId}/info")]
+    public async Task<IActionResult> Info(string fileId)
+    {
+        var record = await GetRecordAsync(fileId);
+        await access.EnsureCanViewFileAsync(record, UserId, UserRole);
+
+        return Ok(new { id = record.Id, fileName = record.FileName, uploadedAt = record.UploadedAt });
     }
 
     [HttpDelete("{fileId}")]

@@ -16,7 +16,6 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
     private static readonly TimeSpan ResendCooldown = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan ResetCodeLifetime = TimeSpan.FromMinutes(15);
     private const int MaxResetCodeAttempts = 5;
-    private const int MinPasswordLength = 8;
     private static readonly TimeSpan TwoFactorChallengeLifetime = TimeSpan.FromMinutes(5);
     private const int MaxChallengeAttempts = 5;
     private static readonly TimeSpan TwoFactorAttemptWindow = TimeSpan.FromMinutes(15);
@@ -139,58 +138,72 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
 
     public async Task<RegisterResponse> RegisterAsync(RegisterRequest request)
     {
-        var exists = await db.Query("Users").Where("Email", request.Email).ExistsAsync();
+        var emailAddress = InputValidation.Email(request.Email);
+        InputValidation.Password(request.Password);
+        var firstName = InputValidation.Required(request.FirstName, "First name", 100);
+        var lastName = InputValidation.Required(request.LastName, "Last name", 100);
+
+        var exists = await db.Query("Users").Where("Email", emailAddress).ExistsAsync();
         if (exists) throw new ArgumentException("Email is already registered.");
 
-        string role = "applicant";
-        string? schoolId = null;
-        string? inviteId = null;
-
-        if (!string.IsNullOrEmpty(request.InviteToken))
-        {
-            var invite = await db.Query("SchoolAdminInvites")
-                .Where("Token", request.InviteToken)
-                .WhereNull("UsedAt")
-                .Where("ExpiresAt", ">", DateTime.UtcNow)
-                .FirstOrDefaultAsync<dynamic>()
-                ?? throw new ArgumentException("Invite link is invalid or has expired.");
-
-            if (string.IsNullOrWhiteSpace(request.SchoolName))
-                throw new ArgumentException("School name is required.");
-
-            var newSchoolId = Guid.NewGuid().ToString();
-            await db.Query("Schools").InsertAsync(new
-            {
-                Id = newSchoolId,
-                Name = request.SchoolName.Trim(),
-                AddressLine1 = request.SchoolAddressLine1?.Trim() ?? string.Empty,
-                AddressLine2 = request.SchoolAddressLine2?.Trim() ?? string.Empty,
-                City = request.SchoolCity?.Trim() ?? string.Empty,
-                State = request.SchoolState?.Trim() ?? string.Empty,
-                Zip = request.SchoolZip?.Trim() ?? string.Empty,
-                CreatedAt = DateTime.UtcNow
-            });
-
-            role = "school_admin";
-            schoolId = newSchoolId;
-            inviteId = (string)invite.Id;
-        }
-
         var id = Guid.NewGuid().ToString();
-        await db.Query("Users").InsertAsync(new
-        {
-            Id = id,
-            Email = request.Email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            FirstName = request.FirstName,
-            LastName = request.LastName,
-            Role = role,
-            SchoolId = schoolId,
-            CreatedAt = DateTime.UtcNow
-        });
+        var now = DateTime.UtcNow;
 
-        if (inviteId is not null)
-            await db.Query("SchoolAdminInvites").Where("Id", inviteId).UpdateAsync(new { UsedAt = DateTime.UtcNow, SchoolId = schoolId });
+        if (db.Connection.State != System.Data.ConnectionState.Open) db.Connection.Open();
+        using (var transaction = db.Connection.BeginTransaction())
+        {
+            string role = "applicant";
+            string? schoolId = null;
+
+            if (!string.IsNullOrEmpty(request.InviteToken))
+            {
+                var schoolName = InputValidation.Required(request.SchoolName, "School name", 255);
+                const string invalidInvite = "Invite link is invalid or has expired.";
+                var inviteId = await db.Query("SchoolAdminInvites")
+                    .Where("TokenHash", HashToken(request.InviteToken))
+                    .WhereNull("UsedAt")
+                    .Where("ExpiresAt", ">", now)
+                    .Select("Id")
+                    .FirstOrDefaultAsync<string>(transaction)
+                    ?? throw new ArgumentException(invalidInvite);
+
+                // Claim the invite first and conditionally, so two registrations racing on one link can't both use it.
+                // Rolled back with everything else if the registration fails.
+                var claimed = await db.StatementAsync(
+                    "UPDATE SchoolAdminInvites SET UsedAt = @Now WHERE Id = @Id AND UsedAt IS NULL",
+                    new { Id = inviteId, Now = now }, transaction);
+                if (claimed == 0) throw new ArgumentException(invalidInvite);
+
+                schoolId = Guid.NewGuid().ToString();
+                await db.Query("Schools").InsertAsync(new
+                {
+                    Id = schoolId,
+                    Name = schoolName,
+                    AddressLine1 = InputValidation.Optional(request.SchoolAddressLine1, "Address line 1", 500, ""),
+                    AddressLine2 = InputValidation.Optional(request.SchoolAddressLine2, "Address line 2", 500, ""),
+                    City = InputValidation.Optional(request.SchoolCity, "City", 200, ""),
+                    State = InputValidation.Optional(request.SchoolState, "State", 100, ""),
+                    Zip = InputValidation.Optional(request.SchoolZip, "Zip", 20, ""),
+                    CreatedAt = now
+                }, transaction);
+                await db.Query("SchoolAdminInvites").Where("Id", inviteId).UpdateAsync(new { SchoolId = schoolId }, transaction);
+                role = "school_admin";
+            }
+
+            await db.Query("Users").InsertAsync(new
+            {
+                Id = id,
+                Email = emailAddress,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+                FirstName = firstName,
+                LastName = lastName,
+                Role = role,
+                SchoolId = schoolId,
+                CreatedAt = now
+            }, transaction);
+
+            transaction.Commit();
+        }
 
         var user = await db.Query("Users").Where("Id", id).FirstAsync<User>();
         await TrySendVerificationEmailAsync(user);
@@ -327,7 +340,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
     public async Task<LoginResult> ResetPasswordAsync(ResetPasswordWithCodeRequest request)
     {
         const string invalidCode = "That code is invalid or has expired. Request a new one and try again.";
-        ValidateNewPassword(request.NewPassword);
+        InputValidation.Password(request.NewPassword);
 
         var user = await db.Query("Users").Where("Email", request.Email?.Trim() ?? "").FirstOrDefaultAsync<User>()
             ?? throw new ArgumentException(invalidCode);
@@ -353,6 +366,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         var now = DateTime.UtcNow;
         await db.Query("PasswordResetCodes").Where("UserId", user.Id).WhereNull("UsedAt").UpdateAsync(new { UsedAt = now });
         await db.Query("Users").Where("Id", user.Id).UpdateAsync(new { PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword) });
+        await SessionVersion.BumpAsync(db, user.Id);
         // Receiving the code proves the user owns the address, so any outstanding verification links are no longer needed
         await db.Query("Users").Where("Id", user.Id).WhereNull("EmailVerifiedAt").UpdateAsync(new { EmailVerifiedAt = now });
         await db.Query("EmailVerificationTokens").Where("UserId", user.Id).WhereNull("UsedAt").UpdateAsync(new { UsedAt = now });
@@ -369,20 +383,15 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         if (string.IsNullOrEmpty(request.CurrentPassword) || !BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
             throw new ArgumentException("Current password is incorrect.");
 
-        ValidateNewPassword(request.NewPassword);
+        InputValidation.Password(request.NewPassword);
         if (request.NewPassword == request.CurrentPassword)
             throw new ArgumentException("New password must be different from your current password.");
 
         await db.Query("Users").Where("Id", userId).UpdateAsync(new { PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword) });
         await db.Query("PasswordResetCodes").Where("UserId", userId).WhereNull("UsedAt").UpdateAsync(new { UsedAt = DateTime.UtcNow });
+        await SessionVersion.BumpAsync(db, userId);
 
         await TrySendPasswordChangedEmailAsync(user);
-    }
-
-    private static void ValidateNewPassword(string? password)
-    {
-        if (string.IsNullOrEmpty(password) || password.Length < MinPasswordLength)
-            throw new ArgumentException($"Password must be at least {MinPasswordLength} characters.");
     }
 
     private async Task TrySendPasswordChangedEmailAsync(User user)
@@ -420,7 +429,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
     {
         var row = await db.Query("SchoolAdminInvites")
             .Select("ExpiresAt", "UsedAt")
-            .Where("Token", token)
+            .Where("TokenHash", HashToken(token ?? ""))
             .FirstOrDefaultAsync<dynamic>()
             ?? throw new KeyNotFoundException("Invite not found.");
 
@@ -448,6 +457,13 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
             .Select("p.Name")
             .GetAsync<dynamic>();
         return rows.Select(r => (string)r.Name).ToList();
+    }
+
+    // A fresh token for a signed-in user whose session version just changed, so their own session carries on
+    public async Task<string> IssueTokenAsync(string userId)
+    {
+        var user = await GetCurrentUserAsync(userId);
+        return GenerateToken(user, (await GetPermissionsForRoleAsync(user.Role)).ToList());
     }
 
     private AuthResponse BuildAuthResponse(User user, IEnumerable<string> permissions)
@@ -480,7 +496,8 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
             new(ClaimTypes.Role, user.Role),
             new(JwtRegisteredClaimNames.Email, user.Email),
             new("firstName", user.FirstName),
-            new("lastName", user.LastName)
+            new("lastName", user.LastName),
+            new(SessionVersion.Claim, user.SessionVersion.ToString())
         };
         if (!string.IsNullOrEmpty(user.SchoolId))
             claims.Add(new Claim("schoolId", user.SchoolId));

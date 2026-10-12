@@ -1,10 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using ScholarshipApi.Authorization;
 using ScholarshipApi.Services;
 
 namespace ScholarshipApi.Controllers;
 
 [ApiController]
 [Route("api/references")]
+[EnableRateLimiting(RateLimitPolicies.Public)]
 public class ReferencesController(IReferenceService referenceService) : ControllerBase
 {
     [HttpGet("{code}")]

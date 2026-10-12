@@ -13,6 +13,8 @@ namespace ScholarshipApi.Controllers;
 [Authorize(Policy = "AppAdmin")]
 public class AdminController(IApplicationService applicationService, ITwoFactorService twoFactorService, QueryFactory db) : ControllerBase
 {
+    private const int MaxPageSize = 100;
+
     // ── Applications ──────────────────────────────────────────────────────────
 
     [HttpGet("applications")]
@@ -22,6 +24,9 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
+        if (!string.IsNullOrEmpty(status)) InputValidation.ApplicationStatus(status);
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
         var items = await applicationService.AdminListAsync(status, search, page, pageSize);
         var total = await applicationService.AdminCountAsync(status, search);
         return Ok(new { data = items, total, page, pageSize });
@@ -42,7 +47,7 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
         var apps = (await db.Query("Applications as a")
             .Join("Users as u", "u.Id", "a.ApplicantId")
             .Select("a.Id as ApplicationId", "a.Status", "u.FirstName", "u.LastName", "a.SubmittedAt")
-            .WhereNotIn("a.Status", new[] { "draft", "archived" })
+            .Where(ApplicationAccess.Scoreable(DateTime.UtcNow))
             .OrderByDesc("a.SubmittedAt")
             .GetAsync<AppOverviewRow>()).ToList();
 
@@ -94,6 +99,7 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
     [HttpGet("applications/export")]
     public async Task<IActionResult> Export([FromQuery] string? status)
     {
+        if (!string.IsNullOrEmpty(status)) InputValidation.ApplicationStatus(status);
         var query = db.Query("Applications as a")
             .Join("Users as u", "u.Id", "a.ApplicantId")
             .Select("a.Id", "a.Status", "u.FirstName", "u.LastName", "u.Email", "a.SubmittedAt", "a.CreatedAt")
@@ -104,9 +110,23 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
         var csv = new StringBuilder();
         csv.AppendLine("Id,Status,FirstName,LastName,Email,SubmittedAt,CreatedAt");
         foreach (var row in rows)
-            csv.AppendLine($"{row.Id},{row.Status},{row.FirstName},{row.LastName},{row.Email},{row.SubmittedAt},{row.CreatedAt}");
+            csv.AppendLine(string.Join(",", new object?[] { row.Id, row.Status, row.FirstName, row.LastName, row.Email, row.SubmittedAt, row.CreatedAt }
+                .Select(CsvField)));
 
         return File(Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", "applications.csv");
+    }
+
+    // Quotes every field, and defuses values a spreadsheet would run as a formula (names and emails are applicant-entered)
+    private static string CsvField(object? value)
+    {
+        var text = value switch
+        {
+            null => "",
+            DateTime d => d.ToString("yyyy-MM-dd HH:mm:ss"),
+            _ => value.ToString() ?? ""
+        };
+        if (text.Length > 0 && "=+-@\t\r".Contains(text[0])) text = "'" + text;
+        return "\"" + text.Replace("\"", "\"\"") + "\"";
     }
 
     // ── Scorers ───────────────────────────────────────────────────────────────
@@ -140,19 +160,35 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
     [HttpPost("users")]
     public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request)
     {
-        var exists = await db.Query("Users").Where("Email", request.Email).ExistsAsync();
+        var email = InputValidation.Email(request.Email);
+        InputValidation.Password(request.Password);
+        var firstName = InputValidation.Required(request.FirstName, "First name", 100);
+        var lastName = InputValidation.Required(request.LastName, "Last name", 100);
+        var role = InputValidation.Role(request.Role);
+
+        // School staff belong to a school; nobody else does
+        string? schoolId = null;
+        if (role is "school_admin" or "counselor")
+        {
+            if (string.IsNullOrEmpty(request.SchoolId)) throw new ArgumentException("Choose a school for this user.");
+            if (!await db.Query("Schools").Where("Id", request.SchoolId).ExistsAsync())
+                throw new ArgumentException("That school doesn't exist.");
+            schoolId = request.SchoolId;
+        }
+
+        var exists = await db.Query("Users").Where("Email", email).ExistsAsync();
         if (exists) throw new ArgumentException("Email is already registered.");
 
         var id = Guid.NewGuid().ToString();
         await db.Query("Users").InsertAsync(new
         {
             Id = id,
-            Email = request.Email,
+            Email = email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            FirstName = request.FirstName,
-            LastName = request.LastName,
-            Role = request.Role,
-            SchoolId = string.IsNullOrEmpty(request.SchoolId) ? null : request.SchoolId,
+            FirstName = firstName,
+            LastName = lastName,
+            Role = role,
+            SchoolId = schoolId,
             EmailVerifiedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
         });
@@ -162,6 +198,7 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
     [HttpPost("users/{id}/reset-password")]
     public async Task<IActionResult> ResetPassword(string id, [FromBody] ResetPasswordRequest request)
     {
+        InputValidation.Password(request.NewPassword);
         var exists = await db.Query("Users").Where("Id", id).ExistsAsync();
         if (!exists) throw new KeyNotFoundException("User not found.");
 
@@ -169,6 +206,7 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
         {
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword)
         });
+        await SessionVersion.BumpAsync(db, id);
         return NoContent();
     }
 
@@ -191,15 +229,9 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
     [HttpPut("schools/{id}")]
     public async Task<IActionResult> AdminUpdateSchool(string id, [FromBody] AdminSchoolRequest request)
     {
-        await db.Query("Schools").Where("Id", id).UpdateAsync(new
-        {
-            Name = request.Name,
-            AddressLine1 = request.AddressLine1,
-            AddressLine2 = request.AddressLine2,
-            City = request.City,
-            State = request.State,
-            Zip = request.Zip
-        });
+        if (!await db.Query("Schools").Where("Id", id).ExistsAsync()) throw new KeyNotFoundException("School not found.");
+        await db.Query("Schools").Where("Id", id).UpdateAsync(SchoolFields.Validate(request.Name, request.AddressLine1,
+            request.AddressLine2, request.City, request.State, request.Zip));
         return NoContent();
     }
 
@@ -212,10 +244,11 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
         var token = Convert.ToBase64String(tokenBytes)
             .Replace("+", "-").Replace("/", "_").TrimEnd('=');
 
+        // Only the hash is stored; the link is shown to the admin once, here
         await db.Query("SchoolAdminInvites").InsertAsync(new
         {
             Id = Guid.NewGuid().ToString(),
-            Token = token,
+            TokenHash = TokenHash.Sha256(token),
             CreatedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddDays(7)
         });
@@ -228,7 +261,7 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
     {
         var invites = await db.Query("SchoolAdminInvites as i")
             .LeftJoin("Schools as s", "s.Id", "i.SchoolId")
-            .Select("i.Id", "i.Token", "s.Name as SchoolName", "i.CreatedAt", "i.ExpiresAt", "i.UsedAt")
+            .Select("i.Id", "s.Name as SchoolName", "i.CreatedAt", "i.ExpiresAt", "i.UsedAt")
             .OrderByDesc("i.CreatedAt")
             .GetAsync<dynamic>();
         return Ok(invites);
@@ -246,6 +279,11 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
     [HttpPost("cycles")]
     public async Task<IActionResult> CreateCycle([FromBody] CycleRequest request)
     {
+        var name = ValidateCycle(request);
+        if (!string.IsNullOrEmpty(request.CopyFromCycleId)
+            && !await db.Query("ScholarshipCycles").Where("Id", request.CopyFromCycleId).ExistsAsync())
+            throw new ArgumentException("The cycle to copy questions from doesn't exist.");
+
         var id = Guid.NewGuid().ToString();
         if (db.Connection.State != System.Data.ConnectionState.Open) db.Connection.Open();
         using var transaction = db.Connection.BeginTransaction();
@@ -253,7 +291,7 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
         await db.Query("ScholarshipCycles").InsertAsync(new
         {
             Id = id,
-            Name = request.Name,
+            Name = name,
             OpenDate = request.OpenDate,
             CloseDate = request.CloseDate,
             IsActive = request.IsActive
@@ -270,14 +308,24 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
     [HttpPut("cycles/{id}")]
     public async Task<IActionResult> UpdateCycle(string id, [FromBody] CycleRequest request)
     {
+        var name = ValidateCycle(request);
+        if (!await db.Query("ScholarshipCycles").Where("Id", id).ExistsAsync()) throw new KeyNotFoundException("Cycle not found.");
         await db.Query("ScholarshipCycles").Where("Id", id).UpdateAsync(new
         {
-            Name = request.Name,
+            Name = name,
             OpenDate = request.OpenDate,
             CloseDate = request.CloseDate,
             IsActive = request.IsActive
         });
         return NoContent();
+    }
+
+    private static string ValidateCycle(CycleRequest request)
+    {
+        var name = InputValidation.Required(request.Name, "Name", 255);
+        if (request.OpenDate == default || request.CloseDate == default) throw new ArgumentException("Open and close dates are required.");
+        if (request.CloseDate.Date < request.OpenDate.Date) throw new ArgumentException("The close date must be on or after the open date.");
+        return name;
     }
 }
 

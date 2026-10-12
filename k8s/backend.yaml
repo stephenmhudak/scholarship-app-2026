@@ -17,15 +17,16 @@ spec:
           ports:
             - containerPort: 8080
           env:
-            - name: ConnectionStrings__Default
-              value: "Server=mysql;Database=scholarship_db;User=root;Password=App!Password_2026;"
             - name: Storage__Provider
               value: "R2"
             - name: App__BaseUrl
               value: "https://scholarships.shudak.com"
-          # R2 and Resend credentials come from Secrets created out-of-band
-          # (see k8s/r2-secret.example.yaml and k8s/email-secret.example.yaml)
+          # Credentials come from Secrets created out-of-band (see k8s/*-secret.example.yaml)
           envFrom:
+            - secretRef:
+                name: jwt-credentials
+            - secretRef:
+                name: db-credentials
             - secretRef:
                 name: r2-credentials
             - secretRef:

@@ -20,9 +20,14 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// Response interceptor — redirect to /login on 401
+// Response interceptor — keep a replacement token, redirect to /login on 401
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Password and two-factor changes end every other session; the API hands this one a new token
+    const token = response.headers['x-session-token']
+    if (token) localStorage.setItem('auth_token', token)
+    return response
+  },
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('auth_token')

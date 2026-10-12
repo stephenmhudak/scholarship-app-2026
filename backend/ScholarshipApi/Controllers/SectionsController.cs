@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SqlKata.Execution;
 using ScholarshipApi.Models;
+using ScholarshipApi.Services;
 
 namespace ScholarshipApi.Controllers;
 
@@ -24,14 +25,17 @@ public class SectionsController(QueryFactory db) : ControllerBase
     [Authorize(Policy = "AppAdmin")]
     public async Task<IActionResult> Create(string cycleId, [FromBody] SectionRequest request)
     {
+        if (!await db.Query("ScholarshipCycles").Where("Id", cycleId).ExistsAsync()) throw new KeyNotFoundException("Cycle not found.");
+        var title = InputValidation.Required(request.Title, "Section title", 255);
+        var description = InputValidation.Optional(request.Description, "Description", 5000);
         var id = Guid.NewGuid().ToString();
         var maxOrder = await db.Query("Sections").Where("CycleId", cycleId).MaxAsync<int>("Order");
         await db.Query("Sections").InsertAsync(new
         {
             Id = id,
             CycleId = cycleId,
-            Title = request.Title,
-            Description = request.Description,
+            Title = title,
+            Description = description,
             Order = maxOrder + 1
         });
         return CreatedAtAction(nameof(List), new { cycleId }, new { id });
@@ -41,13 +45,17 @@ public class SectionsController(QueryFactory db) : ControllerBase
     [Authorize(Policy = "AppAdmin")]
     public async Task<IActionResult> Update(string cycleId, string sectionId, [FromBody] SectionRequest request)
     {
+        if (!await db.Query("Sections").Where("Id", sectionId).Where("CycleId", cycleId).ExistsAsync())
+            throw new KeyNotFoundException("Section not found.");
+        var title = InputValidation.Required(request.Title, "Section title", 255);
+        var description = InputValidation.Optional(request.Description, "Description", 5000);
         await db.Query("Sections")
             .Where("Id", sectionId)
             .Where("CycleId", cycleId)
             .UpdateAsync(new
             {
-                Title = request.Title,
-                Description = request.Description
+                Title = title,
+                Description = description
             });
         return NoContent();
     }

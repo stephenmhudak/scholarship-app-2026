@@ -1,12 +1,24 @@
-frontend/dist/
+# Dependencies and build output
 frontend/node_modules/
-backend/ScholarshipApi/Properties/launchSettings.json
-backend/ScholarshipApi/obj/
+frontend/dist/
 backend/ScholarshipApi/bin/
+backend/ScholarshipApi/obj/
+
+# Local machine and editor files
+backend/ScholarshipApi/Properties/launchSettings.json
 scholarship-app-2026.sln
+.DS_Store
+
+# Image exports
 backend.tar
 frontend.tar
+
+# Secrets: only the *.example files are committed
 .env
-k8s/r2-secret.yaml
-k8s/email-secret.yaml
+.env.*
+!.env.example
 secrets/*.env
+k8s/*-secret.yaml
+
+# Applicants' documents saved by local storage (Storage:Provider = Local)
+backend/ScholarshipApi/wwwroot/uploads/

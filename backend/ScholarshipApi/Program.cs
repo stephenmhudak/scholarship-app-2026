@@ -1,17 +1,29 @@
 using System.Reflection;
+using System.Security.Claims;
 using System.Text;
 using DbUp;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 using ScholarshipApi.Authorization;
 using ScholarshipApi.Data;
 using ScholarshipApi.Middleware;
 using ScholarshipApi.Services;
+using SqlKata.Execution;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Secrets come from secrets/*.env (Docker) or k8s Secrets; only appsettings.Development.json carries dev values
+var connectionString = builder.Configuration.GetConnectionString("Default");
+if (string.IsNullOrWhiteSpace(connectionString))
+    throw new InvalidOperationException("ConnectionStrings:Default must be configured (see secrets/db.env.example).");
+
+// The key signs every session token, so a missing, short or published key would let anyone mint an admin token
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey) || Encoding.UTF8.GetByteCount(jwtKey) < 32 || jwtKey.StartsWith("REPLACE_", StringComparison.Ordinal))
+    throw new InvalidOperationException("Jwt:Key must be a random secret of at least 32 bytes (see secrets/jwt.env.example).");
+
 // Run DbUp migrations before the host starts
-var connectionString = builder.Configuration.GetConnectionString("Default")!;
 EnsureDatabase.For.MySqlDatabase(connectionString);
 
 var upgrader = DeployChanges.To
@@ -28,7 +40,6 @@ if (!migrationResult.Successful)
 builder.Services.AddSqlKata();
 
 // JWT Authentication
-var jwtKey = builder.Configuration["Jwt:Key"]!;
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -42,15 +53,43 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
+        options.Events = new JwtBearerEvents
+        {
+            // Account changes bump Users.SessionVersion (see SessionVersion), ending every session issued before them.
+            // Deleted users fail here too.
+            OnTokenValidated = async context =>
+            {
+                var userId = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier)
+                    ?? context.Principal?.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+                var tokenVersion = context.Principal?.FindFirstValue(SessionVersion.Claim);
+                var db = context.HttpContext.RequestServices.GetRequiredService<QueryFactory>();
+                var currentVersion = userId is null ? null
+                    : await db.Query("Users").Where("Id", userId).Select("SessionVersion").FirstOrDefaultAsync<int?>();
+                if (currentVersion is null || tokenVersion != currentVersion.Value.ToString())
+                    context.Fail("This session has ended. Please sign in again.");
+            }
+        };
     });
 
 builder.Services.AddAuthorization(RolePolicies.Configure);
+builder.Services.AddRateLimiter(RateLimitPolicies.Configure);
+
+// Requests reach the API through two proxies: Caddy (or the k8s ingress), then the frontend's nginx.
+// The API port isn't published, so both hops are trusted and the client IP is the one before them.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
+    options.ForwardLimit = 2;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // Application services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITwoFactorService, TwoFactorService>();
 // Built eagerly so a missing or malformed TwoFactor:EncryptionKey stops startup instead of failing at sign-in
 builder.Services.AddSingleton(new TotpSecretProtector(builder.Configuration));
+builder.Services.AddScoped<ApplicationAccess>();
 builder.Services.AddScoped<IApplicationService, ApplicationService>();
 builder.Services.AddScoped<IScoringService, ScoringService>();
 builder.Services.AddScoped<IReferenceService, ReferenceService>();
@@ -92,8 +131,10 @@ if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();
 }
 
+app.UseForwardedHeaders();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseCors("Frontend");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

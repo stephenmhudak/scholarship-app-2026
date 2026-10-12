@@ -18,9 +18,10 @@ public class SchoolsController(QueryFactory db, ITwoFactorService twoFactorServi
     private string? UserSchoolId => User.FindFirstValue("schoolId");
     private bool IsSchoolAdmin => User.IsInRole("school_admin");
 
+    // App admins see every school; everyone else (school admins, counselors, scorers) only their own.
     private IActionResult? EnforceSchoolOwnership(string schoolId)
     {
-        if (IsSchoolAdmin && UserSchoolId != schoolId)
+        if (!User.IsInRole("app_admin") && UserSchoolId != schoolId)
             return Forbid();
         return null;
     }
@@ -56,15 +57,9 @@ public class SchoolsController(QueryFactory db, ITwoFactorService twoFactorServi
         var guard = EnforceSchoolOwnership(id);
         if (guard != null) return guard;
 
-        await db.Query("Schools").Where("Id", id).UpdateAsync(new
-        {
-            Name = request.Name,
-            AddressLine1 = request.AddressLine1,
-            AddressLine2 = request.AddressLine2,
-            City = request.City,
-            State = request.State,
-            Zip = request.Zip
-        });
+        var updated = await db.Query("Schools").Where("Id", id).UpdateAsync(SchoolFields.Validate(request.Name, request.AddressLine1,
+            request.AddressLine2, request.City, request.State, request.Zip));
+        if (updated == 0 && !await db.Query("Schools").Where("Id", id).ExistsAsync()) throw new KeyNotFoundException("School not found.");
         return NoContent();
     }
 
@@ -120,24 +115,29 @@ public class SchoolsController(QueryFactory db, ITwoFactorService twoFactorServi
         var schoolExists = await db.Query("Schools").Where("Id", id).ExistsAsync();
         if (!schoolExists) throw new KeyNotFoundException("School not found.");
 
-        var emailTaken = await db.Query("Users").Where("Email", request.Email).ExistsAsync();
+        var email = InputValidation.Email(request.Email);
+        InputValidation.Password(request.Password);
+        var firstName = InputValidation.Required(request.FirstName, "First name", 100);
+        var lastName = InputValidation.Required(request.LastName, "Last name", 100);
+
+        var emailTaken = await db.Query("Users").Where("Email", email).ExistsAsync();
         if (emailTaken) throw new ArgumentException("Email is already registered.");
 
         var counselorId = Guid.NewGuid().ToString();
         await db.Query("Users").InsertAsync(new
         {
             Id = counselorId,
-            Email = request.Email,
+            Email = email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            FirstName = request.FirstName,
-            LastName = request.LastName,
+            FirstName = firstName,
+            LastName = lastName,
             Role = "counselor",
             SchoolId = id,
             EmailVerifiedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
         });
 
-        return Ok(new { id = counselorId, firstName = request.FirstName, lastName = request.LastName, email = request.Email });
+        return Ok(new { id = counselorId, firstName, lastName, email });
     }
 
     [HttpDelete("{id}/counselors/{counselorId}")]
@@ -164,6 +164,7 @@ public class SchoolsController(QueryFactory db, ITwoFactorService twoFactorServi
     {
         var guard = EnforceSchoolOwnership(id);
         if (guard != null) return guard;
+        InputValidation.Password(request.NewPassword);
 
         var exists = await db.Query("Users")
             .Where("Id", counselorId)
@@ -176,6 +177,7 @@ public class SchoolsController(QueryFactory db, ITwoFactorService twoFactorServi
         {
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword)
         });
+        await SessionVersion.BumpAsync(db, counselorId);
         return NoContent();
     }
 

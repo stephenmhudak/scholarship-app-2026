@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import api from '../../services/api'
 import { MAX_FILE_SIZE } from '../../utils/fileUpload'
 
@@ -15,6 +15,25 @@ const file = ref(null)
 const uploading = ref(false)
 const uploadError = ref(null)
 const uploadedName = ref(null)
+// Id the current uploadedName belongs to, so a fresh upload doesn't trigger a lookup.
+const uploadedId = ref(null)
+
+// When resuming a draft the answer holds a fileId from an earlier session; look up its name.
+watch(() => props.modelValue, async (fileId) => {
+  if (!fileId) {
+    uploadedName.value = null
+    uploadedId.value = null
+    return
+  }
+  if (fileId === uploadedId.value) return
+  uploadedId.value = fileId
+  try {
+    const { data } = await api.get(`/files/${fileId}/info`)
+    if (uploadedId.value === fileId) uploadedName.value = data.fileName
+  } catch {
+    if (uploadedId.value === fileId) uploadedName.value = 'A file'
+  }
+}, { immediate: true })
 
 async function onChange(value) {
   const selected = Array.isArray(value) ? value[0] : value
@@ -35,6 +54,7 @@ async function onChange(value) {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
     uploadedName.value = selected.name
+    uploadedId.value = response.data.fileId
     emit('answer', response.data.fileId)
     emit('update:modelValue', response.data.fileId)
   } catch {
@@ -54,7 +74,7 @@ async function onChange(value) {
     <p v-if="question.description" class="text-xs text-slate-400 mb-2">{{ question.description }}</p>
     <v-file-input
       v-model="file"
-      placeholder="Click to select a file"
+      :placeholder="uploadedName ? 'Click to replace the uploaded file' : 'Click to select a file'"
       hint="Max 5 MB"
       persistent-hint
       :loading="uploading"

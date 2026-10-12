@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using ScholarshipApi.Authorization;
 using ScholarshipApi.DTOs.Auth;
 using ScholarshipApi.Services;
 
@@ -13,7 +15,12 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)
         ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)!;
 
+    // These changes end the user's other sessions; this one gets a replacement token (picked up by frontend/src/services/api.js)
+    private async Task RefreshSessionAsync() =>
+        Response.Headers["X-Session-Token"] = await authService.IssueTokenAsync(UserId);
+
     [HttpPost("login")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         var result = await authService.LoginAsync(request);
@@ -21,6 +28,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     }
 
     [HttpPost("login/2fa")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     public async Task<IActionResult> LoginTwoFactor([FromBody] TwoFactorLoginRequest request)
     {
         var result = await authService.CompleteTwoFactorLoginAsync(request);
@@ -28,6 +36,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     }
 
     [HttpPost("login/2fa/resend")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     public async Task<IActionResult> ResendTwoFactorEmail([FromBody] TwoFactorResendRequest request)
     {
         await authService.ResendTwoFactorEmailAsync(request.ChallengeToken);
@@ -35,6 +44,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     }
 
     [HttpPost("register")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
         var result = await authService.RegisterAsync(request);
@@ -42,6 +52,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     }
 
     [HttpPost("verify-email")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailRequest request)
     {
         var result = await authService.VerifyEmailAsync(request.Token);
@@ -49,6 +60,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     }
 
     [HttpPost("resend-verification")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     public async Task<IActionResult> ResendVerification([FromBody] ResendVerificationRequest request)
     {
         await authService.ResendVerificationAsync(request.Email);
@@ -56,6 +68,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     }
 
     [HttpPost("forgot-password")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
         await authService.ForgotPasswordAsync(request.Email);
@@ -63,6 +76,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     }
 
     [HttpPost("reset-password")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordWithCodeRequest request)
     {
         var result = await authService.ResetPasswordAsync(request);
@@ -74,6 +88,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {
         await authService.ChangePasswordAsync(UserId, request);
+        await RefreshSessionAsync();
         return NoContent();
     }
 
@@ -98,6 +113,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     public async Task<IActionResult> EnableTwoFactor([FromBody] TwoFactorEnableRequest request)
     {
         var result = await twoFactorService.EnableAsync(UserId, request.Code);
+        await RefreshSessionAsync();
         return Ok(result);
     }
 
@@ -114,6 +130,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     public async Task<IActionResult> EnableEmailTwoFactor([FromBody] TwoFactorEnableRequest request)
     {
         await twoFactorService.EnableEmailAsync(UserId, request.Code);
+        await RefreshSessionAsync();
         return NoContent();
     }
 
@@ -122,6 +139,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     public async Task<IActionResult> DisableTwoFactor([FromBody] TwoFactorPasswordRequest request)
     {
         await twoFactorService.DisableAsync(UserId, request.Password);
+        await RefreshSessionAsync();
         return NoContent();
     }
 
@@ -134,6 +152,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     }
 
     [HttpGet("invite/{token}")]
+    [EnableRateLimiting(RateLimitPolicies.Public)]
     public async Task<IActionResult> GetInvite(string token)
     {
         var result = await authService.GetInviteAsync(token);

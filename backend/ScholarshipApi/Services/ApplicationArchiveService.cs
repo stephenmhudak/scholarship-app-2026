@@ -32,14 +32,9 @@ public class ApplicationArchiveService(IServiceScopeFactory scopeFactory, ILogge
 
     public static Task<int> ArchiveClosedDraftsAsync(QueryFactory db, DateTime nowUtc)
     {
-        // CloseDate < today ⇔ the end of the close date has passed (see CycleWindow.ClosesAt).
-        var closedCycleIds = new SqlKata.Query("ScholarshipCycles")
-            .Where("CloseDate", "<", nowUtc.Date)
-            .Select("Id");
-
         return db.Query("Applications")
             .Where("Status", "draft")
-            .WhereIn("CycleId", closedCycleIds)
+            .WhereIn("CycleId", CycleWindow.ClosedCycleIds(nowUtc))
             .UpdateAsync(new { Status = "archived" });
     }
 }
