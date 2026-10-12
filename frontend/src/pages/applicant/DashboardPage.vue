@@ -72,104 +72,107 @@ onMounted(async () => {
 
     <template v-else>
       <!-- Open Scholarships -->
-      <v-card class="pa-6">
-        <h2 class="text-base font-bold text-navy mb-2">Open Scholarships</h2>
-        <p v-if="openCycles.length === 0" class="text-sm text-slate-400">
-          No scholarships are accepting applications right now.
-        </p>
-        <v-list v-else lines="two" class="py-0">
-          <template v-for="(cycle, i) in openCycles" :key="cycle.id">
-            <v-divider v-if="i > 0" />
-            <v-list-item class="px-0 py-3" :subtitle="`Closes ${formatDate(cycle.closeDate)}`">
-              <template #title>
-                <div class="flex items-center gap-2">
-                  <span class="text-sm font-semibold text-navy">{{ cycle.name }}</span>
-                  <StatusBadge v-if="appByCycle[cycle.id]" :status="appByCycle[cycle.id].status" />
-                </div>
-              </template>
-              <template #append>
-                <div class="flex flex-wrap gap-2">
-                  <v-btn
-                    v-if="!appByCycle[cycle.id]"
-                    color="primary"
-                    prepend-icon="mdi-plus"
-                    :to="{ path: '/application/new', query: { cycleId: cycle.id } }"
-                  >
-                    Start Application
-                  </v-btn>
-                  <template v-else>
+      <v-card title="Open Scholarships">
+        <v-card-text class="pa-6">
+          <p v-if="openCycles.length === 0" class="text-sm text-slate-400">
+            No scholarships are accepting applications right now.
+          </p>
+          <v-list v-else lines="two" class="py-0">
+            <template v-for="(cycle, i) in openCycles" :key="cycle.id">
+              <v-divider v-if="i > 0" />
+              <v-list-item class="px-0 py-3" :subtitle="`Closes ${formatDate(cycle.closeDate)}`">
+                <template #title>
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-navy">{{ cycle.name }}</span>
+                    <StatusBadge v-if="appByCycle[cycle.id]" :status="appByCycle[cycle.id].status" />
+                  </div>
+                </template>
+                <template #append>
+                  <div class="flex flex-wrap gap-2">
                     <v-btn
-                      v-if="appByCycle[cycle.id].status === 'draft'"
+                      v-if="!appByCycle[cycle.id]"
                       color="primary"
-                      prepend-icon="mdi-file-document-edit-outline"
-                      :to="`/application/${appByCycle[cycle.id].id}`"
+                      prepend-icon="mdi-plus"
+                      :to="{ path: '/application/new', query: { cycleId: cycle.id } }"
                     >
-                      Continue Application
+                      Start Application
                     </v-btn>
-                    <v-btn
-                      variant="outlined"
-                      prepend-icon="mdi-clipboard-check-outline"
-                      :to="`/application/${appByCycle[cycle.id].id}/status`"
-                    >
-                      View Status
-                    </v-btn>
-                  </template>
-                </div>
-              </template>
-            </v-list-item>
-          </template>
-        </v-list>
+                    <template v-else>
+                      <v-btn
+                        v-if="appByCycle[cycle.id].status === 'draft'"
+                        color="primary"
+                        prepend-icon="mdi-file-document-edit-outline"
+                        :to="`/application/${appByCycle[cycle.id].id}`"
+                      >
+                        Continue Application
+                      </v-btn>
+                      <v-btn
+                        variant="outlined"
+                        prepend-icon="mdi-clipboard-check-outline"
+                        :to="`/application/${appByCycle[cycle.id].id}/status`"
+                      >
+                        View Status
+                      </v-btn>
+                    </template>
+                  </div>
+                </template>
+              </v-list-item>
+            </template>
+          </v-list>
+        </v-card-text>
       </v-card>
 
       <!-- Past Applications -->
-      <v-card v-if="pastApplications.length" class="pa-6">
-        <h2 class="text-base font-bold text-navy mb-2">Past Applications</h2>
-        <v-list lines="two" class="py-0">
-          <template v-for="(app, i) in pastApplications" :key="app.id">
-            <v-divider v-if="i > 0" />
-            <v-list-item
-              class="px-0"
-              :subtitle="app.submittedAt ? `Submitted ${formatDate(app.submittedAt)}` : `Started ${formatDate(app.createdAt)}`"
-            >
-              <template #title>
-                <div class="flex items-center gap-2">
-                  <span class="text-sm font-semibold text-navy">{{ app.cycleName || 'Scholarship' }}</span>
-                  <StatusBadge :status="app.status" />
-                </div>
-              </template>
-              <template #append>
-                <v-btn variant="text" color="primary" :to="`/application/${app.id}/status`">View</v-btn>
-              </template>
-            </v-list-item>
-          </template>
-        </v-list>
+      <v-card v-if="pastApplications.length" title="Past Applications">
+        <v-card-text class="pa-6">
+          <v-list lines="two" class="py-0">
+            <template v-for="(app, i) in pastApplications" :key="app.id">
+              <v-divider v-if="i > 0" />
+              <v-list-item
+                class="px-0"
+                :subtitle="app.submittedAt ? `Submitted ${formatDate(app.submittedAt)}` : `Started ${formatDate(app.createdAt)}`"
+              >
+                <template #title>
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-navy">{{ app.cycleName || 'Scholarship' }}</span>
+                    <StatusBadge :status="app.status" />
+                  </div>
+                </template>
+                <template #append>
+                  <v-btn variant="text" color="primary" :to="`/application/${app.id}/status`">View</v-btn>
+                </template>
+              </v-list-item>
+            </template>
+          </v-list>
+        </v-card-text>
       </v-card>
 
       <!-- References Card -->
-      <v-card class="pa-6">
-        <h2 class="text-base font-bold text-navy mb-2">Reference Letters</h2>
-        <p v-if="references.length === 0" class="text-sm text-slate-400">
-          No reference requests yet. Reference requests will appear here after you start your application.
-        </p>
-        <v-list v-else lines="two" class="py-0">
-          <template v-for="(ref, i) in references" :key="ref.id">
-            <v-divider v-if="i > 0" />
-            <v-list-item class="px-0">
-              <v-list-item-title class="text-sm font-semibold text-navy">
-                {{ ref.label || 'Reference #' + ref.id.slice(0, 8) }}
-              </v-list-item-title>
-              <v-list-item-subtitle>
-                <template v-if="openApplications.length > 1">{{ ref.cycleName }} · </template>
-                Expires {{ formatDate(ref.expiresAt) }}
-              </v-list-item-subtitle>
-              <template #append>
-                <v-chip :color="ref.status === 'received' ? 'success' : 'warning'" class="font-semibold">
-                  {{ ref.status === 'received' ? 'Received' : 'Pending' }}
-                </v-chip>
-              </template>
-            </v-list-item>
-          </template>
-        </v-list>
+      <v-card title="Reference Letters">
+        <v-card-text class="pa-6">
+          <p v-if="references.length === 0" class="text-sm text-slate-400">
+            No reference requests yet. Reference requests will appear here after you start your application.
+          </p>
+          <v-list v-else lines="two" class="py-0">
+            <template v-for="(ref, i) in references" :key="ref.id">
+              <v-divider v-if="i > 0" />
+              <v-list-item class="px-0">
+                <v-list-item-title class="text-sm font-semibold text-navy">
+                  {{ ref.label || 'Reference #' + ref.id.slice(0, 8) }}
+                </v-list-item-title>
+                <v-list-item-subtitle>
+                  <template v-if="openApplications.length > 1">{{ ref.cycleName }} · </template>
+                  Expires {{ formatDate(ref.expiresAt) }}
+                </v-list-item-subtitle>
+                <template #append>
+                  <v-chip :color="ref.status === 'received' ? 'success' : 'warning'" class="font-semibold">
+                    {{ ref.status === 'received' ? 'Received' : 'Pending' }}
+                  </v-chip>
+                </template>
+              </v-list-item>
+            </template>
+          </v-list>
+        </v-card-text>
       </v-card>
     </template>
   </div>

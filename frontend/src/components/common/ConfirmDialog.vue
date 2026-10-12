@@ -6,7 +6,7 @@ const { state, settle } = useConfirmState()
 
 <template>
   <v-dialog :model-value="state.open" max-width="440" @update:model-value="(open) => !open && settle(false)">
-    <v-card :title="state.title">
+    <v-card :title="state.title" :class="`card-header-${state.color}`">
       <template #append>
         <v-btn icon="mdi-close" variant="text" size="small" @click="settle(false)" />
       </template>

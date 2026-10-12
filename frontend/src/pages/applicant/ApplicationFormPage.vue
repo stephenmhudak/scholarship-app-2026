@@ -181,27 +181,26 @@ async function submit() {
       <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
       <!-- Reuse answers from another cycle's application -->
-      <v-card v-if="copySources.length" class="pa-6 space-y-3">
-        <div>
-          <h2 class="text-base font-bold text-navy">Reuse previous answers</h2>
-          <p class="text-sm text-slate-400 mt-0.5">
+      <v-card v-if="copySources.length" title="Reuse previous answers">
+        <v-card-text class="pa-6 space-y-3">
+          <p class="text-sm text-slate-400">
             Copies answers for questions that match exactly. Questions you've already answered aren't changed.
           </p>
-        </div>
-        <div class="flex items-center gap-3">
-          <v-select
-            v-model="copySourceId"
-            :items="copySources"
-            :item-title="sourceLabel"
-            item-value="id"
-            placeholder="Choose an application…"
-            hide-details
-            class="flex-1"
-          />
-          <v-btn variant="outlined" prepend-icon="mdi-content-copy" :loading="copying" :disabled="!copySourceId" @click="copyAnswers">
-            Copy Answers
-          </v-btn>
-        </div>
+          <div class="flex items-center gap-3">
+            <v-select
+              v-model="copySourceId"
+              :items="copySources"
+              :item-title="sourceLabel"
+              item-value="id"
+              placeholder="Choose an application…"
+              hide-details
+              class="flex-1"
+            />
+            <v-btn variant="outlined" prepend-icon="mdi-content-copy" :loading="copying" :disabled="!copySourceId" @click="copyAnswers">
+              Copy Answers
+            </v-btn>
+          </div>
+        </v-card-text>
       </v-card>
 
       <!-- Sections + questions -->

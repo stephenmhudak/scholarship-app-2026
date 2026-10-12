@@ -109,40 +109,38 @@ async function save() {
     <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
     <!-- Edit / Create Form -->
-    <v-card v-if="editing" class="pa-6 space-y-5">
-      <h2 class="text-base font-bold text-navy">
-        {{ creating ? 'Create Cycle' : 'Edit Cycle' }}
-      </h2>
+    <v-card v-if="editing" :title="creating ? 'Create Cycle' : 'Edit Cycle'">
+      <v-card-text class="pa-6 space-y-5">
+        <v-text-field
+          v-model="editing.name"
+          label="Cycle Name"
+          placeholder="e.g. 2026 Spring Scholarship"
+          hide-details="auto"
+        />
 
-      <v-text-field
-        v-model="editing.name"
-        label="Cycle Name"
-        placeholder="e.g. 2026 Spring Scholarship"
-        hide-details="auto"
-      />
+        <div class="grid grid-cols-2 gap-4">
+          <DateField v-model="editing.openDate" label="Open Date" hide-details="auto" />
+          <DateField v-model="editing.closeDate" label="Close Date" hide-details="auto" />
+        </div>
 
-      <div class="grid grid-cols-2 gap-4">
-        <DateField v-model="editing.openDate" label="Open Date" hide-details="auto" />
-        <DateField v-model="editing.closeDate" label="Close Date" hide-details="auto" />
-      </div>
+        <v-select
+          v-if="creating"
+          v-model="editing.copyFromCycleId"
+          :items="copyFromItems"
+          label="Questions"
+          hint="Sections and questions are copied; applications and scores are not."
+          persistent-hint
+        />
 
-      <v-select
-        v-if="creating"
-        v-model="editing.copyFromCycleId"
-        :items="copyFromItems"
-        label="Questions"
-        hint="Sections and questions are copied; applications and scores are not."
-        persistent-hint
-      />
+        <v-switch v-model="editing.isActive" label="Active (applications open)" />
 
-      <v-switch v-model="editing.isActive" label="Active (applications open)" />
-
-      <div class="flex gap-3 pt-2">
-        <v-btn color="primary" prepend-icon="mdi-content-save" :loading="saving" @click="save">
-          Save
-        </v-btn>
-        <v-btn variant="outlined" @click="cancel">Cancel</v-btn>
-      </div>
+        <div class="flex gap-3 pt-2">
+          <v-btn color="primary" prepend-icon="mdi-content-save" :loading="saving" @click="save">
+            Save
+          </v-btn>
+          <v-btn variant="outlined" @click="cancel">Cancel</v-btn>
+        </div>
+      </v-card-text>
     </v-card>
 
     <!-- Loading -->
