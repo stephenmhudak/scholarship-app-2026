@@ -33,9 +33,16 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
         var user = await GetUserAsync(userId);
         RequireNotEnrolled(user);
 
-        // Held as pending until the user proves their app generates matching codes
-        var secret = Base32Encoding.ToString(KeyGeneration.GenerateRandomKey(20));
-        await db.Query("Users").Where("Id", userId).UpdateAsync(new { TotpPendingSecret = protector.Protect(secret, userId) });
+        // Held as pending until the user proves their app generates matching codes. Reopening setup reuses it,
+        // so a QR code the user already scanned keeps working instead of leaving a dead entry in their app.
+        string secret;
+        if (user.TotpPendingSecret is not null)
+            secret = protector.Unprotect(user.TotpPendingSecret, userId);
+        else
+        {
+            secret = Base32Encoding.ToString(KeyGeneration.GenerateRandomKey(20));
+            await db.Query("Users").Where("Id", userId).UpdateAsync(new { TotpPendingSecret = protector.Protect(secret, userId) });
+        }
 
         var issuer = config["App:Name"] ?? "Scholarship Portal";
         var label = Uri.EscapeDataString($"{issuer}:{user.Email}");
@@ -50,8 +57,9 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
         if (user.TotpPendingSecret is null)
             throw new ArgumentException("Start setup again to get a new QR code.");
 
-        if (!TryMatchTotp(protector.Unprotect(user.TotpPendingSecret, userId), code, out var step))
-            throw new ArgumentException("That code doesn't match. Check the time on your device and try again.");
+        var pendingSecret = protector.Unprotect(user.TotpPendingSecret, userId);
+        if (!TryMatchTotp(pendingSecret, code, out var step))
+            throw new ArgumentException(DescribeSetupMismatch(pendingSecret, code, userId));
 
         var enabled = await db.StatementAsync(
             """
@@ -218,6 +226,20 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
             .WhereNull("UsedAt")
             .UpdateAsync(new { UsedAt = DateTime.UtcNow });
         return used == 1;
+    }
+
+    // Setup only (the user is signed in and checking their own new secret), so a wide search here gives nothing away
+    private string DescribeSetupMismatch(string secret, string code, string userId)
+    {
+        var totp = new Totp(Base32Encoding.ToBytes(secret));
+        if (totp.VerifyTotp(NormalizeDigits(code), out var matchedStep, new VerificationWindow(previous: 20, future: 20)))
+        {
+            var offsetSeconds = (matchedStep - DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 30) * 30;
+            logger.LogWarning("TOTP setup for user {UserId} matched a code {OffsetSeconds}s from server time; phone or server clock is off", userId, offsetSeconds);
+            var minutes = Math.Max(1, (int)Math.Round(Math.Abs(offsetSeconds) / 60.0));
+            return $"Your phone's clock looks about {minutes} minute{(minutes == 1 ? "" : "s")} off. Turn on automatic date and time on your phone, then try a new code.";
+        }
+        return "That code doesn't match. Make sure you're reading the newest Scholarship Portal entry in your authenticator app (delete any older ones), then try again.";
     }
 
     private static bool TryMatchTotp(string secret, string code, out long step)

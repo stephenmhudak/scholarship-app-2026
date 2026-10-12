@@ -63,6 +63,7 @@ async function verify() {
         <p class="field-label">1. Scan this QR code</p>
         <p class="text-sm text-slate-400">
           Use an authenticator app such as Google Authenticator, Microsoft Authenticator, or 1Password.
+          If you've set this up before, delete the older Scholarship Portal entries from the app first.
         </p>
       </div>
       <div class="flex justify-center">
