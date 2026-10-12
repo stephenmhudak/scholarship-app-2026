@@ -177,49 +177,51 @@ async function submitResetPassword() {
       </v-card>
 
       <!-- Counselors (school_admin only) -->
-      <v-card v-if="canManageStaff" class="pa-6 space-y-4">
-        <div class="flex items-center justify-between">
-          <h2 class="text-base font-bold text-navy">Counselors</h2>
-          <v-btn color="primary" size="small" prepend-icon="mdi-plus" @click="showAddCounselor = true">
+      <v-card v-if="canManageStaff" title="Counselors">
+        <template #append>
+          <!-- tonal with no color picks up the title bar's white text -->
+          <v-btn variant="tonal" size="small" prepend-icon="mdi-plus" @click="showAddCounselor = true">
             Add Counselor
           </v-btn>
-        </div>
-
-        <v-list v-if="counselors.length" class="py-0">
-          <template v-for="(c, i) in counselors" :key="c.Id">
-            <v-divider v-if="i > 0" />
-            <v-list-item class="px-0" :title="`${c.FirstName} ${c.LastName}`" :subtitle="c.Email">
-              <template #append>
-                <v-btn variant="text" color="primary" size="small" @click="openResetPassword(c)">Reset Password</v-btn>
-                <v-btn variant="text" color="error" size="small" @click="removeCounselor(c)">Remove</v-btn>
-              </template>
-            </v-list-item>
-          </template>
-        </v-list>
-        <p v-else class="text-sm text-slate-400">No counselors assigned yet.</p>
+        </template>
+        <v-card-text class="pa-6">
+          <v-list v-if="counselors.length" class="py-0">
+            <template v-for="(c, i) in counselors" :key="c.Id">
+              <v-divider v-if="i > 0" />
+              <v-list-item class="px-0" :title="`${c.FirstName} ${c.LastName}`" :subtitle="c.Email">
+                <template #append>
+                  <v-btn variant="text" color="primary" size="small" @click="openResetPassword(c)">Reset Password</v-btn>
+                  <v-btn variant="text" color="error" size="small" @click="removeCounselor(c)">Remove</v-btn>
+                </template>
+              </v-list-item>
+            </template>
+          </v-list>
+          <p v-else class="text-sm text-slate-400">No counselors assigned yet.</p>
+        </v-card-text>
       </v-card>
 
       <!-- Applicants -->
-      <v-card class="pa-6 space-y-4">
-        <h2 class="text-base font-bold text-navy">Applicants</h2>
-        <v-card v-if="applicants.length" class="overflow-hidden">
-          <v-data-table
-            :headers="applicantHeaders"
-            :items="applicants"
-            :sort-by="[{ key: 'name', order: 'asc' }]"
-          >
-            <template #item.name="{ item }">
-              <span class="font-semibold text-navy">{{ item.FirstName }} {{ item.LastName }}</span>
-            </template>
-            <template #item.Email="{ value }">
-              <span class="text-slate-400">{{ value }}</span>
-            </template>
-            <template #item.Status="{ value }">
-              <StatusBadge :status="value || 'draft'" />
-            </template>
-          </v-data-table>
-        </v-card>
-        <p v-else class="text-sm text-slate-400">No applicants from this school yet.</p>
+      <v-card title="Applicants">
+        <v-card-text class="pa-6 space-y-4">
+          <v-card v-if="applicants.length" class="overflow-hidden">
+            <v-data-table
+              :headers="applicantHeaders"
+              :items="applicants"
+              :sort-by="[{ key: 'name', order: 'asc' }]"
+            >
+              <template #item.name="{ item }">
+                <span class="font-semibold text-navy">{{ item.FirstName }} {{ item.LastName }}</span>
+              </template>
+              <template #item.Email="{ value }">
+                <span class="text-slate-400">{{ value }}</span>
+              </template>
+              <template #item.Status="{ value }">
+                <StatusBadge :status="value || 'draft'" />
+              </template>
+            </v-data-table>
+          </v-card>
+          <p v-else class="text-sm text-slate-400">No applicants from this school yet.</p>
+        </v-card-text>
       </v-card>
     </template>
   </div>

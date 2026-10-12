@@ -129,23 +129,24 @@ async function updateStatus() {
       </v-card>
 
       <!-- Answers card -->
-      <v-card class="pa-6">
-        <h2 class="text-base font-bold text-navy mb-5">Application Answers</h2>
-        <div v-if="questions.length" class="space-y-5">
-          <template v-for="(q, i) in questions" :key="q.id">
-            <v-divider v-if="i > 0" />
-            <div>
-              <p class="eyebrow mb-1.5">{{ q.text }}</p>
-              <RichTextAnswer v-if="isRichText(q)" :html="answersMap[q.id]?.textValue" />
-              <p v-else class="text-sm text-navy whitespace-pre-wrap">
-                {{ answersMap[q.id]?.selectedOptions?.length
-                    ? answersMap[q.id].selectedOptions.join(', ')
-                    : (answersMap[q.id]?.textValue || '—') }}
-              </p>
-            </div>
-          </template>
-        </div>
-        <p v-else class="text-sm text-slate-400">No answers available.</p>
+      <v-card title="Application Answers">
+        <v-card-text class="pa-6">
+          <div v-if="questions.length" class="space-y-5">
+            <template v-for="(q, i) in questions" :key="q.id">
+              <v-divider v-if="i > 0" />
+              <div>
+                <p class="eyebrow mb-1.5">{{ q.text }}</p>
+                <RichTextAnswer v-if="isRichText(q)" :html="answersMap[q.id]?.textValue" />
+                <p v-else class="text-sm text-navy whitespace-pre-wrap">
+                  {{ answersMap[q.id]?.selectedOptions?.length
+                      ? answersMap[q.id].selectedOptions.join(', ')
+                      : (answersMap[q.id]?.textValue || '—') }}
+                </p>
+              </div>
+            </template>
+          </div>
+          <p v-else class="text-sm text-slate-400">No answers available.</p>
+        </v-card-text>
       </v-card>
     </template>
   </div>

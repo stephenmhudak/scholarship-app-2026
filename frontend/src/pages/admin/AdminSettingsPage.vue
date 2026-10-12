@@ -324,12 +324,11 @@ onMounted(() => { loadUsers(); loadSchools() })
     <div v-if="activeTab === 'invites'" class="space-y-6">
 
       <!-- Generate invite -->
-      <v-card class="pa-6 flex items-center justify-between gap-4">
-        <div>
-          <p class="text-sm font-semibold text-navy">Generate Registration Link</p>
-          <p class="text-xs text-slate-400 mt-0.5">The school admin will enter their school information when they register. Valid for 7 days.</p>
-        </div>
-        <v-btn color="primary" size="small" :loading="generatingInvite" @click="generateInvite">Generate Link</v-btn>
+      <v-card title="Generate Registration Link">
+        <v-card-text class="pa-6 flex items-center justify-between gap-4">
+          <p class="text-sm text-slate-400">The school admin will enter their school information when they register. Valid for 7 days.</p>
+          <v-btn color="primary" size="small" :loading="generatingInvite" @click="generateInvite">Generate Link</v-btn>
+        </v-card-text>
       </v-card>
 
       <!-- New invite link result -->
@@ -348,8 +347,7 @@ onMounted(() => { loadUsers(); loadSchools() })
       </v-alert>
 
       <!-- Existing invites -->
-      <v-card class="overflow-hidden">
-        <v-card-title class="text-sm font-semibold text-navy px-5 py-3 border-b">Invite History</v-card-title>
+      <v-card class="overflow-hidden" title="Invite History">
         <v-data-table
           :headers="inviteHeaders"
           :items="invites"

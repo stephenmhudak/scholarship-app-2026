@@ -496,104 +496,102 @@ function globalIndex(q) {
 
         <template v-for="q in groupRows(group)" :key="q.id">
           <!-- Add / Edit Question Form (inline, in place of the question) -->
-          <v-card v-if="isEditingRow(q)" class="pa-6 space-y-5 border-primary/30">
-            <h2 class="text-base font-bold text-navy">
-              {{ isNew ? 'New Question' : 'Edit Question' }}
-            </h2>
+          <v-card v-if="isEditingRow(q)" class="border-primary/30" :title="isNew ? 'New Question' : 'Edit Question'">
+            <v-card-text class="pa-6 space-y-5">
+              <v-textarea
+                v-model="editing.text"
+                label="Question Text *"
+                rows="2"
+                placeholder="Enter your question…"
+                hide-details="auto"
+              />
 
-            <v-textarea
-              v-model="editing.text"
-              label="Question Text *"
-              rows="2"
-              placeholder="Enter your question…"
-              hide-details="auto"
-            />
+              <v-textarea
+                v-model="editing.description"
+                label="Additional Information"
+                rows="2"
+                placeholder="Optional help text shown below the question…"
+                hide-details="auto"
+              />
 
-            <v-textarea
-              v-model="editing.description"
-              label="Additional Information"
-              rows="2"
-              placeholder="Optional help text shown below the question…"
-              hide-details="auto"
-            />
-
-            <!-- Type + Required -->
-            <div class="flex items-center gap-4">
-              <v-select v-model="editing.type" :items="QUESTION_TYPES" item-title="label" item-value="value" label="Type" hide-details class="flex-1" />
-              <v-checkbox v-model="editing.isRequired" label="Required" hide-details class="flex-none" />
-            </div>
-
-            <!-- Section assignment -->
-            <v-select v-if="sections.length > 0" v-model="editing.sectionId" :items="sectionItems" label="Section" hide-details />
-
-            <!-- Options (MC / SC only) -->
-            <div v-if="hasOptions" class="space-y-3">
-              <p class="text-sm font-semibold text-navy">Answer Options</p>
-
-              <div v-if="editing.options.length" class="flex flex-wrap gap-2">
-                <v-chip
-                  v-for="(opt, i) in editing.options"
-                  :key="i"
-                  size="default"
-                  closable
-                  @click:close="removeOption(i)"
-                >
-                  {{ opt }}
-                </v-chip>
+              <!-- Type + Required -->
+              <div class="flex items-center gap-4">
+                <v-select v-model="editing.type" :items="QUESTION_TYPES" item-title="label" item-value="value" label="Type" hide-details class="flex-1" />
+                <v-checkbox v-model="editing.isRequired" label="Required" hide-details class="flex-none" />
               </div>
 
-              <div class="flex items-center gap-2">
-                <v-text-field
-                  v-model="editing.newOption"
-                  placeholder="Add an option…"
-                  density="compact"
-                  hide-details
-                  class="flex-1"
-                  @keydown.enter.prevent="addOption"
-                />
-                <v-btn variant="outlined" prepend-icon="mdi-plus" @click="addOption">Add</v-btn>
+              <!-- Section assignment -->
+              <v-select v-if="sections.length > 0" v-model="editing.sectionId" :items="sectionItems" label="Section" hide-details />
+
+              <!-- Options (MC / SC only) -->
+              <div v-if="hasOptions" class="space-y-3">
+                <p class="text-sm font-semibold text-navy">Answer Options</p>
+
+                <div v-if="editing.options.length" class="flex flex-wrap gap-2">
+                  <v-chip
+                    v-for="(opt, i) in editing.options"
+                    :key="i"
+                    size="default"
+                    closable
+                    @click:close="removeOption(i)"
+                  >
+                    {{ opt }}
+                  </v-chip>
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <v-text-field
+                    v-model="editing.newOption"
+                    placeholder="Add an option…"
+                    density="compact"
+                    hide-details
+                    class="flex-1"
+                    @keydown.enter.prevent="addOption"
+                  />
+                  <v-btn variant="outlined" prepend-icon="mdi-plus" @click="addOption">Add</v-btn>
+                </div>
+
+                <p v-if="editing.options.length === 0" class="text-xs font-medium text-warning-dark">
+                  Add at least one option for this question type.
+                </p>
               </div>
 
-              <p v-if="editing.options.length === 0" class="text-xs font-medium text-warning-dark">
-                Add at least one option for this question type.
-              </p>
-            </div>
+              <!-- Validation rules -->
+              <template v-if="showValidationRules">
+                <v-divider />
+                <div class="space-y-4">
+                  <p class="text-sm font-bold text-navy">Validation Rules</p>
 
-            <!-- Validation rules -->
-            <template v-if="showValidationRules">
+                  <v-checkbox
+                    v-if="canBeRichText"
+                    v-model="editing.validationRules.richText"
+                    label="Rich text"
+                    hint="Applicants can use bold, lists, headings and links"
+                    persistent-hint
+                  />
+
+                  <div v-if="showFormatRules" class="grid grid-cols-3 gap-3">
+                    <v-checkbox v-model="editing.validationRules.numberOnly" label="Numbers only" />
+                    <v-checkbox v-model="editing.validationRules.phoneFormat" label="Phone format" />
+                    <v-checkbox v-model="editing.validationRules.emailFormat" label="Email format" />
+                  </div>
+
+                  <div class="flex gap-4">
+                    <v-number-input v-model="editing.validationRules.minLength" label="Min Length" :min="0" control-variant="hidden" hide-details class="flex-1" />
+                    <v-number-input v-model="editing.validationRules.maxLength" label="Max Length" :min="0" control-variant="hidden" hide-details class="flex-1" />
+                  </div>
+                </div>
+              </template>
+
+              <!-- Actions -->
               <v-divider />
-              <div class="space-y-4">
-                <p class="text-sm font-bold text-navy">Validation Rules</p>
-
-                <v-checkbox
-                  v-if="canBeRichText"
-                  v-model="editing.validationRules.richText"
-                  label="Rich text"
-                  hint="Applicants can use bold, lists, headings and links"
-                  persistent-hint
-                />
-
-                <div v-if="showFormatRules" class="grid grid-cols-3 gap-3">
-                  <v-checkbox v-model="editing.validationRules.numberOnly" label="Numbers only" />
-                  <v-checkbox v-model="editing.validationRules.phoneFormat" label="Phone format" />
-                  <v-checkbox v-model="editing.validationRules.emailFormat" label="Email format" />
-                </div>
-
-                <div class="flex gap-4">
-                  <v-number-input v-model="editing.validationRules.minLength" label="Min Length" :min="0" control-variant="hidden" hide-details class="flex-1" />
-                  <v-number-input v-model="editing.validationRules.maxLength" label="Max Length" :min="0" control-variant="hidden" hide-details class="flex-1" />
-                </div>
+              <div class="flex gap-3">
+                <v-btn color="primary" prepend-icon="mdi-content-save" :loading="saving" @click="save">
+                  {{ isNew ? 'Add Question' : 'Save Changes' }}
+                </v-btn>
+                <v-btn variant="outlined" @click="cancel">Cancel</v-btn>
               </div>
-            </template>
-
-            <!-- Actions -->
-            <v-divider />
-            <div class="flex gap-3">
-              <v-btn color="primary" prepend-icon="mdi-content-save" :loading="saving" @click="save">
-                {{ isNew ? 'Add Question' : 'Save Changes' }}
-              </v-btn>
-              <v-btn variant="outlined" @click="cancel">Cancel</v-btn>
-            </div>
+            </v-card-text>
           </v-card>
 
           <v-card v-else class="pa-4 flex items-start gap-3">

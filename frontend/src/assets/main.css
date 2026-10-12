@@ -65,11 +65,26 @@ html {
   margin-top: 0 !important;
 }
 
-/* Dialog title bar: blue-accent-4 with white text (the close button in #append inherits it). */
-.v-dialog .v-overlay__content > .v-card > .v-card-item {
-  background: #2962FF;
+/* Card title bar (from the `title` prop): blue-accent-4 with white text; buttons in #append inherit it.
+   Add card-header-<color> to the v-card where another color fits. */
+.v-card > .v-card-item {
+  background: var(--card-header-bg, #2962FF);
   color: #FFFFFF;
 }
+
+.v-card > .v-card-item .v-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.v-card > .v-card-item .v-card-subtitle {
+  opacity: 0.85;
+}
+
+.card-header-secondary { --card-header-bg: rgb(var(--v-theme-secondary)); }
+.card-header-success { --card-header-bg: rgb(var(--v-theme-success)); }
+.card-header-warning { --card-header-bg: rgb(var(--v-theme-warning)); }
+.card-header-error { --card-header-bg: rgb(var(--v-theme-error)); }
 
 .v-data-table .v-data-table__th {
   background: #F4F7FE;
