@@ -30,7 +30,7 @@ export const useAuthStore = defineStore('auth', {
 
     async verifyEmail(token) {
       const response = await api.post('/auth/verify-email', { token })
-      this._applyAuthResponse(response.data)
+      return this._applySignInResponse(response.data)
     },
 
     async resendVerification(email) {
@@ -63,6 +63,11 @@ export const useAuthStore = defineStore('auth', {
     async enableTwoFactor(code) {
       const response = await api.post('/auth/2fa/enable', { code })
       this._setTwoFactorEnabled(true)
+      return response.data.recoveryCodes
+    },
+
+    async regenerateRecoveryCodes(password) {
+      const response = await api.post('/auth/2fa/recovery-codes', { password })
       return response.data.recoveryCodes
     },
 

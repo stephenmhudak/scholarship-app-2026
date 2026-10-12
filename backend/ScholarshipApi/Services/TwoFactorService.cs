@@ -7,7 +7,7 @@ using ScholarshipApi.Models;
 
 namespace ScholarshipApi.Services;
 
-public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailService email, ILogger<TwoFactorService> logger) : ITwoFactorService
+public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailService email, TotpSecretProtector protector, ILogger<TwoFactorService> logger) : ITwoFactorService
 {
     private const int RecoveryCodeCount = 10;
     // No 0/o, 1/l/i so codes survive being written down
@@ -32,7 +32,7 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
 
         // Held as pending until the user proves their app generates matching codes
         var secret = Base32Encoding.ToString(KeyGeneration.GenerateRandomKey(20));
-        await db.Query("Users").Where("Id", userId).UpdateAsync(new { TotpPendingSecret = secret });
+        await db.Query("Users").Where("Id", userId).UpdateAsync(new { TotpPendingSecret = protector.Protect(secret, userId) });
 
         var issuer = config["App:Name"] ?? "Scholarship Portal";
         var label = Uri.EscapeDataString($"{issuer}:{user.Email}");
@@ -48,7 +48,7 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
         if (user.TotpPendingSecret is null)
             throw new ArgumentException("Start setup again to get a new QR code.");
 
-        if (!TryMatchTotp(user.TotpPendingSecret, code, out var step))
+        if (!TryMatchTotp(protector.Unprotect(user.TotpPendingSecret, userId), code, out var step))
             throw new ArgumentException("That code doesn't match. Check the time on your device and try again.");
 
         var enabled = await db.StatementAsync(
@@ -69,10 +69,41 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
     public async Task DisableAsync(string userId, string password)
     {
         var user = await GetUserAsync(userId);
-        if (string.IsNullOrEmpty(password) || !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
-            throw new ArgumentException("Password is incorrect.");
+        RequirePassword(user, password);
         if (user.TotpEnabledAt is null) return;
 
+        await ClearAsync(userId);
+        await TrySendNoticeAsync(user, "Two-factor authentication turned off",
+            "Two-factor authentication was just turned off for your scholarship account. Signing in now only needs your password.");
+    }
+
+    public async Task<TwoFactorEnableResponse> RegenerateRecoveryCodesAsync(string userId, string password)
+    {
+        var user = await GetUserAsync(userId);
+        RequirePassword(user, password);
+        if (user.TotpEnabledAt is null)
+            throw new ArgumentException("Two-factor authentication is not turned on.");
+
+        var codes = await ReplaceRecoveryCodesAsync(userId);
+        await TrySendNoticeAsync(user, "New recovery codes created",
+            "A new set of two-factor recovery codes was just created for your scholarship account. Your old recovery codes no longer work.");
+        return new TwoFactorEnableResponse { RecoveryCodes = codes };
+    }
+
+    // For staff helping a user who has lost both their authenticator and recovery codes
+    public async Task ResetByAdminAsync(string userId)
+    {
+        var user = await GetUserAsync(userId);
+        if (user.TotpEnabledAt is null && user.TotpPendingSecret is null) return;
+
+        await ClearAsync(userId);
+        if (user.TotpEnabledAt is not null)
+            await TrySendNoticeAsync(user, "Two-factor authentication reset",
+                "An administrator reset two-factor authentication on your scholarship account, so signing in now only needs your password. You can set it up again from your Account page.");
+    }
+
+    private async Task ClearAsync(string userId)
+    {
         await db.Query("Users").Where("Id", userId).UpdateAsync(new
         {
             TotpSecret = (string?)null,
@@ -81,9 +112,12 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
             TotpLastUsedStep = (long?)null
         });
         await db.Query("TwoFactorRecoveryCodes").Where("UserId", userId).DeleteAsync();
+    }
 
-        await TrySendNoticeAsync(user, "Two-factor authentication turned off",
-            "Two-factor authentication was just turned off for your scholarship account. Signing in now only needs your password.");
+    private static void RequirePassword(User user, string password)
+    {
+        if (string.IsNullOrEmpty(password) || !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+            throw new ArgumentException("Password is incorrect.");
     }
 
     // Accepts either a 6-digit authenticator code or an unused recovery code
@@ -94,7 +128,7 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
         var normalized = (code ?? "").Replace(" ", "").Replace("-", "").ToLowerInvariant();
         if (normalized.Length == 6 && normalized.All(char.IsAsciiDigit))
         {
-            if (!TryMatchTotp(user.TotpSecret, normalized, out var step)) return false;
+            if (!TryMatchTotp(protector.Unprotect(user.TotpSecret, user.Id), normalized, out var step)) return false;
 
             // Each code works once, even inside its 30-second window
             var advanced = await db.StatementAsync(

@@ -38,7 +38,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailRequest request)
     {
         var result = await authService.VerifyEmailAsync(request.Token);
-        return Ok(result);
+        return Ok(result.Body);
     }
 
     [HttpPost("resend-verification")]
@@ -96,10 +96,18 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
 
     [HttpPost("2fa/disable")]
     [Authorize]
-    public async Task<IActionResult> DisableTwoFactor([FromBody] TwoFactorDisableRequest request)
+    public async Task<IActionResult> DisableTwoFactor([FromBody] TwoFactorPasswordRequest request)
     {
         await twoFactorService.DisableAsync(UserId, request.Password);
         return NoContent();
+    }
+
+    [HttpPost("2fa/recovery-codes")]
+    [Authorize]
+    public async Task<IActionResult> RegenerateRecoveryCodes([FromBody] TwoFactorPasswordRequest request)
+    {
+        var result = await twoFactorService.RegenerateRecoveryCodesAsync(UserId, request.Password);
+        return Ok(result);
     }
 
     [HttpGet("invite/{token}")]

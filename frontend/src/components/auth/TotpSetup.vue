@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import QRCode from 'qrcode'
 import { useAuthStore } from '../../stores/auth'
+import RecoveryCodesList from './RecoveryCodesList.vue'
 
 const emit = defineEmits(['done', 'cancel'])
 
@@ -14,7 +15,6 @@ const code = ref('')
 const verifying = ref(false)
 const error = ref(null)
 const recoveryCodes = ref(null)
-const copied = ref(false)
 
 const groupedSecret = computed(() => secret.value.match(/.{1,4}/g)?.join(' ') ?? '')
 
@@ -41,25 +41,6 @@ async function verify() {
     verifying.value = false
   }
 }
-
-async function copyCodes() {
-  try {
-    await navigator.clipboard.writeText(recoveryCodes.value.join('\n'))
-    copied.value = true
-  } catch {
-    error.value = 'Could not copy to the clipboard. Download the codes instead.'
-  }
-}
-
-function downloadCodes() {
-  const text = `Scholarship Portal recovery codes\nEach code can be used once if you lose access to your authenticator app.\n\n${recoveryCodes.value.join('\n')}\n`
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = 'scholarship-recovery-codes.txt'
-  link.click()
-  URL.revokeObjectURL(url)
-}
 </script>
 
 <template>
@@ -73,20 +54,7 @@ function downloadCodes() {
 
     <template v-else-if="recoveryCodes">
       <v-alert type="success" text="Two-factor authentication is on." />
-      <div>
-        <p class="field-label">Save your recovery codes</p>
-        <p class="text-sm text-slate-400">
-          If you lose your phone, each of these codes lets you sign in once. Store them somewhere safe.
-          They won't be shown again.
-        </p>
-      </div>
-      <div class="grid grid-cols-2 gap-2 p-4 rounded-lg bg-[#F4F7FE] font-mono text-sm text-navy">
-        <span v-for="c in recoveryCodes" :key="c">{{ c }}</span>
-      </div>
-      <div class="flex flex-wrap gap-2">
-        <v-btn variant="tonal" prepend-icon="mdi-content-copy" @click="copyCodes">{{ copied ? 'Copied' : 'Copy' }}</v-btn>
-        <v-btn variant="tonal" prepend-icon="mdi-download" @click="downloadCodes">Download</v-btn>
-      </div>
+      <RecoveryCodesList :codes="recoveryCodes" />
       <v-btn color="primary" block @click="emit('done')">I've saved my recovery codes</v-btn>
     </template>
 

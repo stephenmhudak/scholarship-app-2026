@@ -154,7 +154,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         return new RegisterResponse { Email = user.Email };
     }
 
-    public async Task<AuthResponse> VerifyEmailAsync(string token)
+    public async Task<LoginResult> VerifyEmailAsync(string token)
     {
         if (string.IsNullOrWhiteSpace(token))
             throw new ArgumentException("Verification link is invalid or has expired.");
@@ -171,9 +171,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         await db.Query("EmailVerificationTokens").Where("UserId", userId).WhereNull("UsedAt").UpdateAsync(new { UsedAt = now });
         await db.Query("Users").Where("Id", userId).WhereNull("EmailVerifiedAt").UpdateAsync(new { EmailVerifiedAt = now });
 
-        var user = await GetCurrentUserAsync(userId);
-        var permissions = await GetPermissionsForRoleAsync(user.Role);
-        return BuildAuthResponse(user, permissions);
+        return await SignInOrChallengeAsync(await GetCurrentUserAsync(userId));
     }
 
     // Always succeeds silently so the endpoint can't be used to discover which emails are registered
@@ -312,8 +310,9 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         var now = DateTime.UtcNow;
         await db.Query("PasswordResetCodes").Where("UserId", user.Id).WhereNull("UsedAt").UpdateAsync(new { UsedAt = now });
         await db.Query("Users").Where("Id", user.Id).UpdateAsync(new { PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword) });
-        // Receiving the code proves the user owns the address
+        // Receiving the code proves the user owns the address, so any outstanding verification links are no longer needed
         await db.Query("Users").Where("Id", user.Id).WhereNull("EmailVerifiedAt").UpdateAsync(new { EmailVerifiedAt = now });
+        await db.Query("EmailVerificationTokens").Where("UserId", user.Id).WhereNull("UsedAt").UpdateAsync(new { UsedAt = now });
 
         await TrySendPasswordChangedEmailAsync(user);
 

@@ -42,7 +42,8 @@ public class TwoFactorEnableResponse
     public string[] RecoveryCodes { get; set; } = [];
 }
 
-public class TwoFactorDisableRequest
+// Disabling 2FA and regenerating recovery codes both re-confirm the password
+public class TwoFactorPasswordRequest
 {
     public string Password { get; set; } = null!;
 }

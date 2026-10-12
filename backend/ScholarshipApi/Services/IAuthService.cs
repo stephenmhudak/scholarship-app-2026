@@ -8,7 +8,7 @@ public interface IAuthService
     Task<LoginResult> LoginAsync(LoginRequest request);
     Task<AuthResponse> CompleteTwoFactorLoginAsync(TwoFactorLoginRequest request);
     Task<RegisterResponse> RegisterAsync(RegisterRequest request);
-    Task<AuthResponse> VerifyEmailAsync(string token);
+    Task<LoginResult> VerifyEmailAsync(string token);
     Task ResendVerificationAsync(string email);
     Task ForgotPasswordAsync(string email);
     Task<LoginResult> ResetPasswordAsync(ResetPasswordWithCodeRequest request);

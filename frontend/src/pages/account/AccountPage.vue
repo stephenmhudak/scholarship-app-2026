@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import TotpSetup from '../../components/auth/TotpSetup.vue'
+import RecoveryCodesList from '../../components/auth/RecoveryCodesList.vue'
 
 const authStore = useAuthStore()
 
@@ -17,10 +18,13 @@ const alert = ref(null)
 
 const twoFactor = ref(null)
 const settingUpTwoFactor = ref(false)
-const disableDialog = ref(false)
-const disablePassword = ref('')
-const disabling = ref(false)
-const disableError = ref(null)
+// Turning 2FA off and regenerating recovery codes both re-confirm the password in one dialog
+const passwordDialog = ref(false)
+const passwordAction = ref('disable')
+const dialogPassword = ref('')
+const dialogSubmitting = ref(false)
+const dialogError = ref(null)
+const newRecoveryCodes = ref(null)
 
 onMounted(loadTwoFactorStatus)
 
@@ -37,24 +41,30 @@ async function finishTwoFactorSetup() {
   await loadTwoFactorStatus()
 }
 
-function openDisableDialog() {
-  disablePassword.value = ''
-  disableError.value = null
-  disableDialog.value = true
+function openPasswordDialog(action) {
+  passwordAction.value = action
+  dialogPassword.value = ''
+  dialogError.value = null
+  newRecoveryCodes.value = null
+  passwordDialog.value = true
 }
 
-async function disableTwoFactor() {
-  disabling.value = true
-  disableError.value = null
+async function submitPasswordDialog() {
+  dialogSubmitting.value = true
+  dialogError.value = null
   try {
-    await authStore.disableTwoFactor(disablePassword.value)
-    disableDialog.value = false
-    alert.value = { type: 'success', message: 'Two-factor authentication has been turned off.' }
+    if (passwordAction.value === 'disable') {
+      await authStore.disableTwoFactor(dialogPassword.value)
+      passwordDialog.value = false
+      alert.value = { type: 'success', message: 'Two-factor authentication has been turned off.' }
+    } else {
+      newRecoveryCodes.value = await authStore.regenerateRecoveryCodes(dialogPassword.value)
+    }
     await loadTwoFactorStatus()
   } catch (err) {
-    disableError.value = err.response?.data?.error || 'Could not turn off two-factor. Please try again.'
+    dialogError.value = err.response?.data?.error || 'Something went wrong. Please try again.'
   } finally {
-    disabling.value = false
+    dialogSubmitting.value = false
   }
 }
 
@@ -152,10 +162,13 @@ async function changePassword() {
           <v-alert
             v-if="twoFactor.recoveryCodesRemaining <= 2"
             type="warning"
-            :text="`You have ${twoFactor.recoveryCodesRemaining} recovery code${twoFactor.recoveryCodesRemaining === 1 ? '' : 's'} left. Turn two-factor off and on again to get a new set.`"
+            :text="`You have ${twoFactor.recoveryCodesRemaining} recovery code${twoFactor.recoveryCodesRemaining === 1 ? '' : 's'} left. Create a new set so you don't get locked out.`"
           />
           <p v-else class="text-sm text-slate-400">{{ twoFactor.recoveryCodesRemaining }} unused recovery codes remaining.</p>
-          <v-btn variant="outlined" color="error" @click="openDisableDialog">Turn off two-factor</v-btn>
+          <div class="flex flex-wrap gap-2">
+            <v-btn variant="outlined" prepend-icon="mdi-refresh" @click="openPasswordDialog('regenerate')">New recovery codes</v-btn>
+            <v-btn variant="outlined" color="error" @click="openPasswordDialog('disable')">Turn off two-factor</v-btn>
+          </div>
         </div>
 
         <div v-else-if="settingUpTwoFactor" class="max-w-md">
@@ -174,17 +187,25 @@ async function changePassword() {
       </v-card-text>
     </v-card>
 
-    <v-dialog v-model="disableDialog" max-width="440">
-      <v-card title="Turn off two-factor">
+    <v-dialog v-model="passwordDialog" max-width="480">
+      <v-card :title="passwordAction === 'disable' ? 'Turn off two-factor' : 'New recovery codes'">
         <template #append>
-          <v-btn icon="mdi-close" variant="text" size="small" @click="disableDialog = false" />
+          <v-btn icon="mdi-close" variant="text" size="small" @click="passwordDialog = false" />
         </template>
         <v-card-text class="pa-6">
-          <v-form class="space-y-4" @submit.prevent="disableTwoFactor">
-            <p class="text-sm text-slate-400">Enter your password to confirm. Your recovery codes will stop working.</p>
-            <v-alert v-if="disableError" type="error" :text="disableError" />
+          <div v-if="newRecoveryCodes" class="space-y-4">
+            <RecoveryCodesList :codes="newRecoveryCodes" />
+            <v-btn color="primary" block @click="passwordDialog = false">I've saved my recovery codes</v-btn>
+          </div>
+
+          <v-form v-else class="space-y-4" @submit.prevent="submitPasswordDialog">
+            <p class="text-sm text-slate-400">
+              <template v-if="passwordAction === 'disable'">Enter your password to confirm. Your recovery codes will stop working.</template>
+              <template v-else>Enter your password to create 10 new recovery codes. Your current codes will stop working.</template>
+            </p>
+            <v-alert v-if="dialogError" type="error" :text="dialogError" />
             <v-text-field
-              v-model="disablePassword"
+              v-model="dialogPassword"
               type="password"
               label="Password"
               autocomplete="current-password"
@@ -193,8 +214,10 @@ async function changePassword() {
               hide-details="auto"
             />
             <div class="flex justify-end gap-2">
-              <v-btn variant="text" @click="disableDialog = false">Cancel</v-btn>
-              <v-btn type="submit" color="error" :loading="disabling">Turn off</v-btn>
+              <v-btn variant="text" @click="passwordDialog = false">Cancel</v-btn>
+              <v-btn type="submit" :color="passwordAction === 'disable' ? 'error' : 'primary'" :loading="dialogSubmitting">
+                {{ passwordAction === 'disable' ? 'Turn off' : 'Create new codes' }}
+              </v-btn>
             </div>
           </v-form>
         </v-card-text>
