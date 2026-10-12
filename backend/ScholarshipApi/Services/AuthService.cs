@@ -14,6 +14,9 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
 {
     private static readonly TimeSpan VerificationTokenLifetime = TimeSpan.FromHours(24);
     private static readonly TimeSpan ResendCooldown = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan ResetCodeLifetime = TimeSpan.FromMinutes(15);
+    private const int MaxResetCodeAttempts = 5;
+    private const int MinPasswordLength = 8;
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
     {
@@ -166,6 +169,144 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
             logger.LogError(ex, "Failed to send verification email to user {UserId}", user.Id);
         }
     }
+
+    // Always succeeds silently so the endpoint can't be used to discover which emails are registered
+    public async Task ForgotPasswordAsync(string emailAddress)
+    {
+        if (string.IsNullOrWhiteSpace(emailAddress)) return;
+
+        var user = await db.Query("Users").Where("Email", emailAddress.Trim()).FirstOrDefaultAsync<User>();
+        if (user is null) return;
+
+        var recentlySent = await db.Query("PasswordResetCodes")
+            .Where("UserId", user.Id)
+            .Where("CreatedAt", ">", DateTime.UtcNow - ResendCooldown)
+            .ExistsAsync();
+        if (recentlySent) return;
+
+        // Only the newest code is valid
+        var now = DateTime.UtcNow;
+        await db.Query("PasswordResetCodes").Where("UserId", user.Id).WhereNull("UsedAt").UpdateAsync(new { UsedAt = now });
+
+        var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+        await db.Query("PasswordResetCodes").InsertAsync(new
+        {
+            Id = Guid.NewGuid().ToString(),
+            UserId = user.Id,
+            CodeHash = HashResetCode(user.Id, code),
+            Attempts = 0,
+            ExpiresAt = now + ResetCodeLifetime,
+            CreatedAt = now
+        });
+
+        var name = WebUtility.HtmlEncode(user.FirstName);
+        var html = $"""
+            <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;color:#2B3674">
+              <h2 style="margin-bottom:8px">Reset your password</h2>
+              <p>Hi {name},</p>
+              <p>Use this code to reset your scholarship account password:</p>
+              <p style="margin:28px 0;font-size:32px;font-weight:bold;letter-spacing:8px">{code}</p>
+              <p style="font-size:13px;color:#A3AED0">This code expires in 15 minutes and can only be used once. If you didn't ask to reset your password, you can ignore this email.</p>
+            </div>
+            """;
+        var text = $"Hi {user.FirstName},\n\nUse this code to reset your scholarship account password: {code}\n\nThis code expires in 15 minutes and can only be used once. If you didn't ask to reset your password, you can ignore this email.";
+
+        try
+        {
+            await email.SendAsync(user.Email, "Your password reset code", html, text);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to send password reset email to user {UserId}", user.Id);
+        }
+    }
+
+    public async Task<AuthResponse> ResetPasswordAsync(ResetPasswordWithCodeRequest request)
+    {
+        const string invalidCode = "That code is invalid or has expired. Request a new one and try again.";
+        ValidateNewPassword(request.NewPassword);
+
+        var user = await db.Query("Users").Where("Email", request.Email?.Trim() ?? "").FirstOrDefaultAsync<User>()
+            ?? throw new ArgumentException(invalidCode);
+
+        var row = await db.Query("PasswordResetCodes")
+            .Where("UserId", user.Id)
+            .WhereNull("UsedAt")
+            .Where("ExpiresAt", ">", DateTime.UtcNow)
+            .Where("Attempts", "<", MaxResetCodeAttempts)
+            .OrderByDesc("CreatedAt")
+            .FirstOrDefaultAsync<dynamic>()
+            ?? throw new ArgumentException(invalidCode);
+
+        // Count the attempt before comparing, conditionally, so parallel guesses can't exceed the limit
+        var counted = await db.StatementAsync(
+            "UPDATE PasswordResetCodes SET Attempts = Attempts + 1 WHERE Id = @Id AND UsedAt IS NULL AND Attempts < @Max",
+            new { Id = (string)row.Id, Max = MaxResetCodeAttempts });
+        if (counted == 0 || !CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(HashResetCode(user.Id, request.Code?.Trim() ?? "")),
+                Encoding.UTF8.GetBytes((string)row.CodeHash)))
+            throw new ArgumentException(invalidCode);
+
+        var now = DateTime.UtcNow;
+        await db.Query("PasswordResetCodes").Where("UserId", user.Id).WhereNull("UsedAt").UpdateAsync(new { UsedAt = now });
+        await db.Query("Users").Where("Id", user.Id).UpdateAsync(new { PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword) });
+        // Receiving the code proves the user owns the address
+        await db.Query("Users").Where("Id", user.Id).WhereNull("EmailVerifiedAt").UpdateAsync(new { EmailVerifiedAt = now });
+
+        await TrySendPasswordChangedEmailAsync(user);
+
+        user = await GetCurrentUserAsync(user.Id);
+        var permissions = await GetPermissionsForRoleAsync(user.Role);
+        return BuildAuthResponse(user, permissions);
+    }
+
+    public async Task ChangePasswordAsync(string userId, ChangePasswordRequest request)
+    {
+        var user = await GetCurrentUserAsync(userId);
+        if (string.IsNullOrEmpty(request.CurrentPassword) || !BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+            throw new ArgumentException("Current password is incorrect.");
+
+        ValidateNewPassword(request.NewPassword);
+        if (request.NewPassword == request.CurrentPassword)
+            throw new ArgumentException("New password must be different from your current password.");
+
+        await db.Query("Users").Where("Id", userId).UpdateAsync(new { PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword) });
+        await db.Query("PasswordResetCodes").Where("UserId", userId).WhereNull("UsedAt").UpdateAsync(new { UsedAt = DateTime.UtcNow });
+
+        await TrySendPasswordChangedEmailAsync(user);
+    }
+
+    private static void ValidateNewPassword(string? password)
+    {
+        if (string.IsNullOrEmpty(password) || password.Length < MinPasswordLength)
+            throw new ArgumentException($"Password must be at least {MinPasswordLength} characters.");
+    }
+
+    private async Task TrySendPasswordChangedEmailAsync(User user)
+    {
+        var name = WebUtility.HtmlEncode(user.FirstName);
+        var html = $"""
+            <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;color:#2B3674">
+              <h2 style="margin-bottom:8px">Your password was changed</h2>
+              <p>Hi {name},</p>
+              <p>The password for your scholarship account was just changed.</p>
+              <p style="font-size:13px;color:#A3AED0">If this wasn't you, reset your password from the sign-in page right away and contact the scholarship administrator.</p>
+            </div>
+            """;
+        var text = $"Hi {user.FirstName},\n\nThe password for your scholarship account was just changed.\n\nIf this wasn't you, reset your password from the sign-in page right away and contact the scholarship administrator.";
+
+        try
+        {
+            await email.SendAsync(user.Email, "Your password was changed", html, text);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to send password changed email to user {UserId}", user.Id);
+        }
+    }
+
+    // Salted with the user id so identical codes for different users don't share a hash
+    private static string HashResetCode(string userId, string code) => HashToken($"{userId}:{code}");
 
     private static string HashToken(string token)
     {

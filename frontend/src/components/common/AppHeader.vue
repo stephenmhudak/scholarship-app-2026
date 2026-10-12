@@ -36,6 +36,9 @@ function logout() {
           </p>
         </div>
       </div>
+      <v-btn variant="text" prepend-icon="mdi-account-cog-outline" to="/account">
+        <span class="hidden sm:inline">Account</span>
+      </v-btn>
       <v-btn variant="text" color="error" prepend-icon="mdi-logout" @click="logout">
         <span class="hidden sm:inline">Logout</span>
       </v-btn>

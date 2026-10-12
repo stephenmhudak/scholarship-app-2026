@@ -121,6 +121,9 @@ backend/ScholarshipApi/
 | POST | `/api/auth/register` | Public | Creates applicant, emails verification link (no token returned) |
 | POST | `/api/auth/verify-email` | Public | `{ token }` → same payload as login |
 | POST | `/api/auth/resend-verification` | Public | `{ email }` → 204 always (no enumeration, 1 min cooldown) |
+| POST | `/api/auth/forgot-password` | Public | `{ email }` → 204 always; emails a 6-digit code (15 min, 5 tries, 1 min cooldown) |
+| POST | `/api/auth/reset-password` | Public | `{ email, code, newPassword }` → same payload as login |
+| POST | `/api/auth/change-password` | Bearer | `{ currentPassword, newPassword }` → 204 |
 | GET | `/api/auth/me` | Bearer | Current user |
 | GET | `/api/applications/my` | applicant | Own applications |
 | GET | `/api/applications/current` | applicant | Most recent |
@@ -167,6 +170,7 @@ backend/ScholarshipApi/
 - **No EF** — raw SqlKata + Dapper. Write explicit UPDATE queries.
 - **File upload is two-step:** upload (multipart `file`, `applicationId`, `questionId`) → `fileId` → store in answer. `ApplicationFiles.ApplicationId` is a FK, so uploads must name the applicant's own draft application.
 - **Email verification:** self-registered users can't log in until `Users.EmailVerifiedAt` is set (login → 403 `{ code: "email_not_verified" }`). Admin/school-created users are pre-verified. Emails go through `IEmailService` — Resend if `Email:Resend:ApiKey` is set, otherwise logged to console. In Docker, credentials go in `secrets/email.env` and `secrets/r2.env` (copy the `.example` files).
+- **Password reset codes** live in `PasswordResetCodes`, hashed as SHA-256 of `userId:code`. Only the newest code is valid; a successful reset or change marks all codes used and also verifies the email. Both send a "password changed" email.
 - **Reference codes are hashed** — store SHA-256, compare hash on lookup. Plaintext returned once.
 - **Both frontend routing AND backend auth enforce roles** — check both when adding features.
 - **Status transitions are manual** — no state machine. Admin can set any valid status. Exception: `ApplicationArchiveService` (hourly) archives drafts in closed cycles.

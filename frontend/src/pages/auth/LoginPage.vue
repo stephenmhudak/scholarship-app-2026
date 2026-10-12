@@ -94,6 +94,15 @@ async function resend() {
         hide-details="auto"
       />
 
+      <div class="text-right">
+        <RouterLink
+          :to="{ path: '/forgot-password', query: form.email ? { email: form.email } : {} }"
+          class="text-sm text-primary font-semibold hover:underline"
+        >
+          Forgot password?
+        </RouterLink>
+      </div>
+
       <v-btn type="submit" color="primary" size="large" block :loading="loading">
         Sign in
       </v-btn>

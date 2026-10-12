@@ -31,6 +31,19 @@ export const useAuthStore = defineStore('auth', {
       await api.post('/auth/resend-verification', { email })
     },
 
+    async forgotPassword(email) {
+      await api.post('/auth/forgot-password', { email })
+    },
+
+    async resetPassword({ email, code, newPassword }) {
+      const response = await api.post('/auth/reset-password', { email, code, newPassword })
+      this._applyAuthResponse(response.data)
+    },
+
+    async changePassword({ currentPassword, newPassword }) {
+      await api.post('/auth/change-password', { currentPassword, newPassword })
+    },
+
     logout() {
       this.token = null
       this.user = null

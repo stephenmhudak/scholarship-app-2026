@@ -38,6 +38,30 @@ public class AuthController(IAuthService authService) : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        await authService.ForgotPasswordAsync(request.Email);
+        return NoContent();
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordWithCodeRequest request)
+    {
+        var result = await authService.ResetPasswordAsync(request);
+        return Ok(result);
+    }
+
+    [HttpPost("change-password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)!;
+        await authService.ChangePasswordAsync(userId, request);
+        return NoContent();
+    }
+
     [HttpGet("invite/{token}")]
     public async Task<IActionResult> GetInvite(string token)
     {
