@@ -14,5 +14,8 @@ public class User
     public string? TotpPendingSecret { get; set; }
     public DateTime? TotpEnabledAt { get; set; }
     public long? TotpLastUsedStep { get; set; }
+    public string? TwoFactorMethod { get; set; }
+    public string? EmailOtpSetupHash { get; set; }
+    public DateTime? EmailOtpSetupExpiresAt { get; set; }
     public DateTime CreatedAt { get; set; }
 }

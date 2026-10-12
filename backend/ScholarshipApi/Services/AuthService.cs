@@ -62,7 +62,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
             throw new ArgumentException("Too many incorrect codes. Please sign in again.");
 
         var user = await GetCurrentUserAsync(userId);
-        if (!await twoFactor.VerifyLoginCodeAsync(user, request.Code))
+        if (!await twoFactor.VerifyLoginCodeAsync(user, request.Code, challengeId))
             throw new ArgumentException("That code is incorrect. Please try again.");
 
         var consumed = await db.Query("TwoFactorChallenges").Where("Id", challengeId).WhereNull("UsedAt").UpdateAsync(new { UsedAt = DateTime.UtcNow });
@@ -72,26 +72,69 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         return BuildAuthResponse(user, permissions);
     }
 
+    // Email-method users can ask for another code while the challenge is still open
+    public async Task ResendTwoFactorEmailAsync(string challengeToken)
+    {
+        var row = await db.Query("TwoFactorChallenges")
+            .Where("TokenHash", HashToken(challengeToken ?? ""))
+            .WhereNull("UsedAt")
+            .Where("ExpiresAt", ">", DateTime.UtcNow)
+            .FirstOrDefaultAsync<dynamic>()
+            ?? throw new ArgumentException("Your sign-in attempt has expired. Please sign in again.");
+
+        var user = await GetCurrentUserAsync((string)row.UserId);
+        if (user.TwoFactorMethod != TwoFactorMethods.Email)
+            throw new ArgumentException("This account doesn't use email sign-in codes.");
+
+        var now = DateTime.UtcNow;
+        if (row.EmailCodeSentAt is DateTime sentAt && sentAt > now - TwoFactorService.EmailCodeResendCooldown)
+            throw new ArgumentException("A code was just sent. Please wait a minute before requesting another.");
+
+        var challengeId = (string)row.Id;
+        await db.Query("TwoFactorChallenges").Where("Id", challengeId).UpdateAsync(new { ExpiresAt = now + TwoFactorService.EmailCodeLifetime });
+        await twoFactor.IssueEmailLoginCodeAsync(user, challengeId);
+    }
+
     private async Task<LoginResult> SignInOrChallengeAsync(User user)
     {
-        if (user.TotpEnabledAt is null)
+        if (user.TwoFactorMethod is null)
         {
             var permissions = await GetPermissionsForRoleAsync(user.Role);
             return new LoginResult { Auth = BuildAuthResponse(user, permissions) };
         }
 
+        var isEmail = user.TwoFactorMethod == TwoFactorMethods.Email;
         var token = NewUrlToken();
+        var challengeId = Guid.NewGuid().ToString();
         var now = DateTime.UtcNow;
         await db.Query("TwoFactorChallenges").InsertAsync(new
         {
-            Id = Guid.NewGuid().ToString(),
+            Id = challengeId,
             UserId = user.Id,
             TokenHash = HashToken(token),
             Attempts = 0,
-            ExpiresAt = now + TwoFactorChallengeLifetime,
+            // Email can be slow to arrive, so its codes get longer than an app code needs
+            ExpiresAt = now + (isEmail ? TwoFactorService.EmailCodeLifetime : TwoFactorChallengeLifetime),
             CreatedAt = now
         });
-        return new LoginResult { Challenge = new TwoFactorChallengeResponse { ChallengeToken = token } };
+        if (isEmail) await twoFactor.IssueEmailLoginCodeAsync(user, challengeId);
+
+        return new LoginResult
+        {
+            Challenge = new TwoFactorChallengeResponse
+            {
+                ChallengeToken = token,
+                Method = user.TwoFactorMethod,
+                MaskedEmail = isEmail ? MaskEmail(user.Email) : null
+            }
+        };
+    }
+
+    // j•••@example.com: enough to recognize the inbox without revealing the address to someone who only has the password
+    private static string MaskEmail(string address)
+    {
+        var at = address.IndexOf('@');
+        return at <= 0 ? address : $"{address[0]}•••{address[at..]}";
     }
 
     public async Task<RegisterResponse> RegisterAsync(RegisterRequest request)
@@ -421,7 +464,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
             Role = user.Role,
             SchoolId = user.SchoolId,
             Permissions = permList.ToArray(),
-            TwoFactorEnabled = user.TotpEnabledAt is not null
+            TwoFactorEnabled = user.TwoFactorMethod is not null
         };
     }
 

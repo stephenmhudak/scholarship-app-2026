@@ -11,7 +11,7 @@ const redirectAfterSignIn = useSignInRedirect()
 
 const status = ref('verifying')
 const error = ref(null)
-const challengeToken = ref(null)
+const pendingChallenge = ref(null)
 
 onMounted(async () => {
   const token = route.query.token
@@ -24,7 +24,7 @@ onMounted(async () => {
   try {
     const challenge = await authStore.verifyEmail(token)
     if (challenge) {
-      challengeToken.value = challenge.challengeToken
+      pendingChallenge.value = challenge
       status.value = 'challenge'
       return
     }
@@ -40,7 +40,7 @@ onMounted(async () => {
 <template>
   <TwoFactorChallengeForm
     v-if="status === 'challenge'"
-    :challenge-token="challengeToken"
+    :challenge="pendingChallenge"
     @success="redirectAfterSignIn"
     @cancel="$router.push('/login')"
   />

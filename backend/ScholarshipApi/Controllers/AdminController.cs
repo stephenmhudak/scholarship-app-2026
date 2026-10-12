@@ -131,7 +131,7 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
             .LeftJoin("Schools as s", "s.Id", "u.SchoolId")
             .Select("u.Id", "u.Email", "u.FirstName", "u.LastName", "u.Role", "u.SchoolId",
                     "s.Name as SchoolName", "u.CreatedAt")
-            .SelectRaw("u.TotpEnabledAt IS NOT NULL AS TwoFactorEnabled")
+            .SelectRaw("u.TwoFactorMethod IS NOT NULL AS TwoFactorEnabled")
             .OrderBy("u.LastName", "u.FirstName")
             .GetAsync<dynamic>();
         return Ok(users);

@@ -27,6 +27,13 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
         return Ok(result);
     }
 
+    [HttpPost("login/2fa/resend")]
+    public async Task<IActionResult> ResendTwoFactorEmail([FromBody] TwoFactorResendRequest request)
+    {
+        await authService.ResendTwoFactorEmailAsync(request.ChallengeToken);
+        return NoContent();
+    }
+
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
@@ -92,6 +99,22 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     {
         var result = await twoFactorService.EnableAsync(UserId, request.Code);
         return Ok(result);
+    }
+
+    [HttpPost("2fa/email/setup")]
+    [Authorize]
+    public async Task<IActionResult> BeginEmailTwoFactorSetup()
+    {
+        await twoFactorService.BeginEmailSetupAsync(UserId);
+        return NoContent();
+    }
+
+    [HttpPost("2fa/email/enable")]
+    [Authorize]
+    public async Task<IActionResult> EnableEmailTwoFactor([FromBody] TwoFactorEnableRequest request)
+    {
+        await twoFactorService.EnableEmailAsync(UserId, request.Code);
+        return NoContent();
     }
 
     [HttpPost("2fa/disable")]

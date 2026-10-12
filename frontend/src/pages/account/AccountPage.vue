@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth'
-import TotpSetup from '../../components/auth/TotpSetup.vue'
+import TwoFactorSetup from '../../components/auth/TwoFactorSetup.vue'
 import RecoveryCodesList from '../../components/auth/RecoveryCodesList.vue'
 
 const authStore = useAuthStore()
@@ -157,27 +157,34 @@ async function changePassword() {
         <div v-else-if="twoFactor.enabled" class="space-y-4">
           <div class="flex items-center gap-3">
             <v-chip color="success" prepend-icon="mdi-shield-check-outline">On</v-chip>
-            <p class="text-sm text-navy">Signing in needs a code from your authenticator app.</p>
+            <p class="text-sm text-navy">
+              {{ twoFactor.method === 'email'
+                ? 'Signing in needs a code we email to you.'
+                : 'Signing in needs a code from your authenticator app.' }}
+            </p>
           </div>
+          <p v-if="twoFactor.method === 'email'" class="text-sm text-slate-400">
+            To switch to an authenticator app, turn two-factor off and set it up again.
+          </p>
           <v-alert
-            v-if="twoFactor.recoveryCodesRemaining <= 2"
+            v-else-if="twoFactor.recoveryCodesRemaining <= 2"
             type="warning"
             :text="`You have ${twoFactor.recoveryCodesRemaining} recovery code${twoFactor.recoveryCodesRemaining === 1 ? '' : 's'} left. Create a new set so you don't get locked out.`"
           />
           <p v-else class="text-sm text-slate-400">{{ twoFactor.recoveryCodesRemaining }} unused recovery codes remaining.</p>
           <div class="flex flex-wrap gap-2">
-            <v-btn variant="outlined" prepend-icon="mdi-refresh" @click="openPasswordDialog('regenerate')">New recovery codes</v-btn>
+            <v-btn v-if="twoFactor.method === 'totp'" variant="outlined" prepend-icon="mdi-refresh" @click="openPasswordDialog('regenerate')">New recovery codes</v-btn>
             <v-btn variant="outlined" color="error" @click="openPasswordDialog('disable')">Turn off two-factor</v-btn>
           </div>
         </div>
 
         <div v-else-if="settingUpTwoFactor" class="max-w-md">
-          <TotpSetup @done="finishTwoFactorSetup" @cancel="settingUpTwoFactor = false" />
+          <TwoFactorSetup @done="finishTwoFactorSetup" @cancel="settingUpTwoFactor = false" />
         </div>
 
         <div v-else class="space-y-4">
           <p class="text-sm text-slate-400">
-            Add a second step to signing in: a 6-digit code from an authenticator app on your phone.
+            Add a second step to signing in: a 6-digit code from an authenticator app on your phone, or one we email you.
             It keeps your account safe even if someone learns your password.
           </p>
           <v-btn color="primary" prepend-icon="mdi-shield-lock-outline" @click="settingUpTwoFactor = true">
@@ -200,7 +207,7 @@ async function changePassword() {
 
           <v-form v-else class="space-y-4" @submit.prevent="submitPasswordDialog">
             <p class="text-sm text-slate-400">
-              <template v-if="passwordAction === 'disable'">Enter your password to confirm. Your recovery codes will stop working.</template>
+              <template v-if="passwordAction === 'disable'">Enter your password to confirm.{{ twoFactor?.method === 'totp' ? ' Your recovery codes will stop working.' : '' }}</template>
               <template v-else>Enter your password to create 10 new recovery codes. Your current codes will stop working.</template>
             </p>
             <v-alert v-if="dialogError" type="error" :text="dialogError" />

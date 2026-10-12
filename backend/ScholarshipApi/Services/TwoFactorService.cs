@@ -1,5 +1,6 @@
 using System.Net;
 using System.Security.Cryptography;
+using System.Text;
 using OtpNet;
 using SqlKata.Execution;
 using ScholarshipApi.DTOs.Auth;
@@ -12,6 +13,8 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
     private const int RecoveryCodeCount = 10;
     // No 0/o, 1/l/i so codes survive being written down
     private const string RecoveryCodeAlphabet = "abcdefghjkmnpqrstuvwxyz23456789";
+    public static readonly TimeSpan EmailCodeLifetime = TimeSpan.FromMinutes(10);
+    public static readonly TimeSpan EmailCodeResendCooldown = TimeSpan.FromMinutes(1);
 
     public async Task<TwoFactorStatusResponse> GetStatusAsync(string userId)
     {
@@ -19,16 +22,16 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
         var remaining = await db.Query("TwoFactorRecoveryCodes").Where("UserId", userId).WhereNull("UsedAt").CountAsync<int>();
         return new TwoFactorStatusResponse
         {
-            Enabled = user.TotpEnabledAt is not null,
-            RecoveryCodesRemaining = user.TotpEnabledAt is null ? 0 : remaining
+            Enabled = user.TwoFactorMethod is not null,
+            Method = user.TwoFactorMethod,
+            RecoveryCodesRemaining = user.TwoFactorMethod == TwoFactorMethods.Totp ? remaining : 0
         };
     }
 
     public async Task<TwoFactorSetupResponse> BeginSetupAsync(string userId)
     {
         var user = await GetUserAsync(userId);
-        if (user.TotpEnabledAt is not null)
-            throw new ArgumentException("Two-factor authentication is already turned on.");
+        RequireNotEnrolled(user);
 
         // Held as pending until the user proves their app generates matching codes
         var secret = Base32Encoding.ToString(KeyGeneration.GenerateRandomKey(20));
@@ -43,8 +46,7 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
     public async Task<TwoFactorEnableResponse> EnableAsync(string userId, string code)
     {
         var user = await GetUserAsync(userId);
-        if (user.TotpEnabledAt is not null)
-            throw new ArgumentException("Two-factor authentication is already turned on.");
+        RequireNotEnrolled(user);
         if (user.TotpPendingSecret is null)
             throw new ArgumentException("Start setup again to get a new QR code.");
 
@@ -53,10 +55,11 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
 
         var enabled = await db.StatementAsync(
             """
-            UPDATE Users SET TotpSecret = TotpPendingSecret, TotpPendingSecret = NULL, TotpEnabledAt = @Now, TotpLastUsedStep = @Step
-            WHERE Id = @Id AND TotpPendingSecret = @Secret AND TotpEnabledAt IS NULL
+            UPDATE Users SET TotpSecret = TotpPendingSecret, TotpPendingSecret = NULL, TotpEnabledAt = @Now, TotpLastUsedStep = @Step,
+                TwoFactorMethod = @Method
+            WHERE Id = @Id AND TotpPendingSecret = @Secret AND TwoFactorMethod IS NULL
             """,
-            new { Id = userId, Secret = user.TotpPendingSecret, Step = step, Now = DateTime.UtcNow });
+            new { Id = userId, Secret = user.TotpPendingSecret, Step = step, Now = DateTime.UtcNow, Method = TwoFactorMethods.Totp });
         if (enabled == 0)
             throw new ArgumentException("Start setup again to get a new QR code.");
 
@@ -66,11 +69,67 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
         return new TwoFactorEnableResponse { RecoveryCodes = codes };
     }
 
+    public async Task BeginEmailSetupAsync(string userId)
+    {
+        var user = await GetUserAsync(userId);
+        RequireNotEnrolled(user);
+
+        var now = DateTime.UtcNow;
+        if (user.EmailOtpSetupExpiresAt is { } expires && expires - EmailCodeLifetime + EmailCodeResendCooldown > now)
+            throw new ArgumentException("A code was just sent. Please wait a minute before requesting another.");
+
+        var code = NewSixDigitCode();
+        await db.Query("Users").Where("Id", userId).UpdateAsync(new
+        {
+            EmailOtpSetupHash = TokenHash.Sha256($"{userId}:{code}"),
+            EmailOtpSetupExpiresAt = now + EmailCodeLifetime
+        });
+
+        // Setup is interactive, so tell the user if the email didn't go out rather than leave them waiting
+        if (!await TrySendCodeAsync(user, "Confirm email sign-in codes", "Enter this code to start receiving sign-in codes by email:", code))
+            throw new ArgumentException("We couldn't send the email. Please try again shortly.");
+    }
+
+    public async Task EnableEmailAsync(string userId, string code)
+    {
+        var user = await GetUserAsync(userId);
+        RequireNotEnrolled(user);
+        if (user.EmailOtpSetupHash is null || user.EmailOtpSetupExpiresAt is null || user.EmailOtpSetupExpiresAt <= DateTime.UtcNow)
+            throw new ArgumentException("That code has expired. Send a new one and try again.");
+
+        if (!HashesMatch(TokenHash.Sha256($"{userId}:{NormalizeDigits(code)}"), user.EmailOtpSetupHash))
+            throw new ArgumentException("That code doesn't match. Check the latest email we sent.");
+
+        var enabled = await db.StatementAsync(
+            """
+            UPDATE Users SET TwoFactorMethod = @Method, EmailOtpSetupHash = NULL, EmailOtpSetupExpiresAt = NULL
+            WHERE Id = @Id AND EmailOtpSetupHash = @Hash AND TwoFactorMethod IS NULL
+            """,
+            new { Id = userId, Hash = user.EmailOtpSetupHash, Method = TwoFactorMethods.Email });
+        if (enabled == 0)
+            throw new ArgumentException("That code has expired. Send a new one and try again.");
+
+        await TrySendNoticeAsync(user, "Two-factor authentication turned on",
+            "Two-factor authentication was just turned on for your scholarship account. You'll now enter a code we email you when you sign in.");
+    }
+
+    // Puts a fresh code on the sign-in challenge (replacing any earlier one) and emails it
+    public async Task IssueEmailLoginCodeAsync(User user, string challengeId)
+    {
+        var code = NewSixDigitCode();
+        await db.Query("TwoFactorChallenges").Where("Id", challengeId).UpdateAsync(new
+        {
+            EmailCodeHash = TokenHash.Sha256($"{challengeId}:{code}"),
+            EmailCodeSentAt = DateTime.UtcNow
+        });
+        await TrySendCodeAsync(user, "Your sign-in code", "Enter this code to finish signing in to your scholarship account:", code);
+    }
+
     public async Task DisableAsync(string userId, string password)
     {
         var user = await GetUserAsync(userId);
         RequirePassword(user, password);
-        if (user.TotpEnabledAt is null) return;
+        if (user.TwoFactorMethod is null) return;
 
         await ClearAsync(userId);
         await TrySendNoticeAsync(user, "Two-factor authentication turned off",
@@ -81,8 +140,8 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
     {
         var user = await GetUserAsync(userId);
         RequirePassword(user, password);
-        if (user.TotpEnabledAt is null)
-            throw new ArgumentException("Two-factor authentication is not turned on.");
+        if (user.TwoFactorMethod != TwoFactorMethods.Totp)
+            throw new ArgumentException("Recovery codes are only used with an authenticator app.");
 
         var codes = await ReplaceRecoveryCodesAsync(userId);
         await TrySendNoticeAsync(user, "New recovery codes created",
@@ -94,10 +153,10 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
     public async Task ResetByAdminAsync(string userId)
     {
         var user = await GetUserAsync(userId);
-        if (user.TotpEnabledAt is null && user.TotpPendingSecret is null) return;
+        if (user.TwoFactorMethod is null && user.TotpPendingSecret is null && user.EmailOtpSetupHash is null) return;
 
         await ClearAsync(userId);
-        if (user.TotpEnabledAt is not null)
+        if (user.TwoFactorMethod is not null)
             await TrySendNoticeAsync(user, "Two-factor authentication reset",
                 "An administrator reset two-factor authentication on your scholarship account, so signing in now only needs your password. You can set it up again from your Account page.");
     }
@@ -109,9 +168,18 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
             TotpSecret = (string?)null,
             TotpPendingSecret = (string?)null,
             TotpEnabledAt = (DateTime?)null,
-            TotpLastUsedStep = (long?)null
+            TotpLastUsedStep = (long?)null,
+            TwoFactorMethod = (string?)null,
+            EmailOtpSetupHash = (string?)null,
+            EmailOtpSetupExpiresAt = (DateTime?)null
         });
         await db.Query("TwoFactorRecoveryCodes").Where("UserId", userId).DeleteAsync();
+    }
+
+    private static void RequireNotEnrolled(User user)
+    {
+        if (user.TwoFactorMethod is not null)
+            throw new ArgumentException("Two-factor authentication is already turned on. Turn it off first to switch methods.");
     }
 
     private static void RequirePassword(User user, string password)
@@ -120,10 +188,17 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
             throw new ArgumentException("Password is incorrect.");
     }
 
-    // Accepts either a 6-digit authenticator code or an unused recovery code
-    public async Task<bool> VerifyLoginCodeAsync(User user, string code)
+    // Email method: the code emailed for this challenge. Authenticator method: a 6-digit app code or an unused recovery code.
+    public async Task<bool> VerifyLoginCodeAsync(User user, string code, string challengeId)
     {
-        if (user.TotpEnabledAt is null || user.TotpSecret is null) return false;
+        if (user.TwoFactorMethod == TwoFactorMethods.Email)
+        {
+            var row = await db.Query("TwoFactorChallenges").Select("EmailCodeHash").Where("Id", challengeId).FirstOrDefaultAsync<dynamic>();
+            var expected = (string?)row?.EmailCodeHash;
+            return expected is not null && HashesMatch(TokenHash.Sha256($"{challengeId}:{NormalizeDigits(code)}"), expected);
+        }
+
+        if (user.TwoFactorMethod != TwoFactorMethods.Totp || user.TotpSecret is null) return false;
 
         var normalized = (code ?? "").Replace(" ", "").Replace("-", "").ToLowerInvariant();
         if (normalized.Length == 6 && normalized.All(char.IsAsciiDigit))
@@ -156,6 +231,13 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
         return totp.VerifyTotp(code, out step, VerificationWindow.RfcSpecifiedNetworkDelay);
     }
 
+    private static string NewSixDigitCode() => RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+
+    private static string NormalizeDigits(string? code) => (code ?? "").Replace(" ", "").Replace("-", "");
+
+    private static bool HashesMatch(string actual, string expected) =>
+        CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(actual), Encoding.UTF8.GetBytes(expected));
+
     private async Task<string[]> ReplaceRecoveryCodesAsync(string userId)
     {
         await db.Query("TwoFactorRecoveryCodes").Where("UserId", userId).DeleteAsync();
@@ -180,6 +262,32 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
     private async Task<User> GetUserAsync(string userId) =>
         await db.Query("Users").Where("Id", userId).FirstOrDefaultAsync<User>()
             ?? throw new KeyNotFoundException("User not found.");
+
+    private async Task<bool> TrySendCodeAsync(User user, string subject, string intro, string code)
+    {
+        var name = WebUtility.HtmlEncode(user.FirstName);
+        var html = $"""
+            <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;color:#2B3674">
+              <h2 style="margin-bottom:8px">{subject}</h2>
+              <p>Hi {name},</p>
+              <p>{intro}</p>
+              <p style="margin:28px 0;font-size:32px;font-weight:bold;letter-spacing:8px">{code}</p>
+              <p style="font-size:13px;color:#A3AED0">This code expires in 10 minutes. If you didn't just try to sign in, someone may know your password: reset it from the sign-in page.</p>
+            </div>
+            """;
+        var text = $"Hi {user.FirstName},\n\n{intro} {code}\n\nThis code expires in 10 minutes. If you didn't just try to sign in, someone may know your password: reset it from the sign-in page.";
+
+        try
+        {
+            await email.SendAsync(user.Email, subject, html, text);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to send two-factor code to user {UserId}", user.Id);
+            return false;
+        }
+    }
 
     private async Task TrySendNoticeAsync(User user, string subject, string message)
     {

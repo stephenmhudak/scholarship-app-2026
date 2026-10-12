@@ -104,7 +104,7 @@ public class SchoolsController(QueryFactory db, ITwoFactorService twoFactorServi
             .Where("Role", "counselor")
             .Where("SchoolId", id)
             .Select("Id", "FirstName", "LastName", "Email", "CreatedAt")
-            .SelectRaw("TotpEnabledAt IS NOT NULL AS TwoFactorEnabled")
+            .SelectRaw("TwoFactorMethod IS NOT NULL AS TwoFactorEnabled")
             .OrderBy("LastName")
             .GetAsync<dynamic>();
         return Ok(counselors);

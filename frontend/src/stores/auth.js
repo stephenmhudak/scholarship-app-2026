@@ -17,10 +17,14 @@ export const useAuthStore = defineStore('auth', {
   },
 
   actions: {
-    // Resolves to { challengeToken } when a second factor is needed, otherwise null (signed in)
+    // Resolves to { challengeToken, method, maskedEmail } when a second factor is needed, otherwise null (signed in)
     async login(credentials) {
       const response = await api.post('/auth/login', credentials)
       return this._applySignInResponse(response.data)
+    },
+
+    async resendTwoFactorEmail(challengeToken) {
+      await api.post('/auth/login/2fa/resend', { challengeToken })
     },
 
     async completeTwoFactorLogin(challengeToken, code) {
@@ -66,6 +70,15 @@ export const useAuthStore = defineStore('auth', {
       return response.data.recoveryCodes
     },
 
+    async beginEmailTwoFactorSetup() {
+      await api.post('/auth/2fa/email/setup')
+    },
+
+    async enableEmailTwoFactor(code) {
+      await api.post('/auth/2fa/email/enable', { code })
+      this._setTwoFactorEnabled(true)
+    },
+
     async regenerateRecoveryCodes(password) {
       const response = await api.post('/auth/2fa/recovery-codes', { password })
       return response.data.recoveryCodes
@@ -107,7 +120,7 @@ export const useAuthStore = defineStore('auth', {
     },
 
     _applySignInResponse(data) {
-      if (data.twoFactorRequired) return { challengeToken: data.challengeToken }
+      if (data.twoFactorRequired) return { challengeToken: data.challengeToken, method: data.method, maskedEmail: data.maskedEmail }
       this._applyAuthResponse(data)
       return null
     },

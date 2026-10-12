@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import TotpSetup from '../../components/auth/TotpSetup.vue'
+import TwoFactorSetup from '../../components/auth/TwoFactorSetup.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -28,13 +28,13 @@ function continueToApp() {
       <div>
         <h2 class="text-xl font-bold text-navy">Protect your account</h2>
         <p class="text-sm text-slate-400 mt-1">
-          Add two-factor authentication so signing in also needs a code from an authenticator app on your phone.
+          Add two-factor authentication so signing in also needs a code from an authenticator app or your email.
           It keeps your account safe even if someone learns your password.
         </p>
       </div>
     </div>
 
-    <TotpSetup v-if="settingUp" @done="continueToApp" @cancel="settingUp = false" />
+    <TwoFactorSetup v-if="settingUp" @done="continueToApp" @cancel="settingUp = false" />
 
     <div v-else class="space-y-3">
       <v-btn color="primary" size="large" block prepend-icon="mdi-shield-check-outline" @click="settingUp = true">

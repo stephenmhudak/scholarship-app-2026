@@ -20,7 +20,7 @@ const loading = ref(false)
 const error = ref(null)
 const resending = ref(false)
 const resendMessage = ref(null)
-const challengeToken = ref(null)
+const pendingChallenge = ref(null)
 
 async function requestCode() {
   loading.value = true
@@ -62,7 +62,7 @@ async function resetPassword() {
       code: form.value.code,
       newPassword: form.value.newPassword,
     })
-    if (challenge) challengeToken.value = challenge.challengeToken
+    if (challenge) pendingChallenge.value = challenge
     else redirectAfterSignIn()
   } catch (err) {
     error.value = err.response?.data?.error || 'Could not reset your password. Please try again.'
@@ -73,10 +73,10 @@ async function resetPassword() {
 </script>
 
 <template>
-  <div v-if="challengeToken" class="space-y-5">
+  <div v-if="pendingChallenge" class="space-y-5">
     <v-alert type="success" text="Your password has been reset. Finish signing in with your second factor." />
     <TwoFactorChallengeForm
-      :challenge-token="challengeToken"
+      :challenge="pendingChallenge"
       @success="redirectAfterSignIn"
       @cancel="$router.push('/login')"
     />

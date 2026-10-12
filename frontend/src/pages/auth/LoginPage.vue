@@ -16,7 +16,7 @@ const error = ref(null)
 const unverifiedEmail = ref(null)
 const resending = ref(false)
 const resendMessage = ref(null)
-const challengeToken = ref(null)
+const pendingChallenge = ref(null)
 
 async function login() {
   loading.value = true
@@ -26,7 +26,7 @@ async function login() {
 
   try {
     const challenge = await authStore.login(form.value)
-    if (challenge) challengeToken.value = challenge.challengeToken
+    if (challenge) pendingChallenge.value = challenge
     else redirectAfterSignIn()
   } catch (err) {
     if (err.response?.data?.code === 'email_not_verified') unverifiedEmail.value = form.value.email
@@ -51,10 +51,10 @@ async function resend() {
 
 <template>
   <TwoFactorChallengeForm
-    v-if="challengeToken"
-    :challenge-token="challengeToken"
+    v-if="pendingChallenge"
+    :challenge="pendingChallenge"
     @success="redirectAfterSignIn"
-    @cancel="challengeToken = null; form.password = ''"
+    @cancel="pendingChallenge = null; form.password = ''"
   />
 
   <div v-else class="space-y-5">

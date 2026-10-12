@@ -7,6 +7,7 @@ public interface IAuthService
 {
     Task<LoginResult> LoginAsync(LoginRequest request);
     Task<AuthResponse> CompleteTwoFactorLoginAsync(TwoFactorLoginRequest request);
+    Task ResendTwoFactorEmailAsync(string challengeToken);
     Task<RegisterResponse> RegisterAsync(RegisterRequest request);
     Task<LoginResult> VerifyEmailAsync(string token);
     Task ResendVerificationAsync(string email);
