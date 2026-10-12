@@ -10,5 +10,9 @@ public class User
     public string Role { get; set; } = null!;
     public string? SchoolId { get; set; }
     public DateTime? EmailVerifiedAt { get; set; }
+    public string? TotpSecret { get; set; }
+    public string? TotpPendingSecret { get; set; }
+    public DateTime? TotpEnabledAt { get; set; }
+    public long? TotpLastUsedStep { get; set; }
     public DateTime CreatedAt { get; set; }
 }

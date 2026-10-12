@@ -10,15 +10,19 @@ using ScholarshipApi.Models;
 
 namespace ScholarshipApi.Services;
 
-public class AuthService(QueryFactory db, IConfiguration config, IEmailService email, ILogger<AuthService> logger) : IAuthService
+public class AuthService(QueryFactory db, IConfiguration config, IEmailService email, ITwoFactorService twoFactor, ILogger<AuthService> logger) : IAuthService
 {
     private static readonly TimeSpan VerificationTokenLifetime = TimeSpan.FromHours(24);
     private static readonly TimeSpan ResendCooldown = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan ResetCodeLifetime = TimeSpan.FromMinutes(15);
     private const int MaxResetCodeAttempts = 5;
     private const int MinPasswordLength = 8;
+    private static readonly TimeSpan TwoFactorChallengeLifetime = TimeSpan.FromMinutes(5);
+    private const int MaxChallengeAttempts = 5;
+    private static readonly TimeSpan TwoFactorAttemptWindow = TimeSpan.FromMinutes(15);
+    private const int MaxTwoFactorAttemptsPerWindow = 10;
 
-    public async Task<AuthResponse> LoginAsync(LoginRequest request)
+    public async Task<LoginResult> LoginAsync(LoginRequest request)
     {
         var user = await db.Query("Users").Where("Email", request.Email).FirstOrDefaultAsync<User>();
         if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
@@ -27,8 +31,67 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         if (user.EmailVerifiedAt is null)
             throw new EmailNotVerifiedException(user.Email);
 
+        return await SignInOrChallengeAsync(user);
+    }
+
+    public async Task<AuthResponse> CompleteTwoFactorLoginAsync(TwoFactorLoginRequest request)
+    {
+        const string expired = "Your sign-in attempt has expired. Please sign in again.";
+
+        var row = await db.Query("TwoFactorChallenges")
+            .Where("TokenHash", HashToken(request.ChallengeToken ?? ""))
+            .WhereNull("UsedAt")
+            .Where("ExpiresAt", ">", DateTime.UtcNow)
+            .FirstOrDefaultAsync<dynamic>()
+            ?? throw new ArgumentException(expired);
+        var challengeId = (string)row.Id;
+        var userId = (string)row.UserId;
+
+        // A fresh challenge only needs the password, so also cap guesses per user across challenges
+        var recentAttempts = await db.Query("TwoFactorChallenges")
+            .Where("UserId", userId)
+            .Where("CreatedAt", ">", DateTime.UtcNow - TwoFactorAttemptWindow)
+            .SumAsync<decimal>("Attempts");
+        if (recentAttempts >= MaxTwoFactorAttemptsPerWindow)
+            throw new ArgumentException("Too many incorrect codes. Please wait 15 minutes and try again.");
+
+        var counted = await db.StatementAsync(
+            "UPDATE TwoFactorChallenges SET Attempts = Attempts + 1 WHERE Id = @Id AND UsedAt IS NULL AND Attempts < @Max",
+            new { Id = challengeId, Max = MaxChallengeAttempts });
+        if (counted == 0)
+            throw new ArgumentException("Too many incorrect codes. Please sign in again.");
+
+        var user = await GetCurrentUserAsync(userId);
+        if (!await twoFactor.VerifyLoginCodeAsync(user, request.Code))
+            throw new ArgumentException("That code is incorrect. Please try again.");
+
+        var consumed = await db.Query("TwoFactorChallenges").Where("Id", challengeId).WhereNull("UsedAt").UpdateAsync(new { UsedAt = DateTime.UtcNow });
+        if (consumed == 0) throw new ArgumentException(expired);
+
         var permissions = await GetPermissionsForRoleAsync(user.Role);
         return BuildAuthResponse(user, permissions);
+    }
+
+    private async Task<LoginResult> SignInOrChallengeAsync(User user)
+    {
+        if (user.TotpEnabledAt is null)
+        {
+            var permissions = await GetPermissionsForRoleAsync(user.Role);
+            return new LoginResult { Auth = BuildAuthResponse(user, permissions) };
+        }
+
+        var token = NewUrlToken();
+        var now = DateTime.UtcNow;
+        await db.Query("TwoFactorChallenges").InsertAsync(new
+        {
+            Id = Guid.NewGuid().ToString(),
+            UserId = user.Id,
+            TokenHash = HashToken(token),
+            Attempts = 0,
+            ExpiresAt = now + TwoFactorChallengeLifetime,
+            CreatedAt = now
+        });
+        return new LoginResult { Challenge = new TwoFactorChallengeResponse { ChallengeToken = token } };
     }
 
     public async Task<RegisterResponse> RegisterAsync(RegisterRequest request)
@@ -130,8 +193,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
 
     private async Task TrySendVerificationEmailAsync(User user)
     {
-        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
-            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var token = NewUrlToken();
         var now = DateTime.UtcNow;
         await db.Query("EmailVerificationTokens").InsertAsync(new
         {
@@ -221,7 +283,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         }
     }
 
-    public async Task<AuthResponse> ResetPasswordAsync(ResetPasswordWithCodeRequest request)
+    public async Task<LoginResult> ResetPasswordAsync(ResetPasswordWithCodeRequest request)
     {
         const string invalidCode = "That code is invalid or has expired. Request a new one and try again.";
         ValidateNewPassword(request.NewPassword);
@@ -255,9 +317,8 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
 
         await TrySendPasswordChangedEmailAsync(user);
 
-        user = await GetCurrentUserAsync(user.Id);
-        var permissions = await GetPermissionsForRoleAsync(user.Role);
-        return BuildAuthResponse(user, permissions);
+        // The reset code only proves access to the inbox, so enrolled users still need their second factor
+        return await SignInOrChallengeAsync(await GetCurrentUserAsync(user.Id));
     }
 
     public async Task ChangePasswordAsync(string userId, ChangePasswordRequest request)
@@ -308,11 +369,10 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
     // Salted with the user id so identical codes for different users don't share a hash
     private static string HashResetCode(string userId, string code) => HashToken($"{userId}:{code}");
 
-    private static string HashToken(string token)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
-        return Convert.ToHexString(bytes).ToLower();
-    }
+    private static string HashToken(string token) => TokenHash.Sha256(token);
+
+    private static string NewUrlToken() =>
+        Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     public async Task<InviteInfoResponse> GetInviteAsync(string token)
     {
@@ -361,7 +421,8 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
             LastName = user.LastName,
             Role = user.Role,
             SchoolId = user.SchoolId,
-            Permissions = permList.ToArray()
+            Permissions = permList.ToArray(),
+            TwoFactorEnabled = user.TotpEnabledAt is not null
         };
     }
 

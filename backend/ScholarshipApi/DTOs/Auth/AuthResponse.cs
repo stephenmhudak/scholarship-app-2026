@@ -10,4 +10,5 @@ public class AuthResponse
     public string Role { get; set; } = null!;
     public string? SchoolId { get; set; }
     public string[] Permissions { get; set; } = [];
+    public bool TwoFactorEnabled { get; set; }
 }

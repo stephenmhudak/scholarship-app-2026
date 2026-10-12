@@ -41,6 +41,12 @@ const routes = [
     meta: { layout: 'auth', public: true },
   },
   {
+    path: '/two-factor',
+    name: 'TwoFactorPrompt',
+    component: () => import('../pages/auth/TwoFactorPromptPage.vue'),
+    meta: { layout: 'auth' },
+  },
+  {
     path: '/account',
     name: 'Account',
     component: () => import('../pages/account/AccountPage.vue'),

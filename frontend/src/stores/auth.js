@@ -17,8 +17,14 @@ export const useAuthStore = defineStore('auth', {
   },
 
   actions: {
+    // Resolves to { challengeToken } when a second factor is needed, otherwise null (signed in)
     async login(credentials) {
       const response = await api.post('/auth/login', credentials)
+      return this._applySignInResponse(response.data)
+    },
+
+    async completeTwoFactorLogin(challengeToken, code) {
+      const response = await api.post('/auth/login/2fa', { challengeToken, code })
       this._applyAuthResponse(response.data)
     },
 
@@ -37,11 +43,32 @@ export const useAuthStore = defineStore('auth', {
 
     async resetPassword({ email, code, newPassword }) {
       const response = await api.post('/auth/reset-password', { email, code, newPassword })
-      this._applyAuthResponse(response.data)
+      return this._applySignInResponse(response.data)
     },
 
     async changePassword({ currentPassword, newPassword }) {
       await api.post('/auth/change-password', { currentPassword, newPassword })
+    },
+
+    async fetchTwoFactorStatus() {
+      const response = await api.get('/auth/2fa')
+      return response.data
+    },
+
+    async beginTwoFactorSetup() {
+      const response = await api.post('/auth/2fa/setup')
+      return response.data
+    },
+
+    async enableTwoFactor(code) {
+      const response = await api.post('/auth/2fa/enable', { code })
+      this._setTwoFactorEnabled(true)
+      return response.data.recoveryCodes
+    },
+
+    async disableTwoFactor(password) {
+      await api.post('/auth/2fa/disable', { password })
+      this._setTwoFactorEnabled(false)
     },
 
     logout() {
@@ -67,10 +94,23 @@ export const useAuthStore = defineStore('auth', {
         lastName: d.lastName,
         role: d.role,
         schoolId: d.schoolId ?? null,
+        twoFactorEnabled: this.user?.twoFactorEnabled ?? false,
       }
       localStorage.setItem('auth_role', d.role)
       localStorage.setItem('auth_user', JSON.stringify(this.user))
       localStorage.setItem('auth_permissions', JSON.stringify(this.permissions))
+    },
+
+    _applySignInResponse(data) {
+      if (data.twoFactorRequired) return { challengeToken: data.challengeToken }
+      this._applyAuthResponse(data)
+      return null
+    },
+
+    _setTwoFactorEnabled(enabled) {
+      if (!this.user) return
+      this.user = { ...this.user, twoFactorEnabled: enabled }
+      localStorage.setItem('auth_user', JSON.stringify(this.user))
     },
 
     _applyAuthResponse(data) {
@@ -84,6 +124,7 @@ export const useAuthStore = defineStore('auth', {
         lastName: data.lastName,
         role: data.role,
         schoolId: data.schoolId ?? null,
+        twoFactorEnabled: !!data.twoFactorEnabled,
       }
       localStorage.setItem('auth_token', data.token)
       localStorage.setItem('auth_role', data.role)

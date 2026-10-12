@@ -1,10 +1,11 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
+import { useSignInRedirect } from '../../composables/useSignInRedirect'
+import TwoFactorChallengeForm from '../../components/auth/TwoFactorChallengeForm.vue'
 
-const router = useRouter()
 const authStore = useAuthStore()
+const redirectAfterSignIn = useSignInRedirect()
 
 const form = ref({
   email: '',
@@ -15,14 +16,7 @@ const error = ref(null)
 const unverifiedEmail = ref(null)
 const resending = ref(false)
 const resendMessage = ref(null)
-
-const roleHome = {
-  applicant:    '/dashboard',
-  scorer:       '/scoring',
-  app_admin:    '/admin/applications',
-  school_admin: '/schools',
-  counselor:    '/counselor',
-}
+const challengeToken = ref(null)
 
 async function login() {
   loading.value = true
@@ -31,8 +25,9 @@ async function login() {
   resendMessage.value = null
 
   try {
-    await authStore.login(form.value)
-    router.push(roleHome[authStore.role] ?? '/dashboard')
+    const challenge = await authStore.login(form.value)
+    if (challenge) challengeToken.value = challenge.challengeToken
+    else redirectAfterSignIn()
   } catch (err) {
     if (err.response?.data?.code === 'email_not_verified') unverifiedEmail.value = form.value.email
     else error.value = err.response?.data?.error || 'Invalid email or password. Please try again.'
@@ -55,7 +50,14 @@ async function resend() {
 </script>
 
 <template>
-  <div class="space-y-5">
+  <TwoFactorChallengeForm
+    v-if="challengeToken"
+    :challenge-token="challengeToken"
+    @success="redirectAfterSignIn"
+    @cancel="challengeToken = null; form.password = ''"
+  />
+
+  <div v-else class="space-y-5">
     <div>
       <h2 class="text-xl font-bold text-navy">Sign in</h2>
       <p class="text-sm text-slate-400 mt-0.5">Access your scholarship account</p>

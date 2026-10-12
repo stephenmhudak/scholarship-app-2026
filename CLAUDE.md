@@ -117,13 +117,16 @@ backend/ScholarshipApi/
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| POST | `/api/auth/login` | Public | Returns `{ token, userId, role, ... }` |
+| POST | `/api/auth/login` | Public | Returns `{ token, userId, role, twoFactorEnabled, ... }`, or `{ twoFactorRequired, challengeToken }` if enrolled in 2FA |
+| POST | `/api/auth/login/2fa` | Public | `{ challengeToken, code }` (TOTP or recovery code) → same payload as login |
 | POST | `/api/auth/register` | Public | Creates applicant, emails verification link (no token returned) |
 | POST | `/api/auth/verify-email` | Public | `{ token }` → same payload as login |
 | POST | `/api/auth/resend-verification` | Public | `{ email }` → 204 always (no enumeration, 1 min cooldown) |
 | POST | `/api/auth/forgot-password` | Public | `{ email }` → 204 always; emails a 6-digit code (15 min, 5 tries, 1 min cooldown) |
-| POST | `/api/auth/reset-password` | Public | `{ email, code, newPassword }` → same payload as login |
+| POST | `/api/auth/reset-password` | Public | `{ email, code, newPassword }` → same payload as login (2FA challenge included) |
 | POST | `/api/auth/change-password` | Bearer | `{ currentPassword, newPassword }` → 204 |
+| GET | `/api/auth/2fa` | Bearer | `{ enabled, recoveryCodesRemaining }` |
+| POST | `/api/auth/2fa/setup` · `/2fa/enable` · `/2fa/disable` | Bearer | setup → `{ secret, otpauthUri }`; enable `{ code }` → `{ recoveryCodes }`; disable `{ password }` |
 | GET | `/api/auth/me` | Bearer | Current user |
 | GET | `/api/applications/my` | applicant | Own applications |
 | GET | `/api/applications/current` | applicant | Most recent |
@@ -171,6 +174,7 @@ backend/ScholarshipApi/
 - **File upload is two-step:** upload (multipart `file`, `applicationId`, `questionId`) → `fileId` → store in answer. `ApplicationFiles.ApplicationId` is a FK, so uploads must name the applicant's own draft application.
 - **Email verification:** self-registered users can't log in until `Users.EmailVerifiedAt` is set (login → 403 `{ code: "email_not_verified" }`). Admin/school-created users are pre-verified. Emails go through `IEmailService` — Resend if `Email:Resend:ApiKey` is set, otherwise logged to console. In Docker, credentials go in `secrets/email.env` and `secrets/r2.env` (copy the `.example` files).
 - **Password reset codes** live in `PasswordResetCodes`, hashed as SHA-256 of `userId:code`. Only the newest code is valid; a successful reset or change marks all codes used and also verifies the email. Both send a "password changed" email.
+- **Two-factor (TOTP) is opt-in.** `TwoFactorService` (Otp.NET) handles enrollment and code checks; `Users.TotpSecret` is stored as-is (not encrypted). After a password sign-in, `useSignInRedirect()` sends non-enrolled users to `/two-factor` (setup or "Not now") on every login. Enrolled users get a `TwoFactorChallenges` row (5 min, 5 tries; 10 tries per user per 15 min); TOTP steps can't be replayed (`TotpLastUsedStep`). Any new sign-in path must go through `SignInOrChallengeAsync`, not `BuildAuthResponse`, or it bypasses 2FA.
 - **Reference codes are hashed** — store SHA-256, compare hash on lookup. Plaintext returned once.
 - **Both frontend routing AND backend auth enforce roles** — check both when adding features.
 - **Status transitions are manual** — no state machine. Admin can set any valid status. Exception: `ApplicationArchiveService` (hourly) archives drafts in closed cycles.

@@ -1,11 +1,13 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
+import { useSignInRedirect } from '../../composables/useSignInRedirect'
+import TwoFactorChallengeForm from '../../components/auth/TwoFactorChallengeForm.vue'
 
-const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const redirectAfterSignIn = useSignInRedirect()
 
 const step = ref('request')
 const email = ref(route.query.email || '')
@@ -18,14 +20,7 @@ const loading = ref(false)
 const error = ref(null)
 const resending = ref(false)
 const resendMessage = ref(null)
-
-const roleHome = {
-  applicant:    '/dashboard',
-  scorer:       '/scoring',
-  app_admin:    '/admin/applications',
-  school_admin: '/schools',
-  counselor:    '/counselor',
-}
+const challengeToken = ref(null)
 
 async function requestCode() {
   loading.value = true
@@ -62,12 +57,13 @@ async function resetPassword() {
   loading.value = true
   error.value = null
   try {
-    await authStore.resetPassword({
+    const challenge = await authStore.resetPassword({
       email: email.value,
       code: form.value.code,
       newPassword: form.value.newPassword,
     })
-    router.replace(roleHome[authStore.role] ?? '/dashboard')
+    if (challenge) challengeToken.value = challenge.challengeToken
+    else redirectAfterSignIn()
   } catch (err) {
     error.value = err.response?.data?.error || 'Could not reset your password. Please try again.'
   } finally {
@@ -77,7 +73,16 @@ async function resetPassword() {
 </script>
 
 <template>
-  <div class="space-y-5">
+  <div v-if="challengeToken" class="space-y-5">
+    <v-alert type="success" text="Your password has been reset. Finish signing in with your second factor." />
+    <TwoFactorChallengeForm
+      :challenge-token="challengeToken"
+      @success="redirectAfterSignIn"
+      @cancel="$router.push('/login')"
+    />
+  </div>
+
+  <div v-else class="space-y-5">
     <div>
       <h2 class="text-xl font-bold text-navy">Reset your password</h2>
       <p v-if="step === 'request'" class="text-sm text-slate-400 mt-0.5">
