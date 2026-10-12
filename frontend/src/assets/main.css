@@ -86,6 +86,11 @@ html {
 .card-header-warning { --card-header-bg: rgb(var(--v-theme-warning)); }
 .card-header-error { --card-header-bg: rgb(var(--v-theme-error)); }
 
+/* Vuetify drops v-card-text's top padding after a title; with the colored bar, dialogs need it back. */
+.v-dialog .v-card > .v-card-item + .v-card-text {
+  padding-top: 20px;
+}
+
 .v-data-table .v-data-table__th {
   background: #F4F7FE;
   font-size: 0.75rem;
