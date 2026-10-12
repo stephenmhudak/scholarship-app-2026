@@ -72,6 +72,7 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
             throw new ArgumentException("Start setup again to get a new QR code.");
 
         var codes = await ReplaceRecoveryCodesAsync(userId);
+        await SessionVersion.BumpAsync(db, userId);
         await TrySendNoticeAsync(user, "Two-factor authentication turned on",
             "Two-factor authentication was just turned on for your scholarship account. You'll now enter a code from your authenticator app when you sign in.");
         return new TwoFactorEnableResponse { RecoveryCodes = codes };
@@ -116,6 +117,7 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
             new { Id = userId, Hash = user.EmailOtpSetupHash, Method = TwoFactorMethods.Email });
         if (enabled == 0)
             throw new ArgumentException("That code has expired. Send a new one and try again.");
+        await SessionVersion.BumpAsync(db, userId);
 
         await TrySendNoticeAsync(user, "Two-factor authentication turned on",
             "Two-factor authentication was just turned on for your scholarship account. You'll now enter a code we email you when you sign in.");
@@ -140,6 +142,7 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
         if (user.TwoFactorMethod is null) return;
 
         await ClearAsync(userId);
+        await SessionVersion.BumpAsync(db, userId);
         await TrySendNoticeAsync(user, "Two-factor authentication turned off",
             "Two-factor authentication was just turned off for your scholarship account. Signing in now only needs your password.");
     }
@@ -164,6 +167,7 @@ public class TwoFactorService(QueryFactory db, IConfiguration config, IEmailServ
         if (user.TwoFactorMethod is null && user.TotpPendingSecret is null && user.EmailOtpSetupHash is null) return;
 
         await ClearAsync(userId);
+        await SessionVersion.BumpAsync(db, userId);
         if (user.TwoFactorMethod is not null)
             await TrySendNoticeAsync(user, "Two-factor authentication reset",
                 "An administrator reset two-factor authentication on your scholarship account, so signing in now only needs your password. You can set it up again from your Account page.");

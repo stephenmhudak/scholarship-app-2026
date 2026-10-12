@@ -17,4 +17,5 @@ public interface IAuthService
     Task<User> GetCurrentUserAsync(string userId);
     Task<InviteInfoResponse> GetInviteAsync(string token);
     Task<IEnumerable<string>> GetPermissionsForRoleAsync(string roleName);
+    Task<string> IssueTokenAsync(string userId);
 }

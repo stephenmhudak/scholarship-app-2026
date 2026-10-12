@@ -17,5 +17,6 @@ public class User
     public string? TwoFactorMethod { get; set; }
     public string? EmailOtpSetupHash { get; set; }
     public DateTime? EmailOtpSetupExpiresAt { get; set; }
+    public int SessionVersion { get; set; }
     public DateTime CreatedAt { get; set; }
 }

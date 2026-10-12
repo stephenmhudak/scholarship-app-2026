@@ -5,7 +5,7 @@ using ScholarshipApi.Models;
 
 namespace ScholarshipApi.Services;
 
-public class ReferenceService(QueryFactory db, IFileStorageService fileStorage) : IReferenceService
+public class ReferenceService(QueryFactory db, IFileStorageService fileStorage, ApplicationAccess access) : IReferenceService
 {
     private static readonly HashSet<string> AllowedExtensions = [".doc", ".docx", ".pdf"];
     private static readonly HashSet<string> AllowedMimeTypes = [
@@ -19,7 +19,7 @@ public class ReferenceService(QueryFactory db, IFileStorageService fileStorage) 
         var app = await db.Query("Applications").Where("Id", applicationId).FirstOrDefaultAsync<Application>()
             ?? throw new KeyNotFoundException("Application not found.");
 
-        if (!ApplicationAccess.CanView(app.ApplicantId, app.Status, userId, role))
+        if (!await access.CanViewAsync(app.ApplicantId, app.Status, app.CycleId, userId, role))
             throw new UnauthorizedAccessException("Access denied.");
 
         return await db.Query("References").Where("ApplicationId", applicationId).GetAsync<ReferenceDto>();

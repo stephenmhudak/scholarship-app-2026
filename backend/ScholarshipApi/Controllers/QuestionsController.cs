@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SqlKata.Execution;
 using ScholarshipApi.Models;
+using ScholarshipApi.Services;
 
 namespace ScholarshipApi.Controllers;
 
@@ -52,6 +53,8 @@ public class QuestionsController(QueryFactory db) : ControllerBase
     [Authorize(Policy = "AppAdmin")]
     public async Task<IActionResult> Create(string cycleId, [FromBody] QuestionRequest request)
     {
+        if (!await db.Query("ScholarshipCycles").Where("Id", cycleId).ExistsAsync()) throw new KeyNotFoundException("Cycle not found.");
+        await ValidateAsync(cycleId, request);
         var id = Guid.NewGuid().ToString();
         await db.Query("Questions").InsertAsync(new
         {
@@ -77,6 +80,9 @@ public class QuestionsController(QueryFactory db) : ControllerBase
     [Authorize(Policy = "AppAdmin")]
     public async Task<IActionResult> Update(string cycleId, string questionId, [FromBody] QuestionRequest request)
     {
+        if (!await db.Query("Questions").Where("Id", questionId).Where("CycleId", cycleId).ExistsAsync())
+            throw new KeyNotFoundException("Question not found.");
+        await ValidateAsync(cycleId, request);
         await db.Query("Questions").Where("Id", questionId).Where("CycleId", cycleId).UpdateAsync(new
         {
             Text = request.Text,
@@ -112,6 +118,36 @@ public class QuestionsController(QueryFactory db) : ControllerBase
         transaction.Commit();
 
         return NoContent();
+    }
+
+    private static readonly HashSet<string> QuestionTypes =
+        ["short_answer", "long_answer", "multiple_choice", "single_choice", "file_upload", "school_select", "date"];
+    private const int MaxTextLength = 5000;
+
+    // Normalizes the request in place: trimmed text, blank options dropped, options only kept for choice questions
+    private async Task ValidateAsync(string cycleId, QuestionRequest request)
+    {
+        request.Text = InputValidation.Required(request.Text, "Question text", MaxTextLength);
+        request.Description = InputValidation.Optional(request.Description, "Description", MaxTextLength);
+        if (request.Type is null || !QuestionTypes.Contains(request.Type)) throw new ArgumentException("Choose a valid question type.");
+
+        if (!string.IsNullOrEmpty(request.SectionId)
+            && !await db.Query("Sections").Where("Id", request.SectionId).Where("CycleId", cycleId).ExistsAsync())
+            throw new ArgumentException("That section isn't part of this cycle.");
+        if (string.IsNullOrEmpty(request.SectionId)) request.SectionId = null;
+
+        var isChoice = request.Type is "multiple_choice" or "single_choice";
+        request.Options = isChoice
+            ? (request.Options ?? []).Select(o => o?.Trim() ?? "").Where(o => o.Length > 0).ToList()
+            : null;
+        if (isChoice && request.Options!.Count == 0) throw new ArgumentException("Add at least one option.");
+        if (request.Options?.Any(o => o.Length > 500) == true) throw new ArgumentException("Options must be at most 500 characters.");
+
+        var rules = request.ValidationRules;
+        if (rules is null) return;
+        if (rules.MinLength < 0 || rules.MaxLength < 0) throw new ArgumentException("Length limits can't be negative.");
+        if (rules.MinLength > rules.MaxLength) throw new ArgumentException("The minimum length can't be more than the maximum.");
+        if (rules.RichText && request.Type != "long_answer") throw new ArgumentException("Rich text is only available on long answer questions.");
     }
 
     private async Task SaveOptionsAsync(string questionId, List<string>? options)

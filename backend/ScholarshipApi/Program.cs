@@ -1,12 +1,15 @@
 using System.Reflection;
+using System.Security.Claims;
 using System.Text;
 using DbUp;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 using ScholarshipApi.Authorization;
 using ScholarshipApi.Data;
 using ScholarshipApi.Middleware;
 using ScholarshipApi.Services;
+using SqlKata.Execution;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -50,9 +53,36 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
+        options.Events = new JwtBearerEvents
+        {
+            // Account changes bump Users.SessionVersion (see SessionVersion), ending every session issued before them.
+            // Deleted users fail here too.
+            OnTokenValidated = async context =>
+            {
+                var userId = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier)
+                    ?? context.Principal?.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+                var tokenVersion = context.Principal?.FindFirstValue(SessionVersion.Claim);
+                var db = context.HttpContext.RequestServices.GetRequiredService<QueryFactory>();
+                var currentVersion = userId is null ? null
+                    : await db.Query("Users").Where("Id", userId).Select("SessionVersion").FirstOrDefaultAsync<int?>();
+                if (currentVersion is null || tokenVersion != currentVersion.Value.ToString())
+                    context.Fail("This session has ended. Please sign in again.");
+            }
+        };
     });
 
 builder.Services.AddAuthorization(RolePolicies.Configure);
+builder.Services.AddRateLimiter(RateLimitPolicies.Configure);
+
+// Requests reach the API through two proxies: Caddy (or the k8s ingress), then the frontend's nginx.
+// The API port isn't published, so both hops are trusted and the client IP is the one before them.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
+    options.ForwardLimit = 2;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // Application services
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -101,8 +131,10 @@ if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();
 }
 
+app.UseForwardedHeaders();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseCors("Frontend");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

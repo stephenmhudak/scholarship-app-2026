@@ -5,7 +5,7 @@ using ScholarshipApi.Models;
 
 namespace ScholarshipApi.Services;
 
-public class ApplicationService(QueryFactory db) : IApplicationService
+public class ApplicationService(QueryFactory db, ApplicationAccess access) : IApplicationService
 {
     public async Task<IEnumerable<ApplicationDto>> ListForApplicantAsync(string applicantId)
     {
@@ -39,7 +39,7 @@ public class ApplicationService(QueryFactory db) : IApplicationService
             .FirstOrDefaultAsync<ApplicationDto>()
             ?? throw new KeyNotFoundException("Application not found.");
 
-        if (!ApplicationAccess.CanView(app.ApplicantId, app.Status, requestingUserId, requestingRole))
+        if (!await access.CanViewAsync(app.ApplicantId, app.Status, app.CycleId, requestingUserId, requestingRole))
             throw new UnauthorizedAccessException("Access denied.");
 
         await FillCycleInfoAsync([app]);
@@ -187,8 +187,11 @@ public class ApplicationService(QueryFactory db) : IApplicationService
         return await query.CountAsync<int>();
     }
 
-    public async Task UpdateStatusAsync(string id, string status) =>
-        await db.Query("Applications").Where("Id", id).UpdateAsync(new { Status = status });
+    public async Task UpdateStatusAsync(string id, string status)
+    {
+        var updated = await db.Query("Applications").Where("Id", id).UpdateAsync(new { Status = InputValidation.ApplicationStatus(status) });
+        if (updated == 0) throw new KeyNotFoundException("Application not found.");
+    }
 
     public async Task<CopyAnswersResult> CopyAnswersAsync(string targetId, string sourceId, string applicantId)
     {
