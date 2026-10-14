@@ -140,7 +140,8 @@ async function remove(form) {
 
     <v-card-text class="pa-6 space-y-4">
       <p class="text-sm text-slate-400">
-        Applicants send each reference's link to the person writing it, who answers its questions and signs online.
+        Applicants send each reference's link (or its code) to the person writing it, who signs in with a referee,
+        counselor or school admin account, answers its questions and signs online.
         Only scorers see what's submitted, and each reference is scored on its own. Applicants can't submit until
         every required reference is in.
       </p>

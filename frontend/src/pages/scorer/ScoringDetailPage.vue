@@ -159,7 +159,7 @@ async function handleSave() {
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
             <!-- Answers -->
             <v-card class="pa-5 space-y-4">
-              <ReferenceResponse v-if="section.reference" :reference="section.reference" />
+              <ReferenceResponse v-if="section.reference" :reference="section.reference" show-account />
               <template v-else-if="section.answers.length">
                 <div
                   v-for="answer in section.answers"

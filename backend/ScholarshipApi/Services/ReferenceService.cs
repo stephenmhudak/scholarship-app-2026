@@ -9,9 +9,10 @@ using ScholarshipApi.Models;
 namespace ScholarshipApi.Services;
 
 /// <summary>
-/// References: the applicant makes a link per required reference and shares it; the referee answers the cycle's
-/// reference form and signs through that link (no account); scorers read and score what was submitted.
-/// Applicants only ever see a reference's status, never its answers.
+/// References: the applicant makes a link per required reference and shares it; the referee signs in (a referee,
+/// counselor or school admin account), answers the cycle's reference form and signs it; scorers read and score
+/// what was submitted. Applicants only ever see a reference's status, and referees see what they submitted but
+/// never its scores.
 /// </summary>
 public class ReferenceService(
     QueryFactory db,
@@ -104,11 +105,11 @@ public class ReferenceService(
         foreach (var file in files) await TryDeleteStoredAsync(file.StoragePath);
     }
 
-    // ── Referee (public link) ────────────────────────────────────────────────
+    // ── Referee (signed in, through the code) ────────────────────────────────
 
-    public async Task<ReferenceLinkDto> GetLinkAsync(string code)
+    public async Task<ReferenceLinkDto> GetLinkAsync(string code, string userId)
     {
-        var (request, app, cycle) = await FindLinkAsync(code);
+        var (request, app, cycle) = await FindLinkAsync(code, userId);
         var form = await db.Query("ReferenceForms").Where("Id", request.FormId).FirstAsync<ReferenceForm>();
         var applicant = await db.Query("Users").Where("Id", app.ApplicantId).FirstAsync<User>();
         var status = LinkStatus(request, cycle);
@@ -121,13 +122,14 @@ public class ReferenceService(
             CycleName = cycle.Name,
             FormTitle = form.Title,
             FormDescription = form.Description,
+            SubmittedReferenceId = request.Status == "submitted" && request.SubmittedById == userId ? request.Id : null,
             Questions = status == "open" ? await LoadFormQuestionsAsync(form.Id) : [],
         };
     }
 
-    public async Task<string> UploadFileAsync(string code, string? questionId, IFormFile file)
+    public async Task<string> UploadFileAsync(string code, string userId, string? questionId, IFormFile file)
     {
-        var (request, _, _) = await OpenLinkAsync(code);
+        var (request, _, _) = await OpenLinkAsync(code, userId);
         var isFileQuestion = await db.Query("Questions").Where("Id", questionId ?? "").Where("ReferenceFormId", request.FormId)
             .Where("Type", "file_upload").ExistsAsync();
         if (!isFileQuestion) throw new ArgumentException("That question doesn't take a file.");
@@ -146,6 +148,7 @@ public class ReferenceService(
                 QuestionId = questionId,
                 FileName = fileName.Length > 255 ? fileName[^255..] : fileName,
                 StoragePath = storagePath,
+                UploadedById = userId,
                 UploadedAt = DateTime.UtcNow,
             });
         }
@@ -157,9 +160,9 @@ public class ReferenceService(
         return id;
     }
 
-    public async Task SubmitAsync(string code, ReferenceSubmission submission)
+    public async Task SubmitAsync(string code, string userId, ReferenceSubmission submission)
     {
-        var (request, app, cycle) = await OpenLinkAsync(code);
+        var (request, app, cycle) = await OpenLinkAsync(code, userId);
         var signerName = InputValidation.Required(submission.SignerName, "Your name", 200);
         var signature = DecodeSignature(submission.Signature);
 
@@ -169,7 +172,9 @@ public class ReferenceService(
             ? Enumerable.Empty<QuestionOption>().ToLookup(o => o.QuestionId)
             : (await db.Query("QuestionOptions").WhereIn("QuestionId", questions.Select(q => q.Id))
                 .GetAsync<QuestionOption>()).ToLookup(o => o.QuestionId);
-        var files = (await db.Query("ReferenceFiles").Where("RequestId", request.Id).GetAsync<ReferenceFile>()).ToList();
+        // Only files this account uploaded, in case someone else opened the same code
+        var files = (await db.Query("ReferenceFiles").Where("RequestId", request.Id).Where("UploadedById", userId)
+            .GetAsync<ReferenceFile>()).ToList();
         var answers = (submission.Answers ?? []).Where(a => a.QuestionId is not null)
             .GroupBy(a => a.QuestionId).ToDictionary(g => g.Key, g => g.First());
 
@@ -209,10 +214,11 @@ public class ReferenceService(
             using var transaction = db.Connection.BeginTransaction();
             var claimed = await db.StatementAsync(
                 """
-                UPDATE ReferenceRequests SET Status = 'submitted', SubmittedAt = @Now, SignerName = @SignerName, SignaturePath = @Path
+                UPDATE ReferenceRequests
+                SET Status = 'submitted', SubmittedAt = @Now, SubmittedById = @UserId, SignerName = @SignerName, SignaturePath = @Path
                 WHERE Id = @Id AND Status = 'pending'
                 """,
-                new { Id = request.Id, Now = DateTime.UtcNow, SignerName = signerName, Path = signaturePath }, transaction);
+                new { Id = request.Id, Now = DateTime.UtcNow, UserId = userId, SignerName = signerName, Path = signaturePath }, transaction);
             if (claimed == 0) throw new ArgumentException("This reference has already been submitted.");
             foreach (var row in rows) await db.Query("ReferenceAnswers").InsertAsync(row, transaction);
             transaction.Commit();
@@ -232,8 +238,56 @@ public class ReferenceService(
     {
         await EnsureScoringAccessAsync(applicationId, userId, role);
 
-        var requests = (await db.Query("ReferenceRequests").Where("ApplicationId", applicationId).Where("Status", "submitted")
+        var requests = (await db.Query("ReferenceRequests as r")
+            .Join("ReferenceForms as f", "f.Id", "r.FormId")
+            .Where("r.ApplicationId", applicationId).Where("r.Status", "submitted")
+            .OrderBy("f.Order", "f.CreatedAt", "r.SubmittedAt")
+            .Select("r.*")
             .GetAsync<ReferenceRequest>()).ToList();
+        return await BuildSubmittedAsync(requests);
+    }
+
+    // ── Referee: the references they submitted (answers, never scores) ───────
+
+    public async Task<List<SubmittedReferenceDto>> ListMineAsync(string userId)
+    {
+        var requests = (await db.Query("ReferenceRequests").Where("SubmittedById", userId).Where("Status", "submitted")
+            .OrderByDesc("SubmittedAt").GetAsync<ReferenceRequest>()).ToList();
+        return await BuildSubmittedAsync(requests);
+    }
+
+    public async Task<SubmittedReferenceDto> GetMineAsync(string requestId, string userId)
+    {
+        var request = await db.Query("ReferenceRequests").Where("Id", requestId).Where("SubmittedById", userId)
+            .Where("Status", "submitted").FirstOrDefaultAsync<ReferenceRequest>()
+            ?? throw new KeyNotFoundException("Reference not found.");
+        return (await BuildSubmittedAsync([request])).Single();
+    }
+
+    // ── Signature and files: the referee who wrote it, or someone who can score it ──
+
+    public async Task<(Stream Stream, string ContentType, string FileName)> GetSignatureAsync(string requestId, string userId, string role)
+    {
+        var request = await db.Query("ReferenceRequests").Where("Id", requestId).FirstOrDefaultAsync<ReferenceRequest>();
+        if (request?.SignaturePath is null) throw new KeyNotFoundException("Signature not found.");
+        await EnsureCanReadSubmittedAsync(request, userId, role);
+        var (stream, _, _) = await fileStorage.RetrieveAsync(request.SignaturePath, "signature.jpg");
+        return (stream, "image/jpeg", "signature.jpg");
+    }
+
+    public async Task<(Stream Stream, string ContentType, string FileName)> GetFileAsync(string fileId, string userId, string role)
+    {
+        var file = await db.Query("ReferenceFiles").Where("Id", fileId).FirstOrDefaultAsync<ReferenceFile>()
+            ?? throw new KeyNotFoundException("File not found.");
+        var request = await db.Query("ReferenceRequests").Where("Id", file.RequestId).FirstAsync<ReferenceRequest>();
+        if (request.Status != "submitted") throw new KeyNotFoundException("File not found.");
+        await EnsureCanReadSubmittedAsync(request, userId, role);
+        return await fileStorage.RetrieveAsync(file.StoragePath, file.FileName);
+    }
+
+    // Submitted references with their answers, in the order given
+    private async Task<List<SubmittedReferenceDto>> BuildSubmittedAsync(List<ReferenceRequest> requests)
+    {
         if (requests.Count == 0) return [];
 
         var forms = (await db.Query("ReferenceForms").WhereIn("Id", requests.Select(r => r.FormId).Distinct())
@@ -251,68 +305,68 @@ public class ReferenceService(
         var files = (await db.Query("ReferenceFiles").WhereIn("RequestId", requestIds).GetAsync<ReferenceFile>())
             .ToDictionary(f => f.Id);
 
-        return requests
-            .OrderBy(r => forms[r.FormId].Order).ThenBy(r => forms[r.FormId].CreatedAt).ThenBy(r => r.SubmittedAt)
-            .Select(r => new SubmittedReferenceDto
+        // Who it's for (applicant, school, cycle) and which account submitted it
+        var apps = (await db.Query("Applications").WhereIn("Id", requests.Select(r => r.ApplicationId).Distinct())
+            .GetAsync<Application>()).ToDictionary(a => a.Id);
+        var cycles = (await db.Query("ScholarshipCycles").WhereIn("Id", apps.Values.Select(a => a.CycleId).Distinct())
+            .GetAsync<ScholarshipCycle>()).ToDictionary(c => c.Id);
+        var userIds = apps.Values.Select(a => a.ApplicantId).Concat(requests.Select(r => r.SubmittedById).OfType<string>()).Distinct().ToList();
+        var users = (await db.Query("Users").WhereIn("Id", userIds).GetAsync<User>()).ToDictionary(u => u.Id);
+        var schools = new Dictionary<string, string?>();
+        foreach (var app in apps.Values)
+            schools[app.Id] = users.TryGetValue(app.ApplicantId, out var applicant) ? await GetApplicantSchoolAsync(app, applicant) : null;
+
+        return requests.Select(r =>
+        {
+            var app = apps[r.ApplicationId];
+            var applicant = users.GetValueOrDefault(app.ApplicantId);
+            return new SubmittedReferenceDto
             {
                 Id = r.Id,
                 FormId = r.FormId,
                 FormTitle = forms[r.FormId].Title,
                 Label = r.Label,
+                ApplicantName = applicant is null ? "" : $"{applicant.FirstName} {applicant.LastName}".Trim(),
+                SchoolName = schools[app.Id],
+                CycleName = cycles.TryGetValue(app.CycleId, out var cycle) ? cycle.Name : "",
                 SignerName = r.SignerName,
+                SubmittedByEmail = r.SubmittedById is not null && users.TryGetValue(r.SubmittedById, out var submitter) ? submitter.Email : null,
                 SubmittedAt = r.SubmittedAt ?? r.CreatedAt,
                 HasSignature = r.SignaturePath is not null,
-                Answers = questions[r.FormId].Select(q =>
-                {
-                    answers.TryGetValue((r.Id, q.Id), out var a);
-                    var dto = new SubmittedReferenceAnswerDto
-                    {
-                        QuestionId = q.Id,
-                        QuestionText = q.Text,
-                        Type = q.Type,
-                        RichText = QuestionRules.IsRichText(q),
-                    };
-                    if (a is null) return dto;
-                    switch (q.Type)
-                    {
-                        case "single_choice":
-                            dto.SelectedOptions = a.TextValue is not null && options.TryGetValue(a.TextValue, out var text) ? [text] : [];
-                            break;
-                        case "multiple_choice":
-                            dto.SelectedOptions = (JsonSerializer.Deserialize<List<string>>(a.SelectedOptions ?? "[]") ?? [])
-                                .Select(id => options.GetValueOrDefault(id)).OfType<string>().ToList();
-                            break;
-                        case "file_upload" when a.TextValue is not null && files.TryGetValue(a.TextValue, out var file):
-                            dto.FileId = file.Id;
-                            dto.FileName = file.FileName;
-                            break;
-                        default:
-                            dto.TextValue = a.TextValue;
-                            break;
-                    }
-                    return dto;
-                }).ToList(),
-            })
-            .ToList();
+                Answers = questions[r.FormId].Select(q => ToAnswerDto(q, answers.GetValueOrDefault((r.Id, q.Id)), options, files)).ToList(),
+            };
+        }).ToList();
     }
 
-    public async Task<(Stream Stream, string ContentType, string FileName)> GetSignatureAsync(string requestId, string userId, string role)
+    private static SubmittedReferenceAnswerDto ToAnswerDto(
+        Question q, ReferenceAnswer? a, Dictionary<string, string> options, Dictionary<string, ReferenceFile> files)
     {
-        var request = await db.Query("ReferenceRequests").Where("Id", requestId).FirstOrDefaultAsync<ReferenceRequest>();
-        if (request?.SignaturePath is null) throw new KeyNotFoundException("Signature not found.");
-        await EnsureScoringAccessAsync(request.ApplicationId, userId, role);
-        var (stream, _, _) = await fileStorage.RetrieveAsync(request.SignaturePath, "signature.jpg");
-        return (stream, "image/jpeg", "signature.jpg");
-    }
-
-    public async Task<(Stream Stream, string ContentType, string FileName)> GetFileAsync(string fileId, string userId, string role)
-    {
-        var file = await db.Query("ReferenceFiles").Where("Id", fileId).FirstOrDefaultAsync<ReferenceFile>()
-            ?? throw new KeyNotFoundException("File not found.");
-        var request = await db.Query("ReferenceRequests").Where("Id", file.RequestId).FirstAsync<ReferenceRequest>();
-        if (request.Status != "submitted") throw new KeyNotFoundException("File not found.");
-        await EnsureScoringAccessAsync(request.ApplicationId, userId, role);
-        return await fileStorage.RetrieveAsync(file.StoragePath, file.FileName);
+        var dto = new SubmittedReferenceAnswerDto
+        {
+            QuestionId = q.Id,
+            QuestionText = q.Text,
+            Type = q.Type,
+            RichText = QuestionRules.IsRichText(q),
+        };
+        if (a is null) return dto;
+        switch (q.Type)
+        {
+            case "single_choice":
+                dto.SelectedOptions = a.TextValue is not null && options.TryGetValue(a.TextValue, out var text) ? [text] : [];
+                break;
+            case "multiple_choice":
+                dto.SelectedOptions = (JsonSerializer.Deserialize<List<string>>(a.SelectedOptions ?? "[]") ?? [])
+                    .Select(id => options.GetValueOrDefault(id)).OfType<string>().ToList();
+                break;
+            case "file_upload" when a.TextValue is not null && files.TryGetValue(a.TextValue, out var file):
+                dto.FileId = file.Id;
+                dto.FileName = file.FileName;
+                break;
+            default:
+                dto.TextValue = a.TextValue;
+                break;
+        }
+        return dto;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -345,19 +399,20 @@ public class ReferenceService(
     private static string LinkStatus(ReferenceRequest request, ScholarshipCycle cycle) =>
         request.Status == "submitted" ? "submitted" : CycleWindow.IsClosed(cycle, DateTime.UtcNow) ? "closed" : "open";
 
-    private async Task<(ReferenceRequest Request, Application App, ScholarshipCycle Cycle)> FindLinkAsync(string? code)
+    private async Task<(ReferenceRequest Request, Application App, ScholarshipCycle Cycle)> FindLinkAsync(string? code, string userId)
     {
-        const string invalid = "This reference link isn't valid. Check that the whole link was copied.";
+        const string invalid = "That reference code isn't valid. Check that all 10 characters were entered.";
         var normalized = ReferenceCode.Normalize(code) ?? throw new KeyNotFoundException(invalid);
         var request = await db.Query("ReferenceRequests").Where("CodeHash", ReferenceCode.Hash(normalized))
             .FirstOrDefaultAsync<ReferenceRequest>() ?? throw new KeyNotFoundException(invalid);
         var app = await GetApplicationAsync(request.ApplicationId);
+        if (app.ApplicantId == userId) throw new UnauthorizedAccessException("You can't write a reference for your own application.");
         return (request, app, await GetCycleAsync(app.CycleId));
     }
 
-    private async Task<(ReferenceRequest Request, Application App, ScholarshipCycle Cycle)> OpenLinkAsync(string? code)
+    private async Task<(ReferenceRequest Request, Application App, ScholarshipCycle Cycle)> OpenLinkAsync(string? code, string userId)
     {
-        var link = await FindLinkAsync(code);
+        var link = await FindLinkAsync(code, userId);
         switch (LinkStatus(link.Request, link.Cycle))
         {
             case "submitted": throw new ArgumentException("This reference has already been submitted.");
@@ -382,6 +437,12 @@ public class ReferenceService(
         if (!CycleWindow.IsOpen(await GetCycleAsync(app.CycleId), DateTime.UtcNow))
             throw new ArgumentException("This scholarship cycle has closed.");
         return app;
+    }
+
+    private async Task EnsureCanReadSubmittedAsync(ReferenceRequest request, string userId, string role)
+    {
+        if (request.Status == "submitted" && request.SubmittedById == userId) return;
+        await EnsureScoringAccessAsync(request.ApplicationId, userId, role);
     }
 
     // Reference answers are for scoring only: scorers (once the application is scoreable) and admins, never the applicant

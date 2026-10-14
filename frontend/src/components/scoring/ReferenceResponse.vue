@@ -3,9 +3,14 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import api from '../../services/api'
 import RichTextAnswer from '../application/RichTextAnswer.vue'
 
-// One submitted reference for a scorer: the referee's answers, files, name and drawn signature.
+// One submitted reference: the referee's answers, files, name and drawn signature. Used by scorers, and by the
+// referee to look back at what they wrote (never with scores).
 const props = defineProps({
   reference: { type: Object, required: true },
+  // Where the signature and files are fetched from: '/scoring/references' or '/my-references'
+  apiBase: { type: String, default: '/scoring/references' },
+  // Scorers see which account it came from
+  showAccount: { type: Boolean, default: false },
 })
 
 const signatureUrl = ref(null)
@@ -16,7 +21,7 @@ const downloading = ref(null)
 onMounted(async () => {
   if (!props.reference.hasSignature) return
   try {
-    const res = await api.get(`/scoring/references/${props.reference.id}/signature`, { responseType: 'blob' })
+    const res = await api.get(`${props.apiBase}/${props.reference.id}/signature`, { responseType: 'blob' })
     signatureUrl.value = URL.createObjectURL(res.data)
   } catch {
     signatureError.value = true
@@ -30,7 +35,7 @@ onBeforeUnmount(() => {
 async function download(answer) {
   downloading.value = answer.fileId
   try {
-    const res = await api.get(`/scoring/references/files/${answer.fileId}`, { responseType: 'blob' })
+    const res = await api.get(`${props.apiBase}/files/${answer.fileId}`, { responseType: 'blob' })
     const url = URL.createObjectURL(res.data)
     const link = document.createElement('a')
     link.href = url
@@ -84,6 +89,9 @@ function hasAnswer(answer) {
       <p class="text-sm text-navy">
         <span class="font-semibold">{{ reference.signerName }}</span>
         <span class="text-slate-400"> · {{ new Date(reference.submittedAt).toLocaleDateString() }}</span>
+      </p>
+      <p v-if="showAccount && reference.submittedByEmail" class="text-xs text-slate-400">
+        Submitted from the account {{ reference.submittedByEmail }}
       </p>
     </div>
   </div>

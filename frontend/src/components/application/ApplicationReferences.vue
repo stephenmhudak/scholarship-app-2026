@@ -79,6 +79,11 @@ async function deleteLink(request) {
   }
 }
 
+// Referees can type the code in on their My References page instead of using the link
+function codeOf(request) {
+  return request.link?.split('/r/')[1] ?? null
+}
+
 function requestName(form, request, i) {
   return request.label || (form.requiredCount > 1 ? `Reference ${i + 1}` : form.title)
 }
@@ -98,9 +103,10 @@ function formatDate(value) {
 
     <v-card-text class="pa-6 space-y-5">
       <p v-if="!compact" class="text-sm text-slate-400">
-        Create a link for each reference and send it to the person writing it. They fill it in and sign it online,
-        and it goes straight to the scholarship committee, so you won't see what they wrote. We'll email you as each
-        one comes in. You can submit your application once every reference has been received.
+        Create a link for each reference and send it to the person writing it. They'll sign in (or create a free
+        referee account), fill it in and sign it online. It goes straight to the scholarship committee, so you won't
+        see what they wrote. We'll email you as each one comes in. You can submit your application once every
+        reference has been received.
       </p>
 
       <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
@@ -152,6 +158,9 @@ function formatDate(value) {
                 @click="deleteLink(request)"
               />
             </div>
+            <p v-if="request.status === 'pending' && codeOf(request)" class="text-xs text-slate-400">
+              Or they can enter the code <span class="font-mono font-semibold text-navy">{{ codeOf(request) }}</span> after signing in.
+            </p>
           </div>
 
           <div v-if="canAdd(form)" class="flex items-center gap-2">

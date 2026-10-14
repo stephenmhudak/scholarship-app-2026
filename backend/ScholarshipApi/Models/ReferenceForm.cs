@@ -34,6 +34,7 @@ public class ReferenceRequest
     public string Status { get; set; } = null!;
     public string? SignerName { get; set; }
     public string? SignaturePath { get; set; }
+    public string? SubmittedById { get; set; }
     public DateTime? SubmittedAt { get; set; }
     public DateTime CreatedAt { get; set; }
 }
@@ -54,5 +55,6 @@ public class ReferenceFile
     public string? QuestionId { get; set; }
     public string FileName { get; set; } = null!;
     public string StoragePath { get; set; } = null!;
+    public string? UploadedById { get; set; }
     public DateTime UploadedAt { get; set; }
 }

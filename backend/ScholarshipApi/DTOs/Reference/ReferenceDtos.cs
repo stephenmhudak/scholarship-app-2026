@@ -53,6 +53,8 @@ public class ReferenceLinkDto
     public string CycleName { get; set; } = null!;
     public string FormTitle { get; set; } = null!;
     public string? FormDescription { get; set; }
+    /// <summary>Set when the signed-in user is the one who submitted it, so they can open their copy.</summary>
+    public string? SubmittedReferenceId { get; set; }
     public List<ReferenceQuestionDto> Questions { get; set; } = [];
 }
 
@@ -82,7 +84,7 @@ public class ReferenceSubmission
     public List<AnswerDto> Answers { get; set; } = [];
 }
 
-// ── Scorer ─────────────────────────────────────────────────────────────────
+// ── Scorer, and the referee's own copy (never scores) ──────────────────────
 
 public class SubmittedReferenceDto
 {
@@ -90,7 +92,12 @@ public class SubmittedReferenceDto
     public string FormId { get; set; } = null!;
     public string FormTitle { get; set; } = null!;
     public string? Label { get; set; }
+    public string ApplicantName { get; set; } = null!;
+    public string? SchoolName { get; set; }
+    public string CycleName { get; set; } = null!;
     public string? SignerName { get; set; }
+    /// <summary>The account it was submitted from (null for references from before accounts were required).</summary>
+    public string? SubmittedByEmail { get; set; }
     public DateTime SubmittedAt { get; set; }
     public bool HasSignature { get; set; }
     public List<SubmittedReferenceAnswerDto> Answers { get; set; } = [];

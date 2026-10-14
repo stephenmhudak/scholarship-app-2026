@@ -6,6 +6,8 @@ public class RegisterRequest
     public string Password { get; set; } = null!;
     public string FirstName { get; set; } = null!;
     public string LastName { get; set; } = null!;
+    /// <summary><c>applicant</c> (default) or <c>referee</c>; ignored with an invite, which makes a school admin.</summary>
+    public string? AccountType { get; set; }
     public string? InviteToken { get; set; }
     public string? SchoolName { get; set; }
     public string? SchoolAddressLine1 { get; set; }

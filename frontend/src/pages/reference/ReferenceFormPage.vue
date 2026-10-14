@@ -2,20 +2,24 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../../services/api'
+import { useAuthStore } from '../../stores/auth'
+import { normalizeReferenceCode } from '../../utils/pendingReference'
 import { validateForm } from '../../utils/validate'
 import QuestionRenderer from '../../components/application/QuestionRenderer.vue'
 import SignaturePad from '../../components/reference/SignaturePad.vue'
 
-// A referee fills in and signs a reference through the link the applicant shared (/r/CODE). No account needed.
+// A signed-in referee fills in and signs a reference by its code (/r/CODE, from the applicant's link or typed in
+// on My References). The submission is tied to their account.
 const route = useRoute()
-const code = String(route.params.code ?? '').trim().toUpperCase()
+const authStore = useAuthStore()
+const code = normalizeReferenceCode(route.params.code)
 
 const loading = ref(true)
 const loadError = ref(null)
 const link = ref(null)
 const answers = ref({})
 const errors = ref({})
-const signerName = ref('')
+const signerName = ref(`${authStore.user?.firstName ?? ''} ${authStore.user?.lastName ?? ''}`.trim())
 const signature = ref(null)
 const submitting = ref(false)
 const alert = ref(null)
@@ -29,8 +33,8 @@ onMounted(async () => {
     const { data } = await api.get(`/reference-links/${code}`)
     link.value = data
   } catch (err) {
-    loadError.value = err.response?.status === 404
-      ? "This reference link isn't valid. Check that the whole link was copied, or ask the applicant to send it again."
+    loadError.value = [403, 404].includes(err.response?.status)
+      ? err.response.data?.error || "That reference code isn't valid."
       : 'The reference form could not be loaded. Please try again in a moment.'
   } finally {
     loading.value = false
@@ -86,7 +90,11 @@ async function submit() {
     </div>
 
     <v-card v-else-if="loadError">
-      <v-empty-state icon="mdi-link-off" title="Link not found" :text="loadError" />
+      <v-empty-state icon="mdi-link-off" title="Can't open this reference" :text="loadError">
+        <template #actions>
+          <v-btn color="primary" to="/references">Enter a different code</v-btn>
+        </template>
+      </v-empty-state>
     </v-card>
 
     <v-card v-else-if="submitted">
@@ -96,14 +104,27 @@ async function submit() {
             Your reference for <strong class="text-navy">{{ link.applicantName }}</strong> has been submitted.
             It goes directly to the scholarship committee; the applicant can't see what you wrote.
           </p>
-          <p class="text-sm text-slate-400 mt-2">You can close this window.</p>
+        </template>
+        <template #actions>
+          <v-btn color="primary" to="/references">My References</v-btn>
         </template>
       </v-empty-state>
     </v-card>
 
     <v-card v-else-if="link.status === 'submitted'">
-      <v-empty-state icon="mdi-check-circle-outline" title="Already submitted"
-        :text="`This ${link.formTitle} for ${link.applicantName} has already been submitted. Thank you!`" />
+      <v-empty-state
+        icon="mdi-check-circle-outline"
+        title="Already submitted"
+        :text="link.submittedReferenceId
+          ? `You've already submitted this ${link.formTitle} for ${link.applicantName}.`
+          : `This ${link.formTitle} for ${link.applicantName} has already been submitted.`"
+      >
+        <template #actions>
+          <v-btn color="primary" :to="link.submittedReferenceId ? `/references/${link.submittedReferenceId}` : '/references'">
+            {{ link.submittedReferenceId ? 'View your reference' : 'My References' }}
+          </v-btn>
+        </template>
+      </v-empty-state>
     </v-card>
 
     <v-card v-else-if="link.status === 'closed'">
