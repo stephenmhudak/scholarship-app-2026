@@ -41,12 +41,17 @@ public class ReferenceService(
         var requirements = await ReferenceRequirements.EvaluateAsync(db, app.Id, app.CycleId);
         var requests = (await db.Query("ReferenceRequests").Where("ApplicationId", app.Id).OrderBy("CreatedAt")
             .GetAsync<ReferenceRequest>()).ToLookup(r => r.FormId);
+        var conditions = requirements.Count == 0
+            ? Enumerable.Empty<ReferenceFormCondition>().ToLookup(c => c.FormId)
+            : (await db.Query("ReferenceFormConditions").WhereIn("FormId", requirements.Select(r => r.Form.Id))
+                .GetAsync<ReferenceFormCondition>()).ToLookup(c => c.FormId);
 
+        // Every form, with its conditions, so the application form can show the ones the applicant's answers call
+        // for as they answer, before saving
         return new ApplicationReferencesDto
         {
             CanRequest = app.Status == "draft" && CycleWindow.IsOpen(cycle, DateTime.UtcNow),
             Forms = requirements
-                .Where(r => r.Required || requests[r.Form.Id].Any())
                 .Select(r => new ReferenceFormStatusDto
                 {
                     FormId = r.Form.Id,
@@ -54,6 +59,14 @@ public class ReferenceService(
                     Description = r.Form.Description,
                     RequiredCount = r.Form.RequiredCount,
                     Required = r.Required,
+                    Requirement = r.Form.Requirement,
+                    Conditions = conditions[r.Form.Id].Select(c => new ReferenceConditionDto
+                    {
+                        QuestionId = c.QuestionId,
+                        OptionId = c.OptionId,
+                        SchoolId = c.SchoolId,
+                        TextContains = c.TextContains,
+                    }).ToList(),
                     Received = requests[r.Form.Id].Count(x => x.Status == "submitted"),
                     Requests = requests[r.Form.Id].Select(ToDto).ToList(),
                 })

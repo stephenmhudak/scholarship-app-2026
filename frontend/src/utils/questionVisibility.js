@@ -14,20 +14,26 @@ import { htmlToText } from './richText'
  *   single-choice option id), or an array of option ids
  * @returns {Set<string>} ids of the questions to show
  */
+/**
+ * Whether one answer meets a condition (as AnswerConditions on the server): it includes the condition's optionId or
+ * schoolId, or, for text, contains textContains, ignoring case. Shared by conditional questions and references.
+ */
+export function answerMatches(condition, value) {
+  const selected = condition.optionId ?? condition.schoolId
+  if (selected) return Array.isArray(value) ? value.includes(selected) : value === selected
+  if (!condition.textContains || typeof value !== 'string' || !value) return false
+  // Rich text answers are HTML; match the visible text
+  const text = value.includes('<') ? htmlToText(value) : value
+  return text.toLowerCase().includes(condition.textContains.trim().toLowerCase())
+}
+
 export function visibleQuestionIds(questions, answerOf) {
   const byId = Object.fromEntries(questions.map((q) => [q.id, q]))
   const memo = new Map()
   const visiting = new Set()
 
   function matches(condition) {
-    if (!isVisible(condition.sourceQuestionId)) return false
-    const value = answerOf(condition.sourceQuestionId)
-    const selected = condition.optionId ?? condition.schoolId
-    if (selected) return Array.isArray(value) ? value.includes(selected) : value === selected
-    if (!condition.textContains || typeof value !== 'string' || !value) return false
-    // Rich text answers are HTML; match the visible text
-    const text = value.includes('<') ? htmlToText(value) : value
-    return text.toLowerCase().includes(condition.textContains.trim().toLowerCase())
+    return isVisible(condition.sourceQuestionId) && answerMatches(condition, answerOf(condition.sourceQuestionId))
   }
 
   function isVisible(id) {
