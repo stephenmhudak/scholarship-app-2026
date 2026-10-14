@@ -51,7 +51,7 @@ public class ApplicationAccess(QueryFactory db)
         return applicationIds.Where(id =>
         {
             var byQuestion = answers[id].GroupBy(a => a.QuestionId).ToDictionary(g => g.Key, g => AnswerValue.From(g.First()));
-            return filters.Any(f => AnswerConditions.Matches(f.OptionId, f.TextContains, byQuestion.GetValueOrDefault(f.QuestionId)));
+            return filters.Any(f => AnswerConditions.Matches(f.OptionId ?? f.SchoolId, f.TextContains, byQuestion.GetValueOrDefault(f.QuestionId)));
         }).ToHashSet();
     }
 

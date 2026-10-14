@@ -5,6 +5,7 @@ import api from '../../services/api'
 import { isRichText } from '../../utils/richText'
 import { useConfirm } from '../../composables/useConfirm'
 import ReferenceFormsCard from '../../components/admin/ReferenceFormsCard.vue'
+import { CONDITION_TYPES, conditionKind, conditionFields, describeCondition, useSchools } from '../../utils/conditionTargets'
 
 const route = useRoute()
 const confirm = useConfirm()
@@ -47,7 +48,7 @@ const ALL_QUESTION_TYPES = [
 const QUESTION_TYPES = formId ? ALL_QUESTION_TYPES.filter((t) => t.value !== 'school_select') : ALL_QUESTION_TYPES
 
 const TEXT_TYPES = ['short_answer', 'long_answer']
-const CHOICE_TYPES = ['multiple_choice', 'single_choice']
+const { schools, schoolName } = useSchools()
 
 const sectionItems = computed(() => [
   { title: 'No section (ungrouped)', value: '' },
@@ -172,7 +173,7 @@ const earlierQuestions = computed(() => {
 const conditionSources = computed(() => {
   if (formId) return []
   const earlier = new Set(earlierQuestions.value.map((q) => q.id))
-  return questions.value.filter((q) => earlier.has(q.id) && [...CHOICE_TYPES, ...TEXT_TYPES].includes(q.type))
+  return questions.value.filter((q) => earlier.has(q.id) && CONDITION_TYPES.includes(q.type))
 })
 
 // Conditions in the editor that would point at a later question (e.g. after changing the section above)
@@ -183,19 +184,19 @@ const laterConditionCount = computed(() => {
 
 const questionById = computed(() => Object.fromEntries(questions.value.map((q) => [q.id, q])))
 
-function isChoiceSource(sourceQuestionId) {
-  return CHOICE_TYPES.includes(questionById.value[sourceQuestionId]?.type)
+// 'option', 'school' or 'text': what a condition on this question looks for
+function sourceKind(sourceQuestionId) {
+  return conditionKind(questionById.value[sourceQuestionId]?.type)
 }
 
 function addCondition() {
-  editing.value.conditions.push({ sourceQuestionId: null, optionId: null, textContains: '' })
+  editing.value.conditions.push({ sourceQuestionId: null, optionId: null, schoolId: null, textContains: '' })
 }
 
 function conditionText(c) {
   const source = questionById.value[c.sourceQuestionId]
   if (!source) return null
-  if (c.optionId) return `"${source.text}" is "${source.options?.find((o) => o.id === c.optionId)?.text ?? '?'}"`
-  return `"${source.text}" contains "${c.textContains}"`
+  return describeCondition(source, c, schoolName)
 }
 
 function visibilityText(q) {
@@ -322,8 +323,7 @@ async function save() {
     conditions: !formId && editing.value.visibility === 'conditional'
       ? editing.value.conditions.map((c) => ({
           sourceQuestionId: c.sourceQuestionId,
-          optionId: isChoiceSource(c.sourceQuestionId) ? c.optionId : null,
-          textContains: isChoiceSource(c.sourceQuestionId) ? null : c.textContains,
+          ...conditionFields(questionById.value[c.sourceQuestionId]?.type, c),
         }))
       : [],
   }
@@ -844,15 +844,25 @@ function globalIndex(q) {
                         label="Question"
                         hide-details
                         class="flex-1 min-w-0"
-                        @update:model-value="c.optionId = null; c.textContains = ''"
+                        @update:model-value="c.optionId = null; c.schoolId = null; c.textContains = ''"
                       />
                       <v-select
-                        v-if="c.sourceQuestionId && isChoiceSource(c.sourceQuestionId)"
+                        v-if="c.sourceQuestionId && sourceKind(c.sourceQuestionId) === 'option'"
                         v-model="c.optionId"
                         :items="questionById[c.sourceQuestionId]?.options ?? []"
                         item-title="text"
                         item-value="id"
                         label="Answer is"
+                        hide-details
+                        class="flex-1 min-w-0"
+                      />
+                      <v-autocomplete
+                        v-else-if="c.sourceQuestionId && sourceKind(c.sourceQuestionId) === 'school'"
+                        v-model="c.schoolId"
+                        :items="schools"
+                        item-title="name"
+                        item-value="id"
+                        label="School is"
                         hide-details
                         class="flex-1 min-w-0"
                       />
@@ -870,7 +880,7 @@ function globalIndex(q) {
                       that would come after this one. Remove {{ laterConditionCount === 1 ? 'it' : 'them' }} or keep this question in its section.
                     </p>
                     <p v-if="conditionSources.length === 0" class="text-xs font-medium text-warning-dark">
-                      There are no earlier choice or text questions to depend on.
+                      There are no earlier choice, school or text questions to depend on.
                     </p>
                     <v-btn v-else variant="outlined" size="small" prepend-icon="mdi-plus" @click="addCondition">Add condition</v-btn>
                     <p class="text-xs text-slate-400">

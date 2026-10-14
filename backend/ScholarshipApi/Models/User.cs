@@ -29,5 +29,7 @@ public class ScorerFilter
     public string ScorerId { get; set; } = null!;
     public string QuestionId { get; set; } = null!;
     public string? OptionId { get; set; }
+    /// <summary>For School Select questions: the school chosen.</summary>
+    public string? SchoolId { get; set; }
     public string? TextContains { get; set; }
 }

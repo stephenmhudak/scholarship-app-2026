@@ -230,10 +230,11 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
             .Join("Questions as q", "q.Id", "f.QuestionId")
             .Join("ScholarshipCycles as c", "c.Id", "q.CycleId")
             .LeftJoin("QuestionOptions as o", "o.Id", "f.OptionId")
+            .LeftJoin("Schools as s", "s.Id", "f.SchoolId")
             .Where("f.ScorerId", id)
             .OrderBy("c.Name", "q.Order")
-            .Select("f.QuestionId", "f.OptionId", "f.TextContains", "q.CycleId", "q.Text as QuestionText",
-                    "c.Name as CycleName", "o.Text as OptionText")
+            .Select("f.QuestionId", "f.OptionId", "f.SchoolId", "f.TextContains", "q.CycleId", "q.Text as QuestionText",
+                    "c.Name as CycleName", "o.Text as OptionText", "s.Name as SchoolName")
             .GetAsync<dynamic>();
         return Ok(new { scope = scorer.ScoringScope, filters });
     }
@@ -252,21 +253,8 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
             var question = await db.Query("Questions").Where("Id", filter.QuestionId ?? "").WhereNull("ReferenceFormId")
                 .FirstOrDefaultAsync<Question>()
                 ?? throw new ArgumentException("A filter uses a question that isn't on an application.");
-            if (question.Type is "single_choice" or "multiple_choice")
-            {
-                if (!await db.Query("QuestionOptions").Where("Id", filter.OptionId ?? "").Where("QuestionId", question.Id).ExistsAsync())
-                    throw new ArgumentException($"Choose an answer for \"{question.Text}\".");
-                filter.TextContains = null;
-            }
-            else if (question.Type is "short_answer" or "long_answer")
-            {
-                filter.TextContains = InputValidation.Required(filter.TextContains, "Text to look for", 255);
-                filter.OptionId = null;
-            }
-            else
-            {
-                throw new ArgumentException("Filters can only use choice or text questions.");
-            }
+            (filter.OptionId, filter.SchoolId, filter.TextContains) =
+                await ConditionTarget.ValidateAsync(db, question, filter.OptionId, filter.SchoolId, filter.TextContains);
         }
 
         if (db.Connection.State != System.Data.ConnectionState.Open) db.Connection.Open();
@@ -281,6 +269,7 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
                 ScorerId = id,
                 filter.QuestionId,
                 filter.OptionId,
+                filter.SchoolId,
                 filter.TextContains,
             }, transaction);
         }
@@ -489,6 +478,8 @@ public class ScorerFilterRequest
     /// <summary>For choice questions: applications where this option was chosen.</summary>
     public string? OptionId { get; set; }
     /// <summary>For text questions: applications whose answer contains this text (ignoring case).</summary>
+    /// <summary>For School Select questions: the school chosen.</summary>
+    public string? SchoolId { get; set; }
     public string? TextContains { get; set; }
 }
 
