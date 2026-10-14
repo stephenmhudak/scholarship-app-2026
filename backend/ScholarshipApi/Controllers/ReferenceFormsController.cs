@@ -30,9 +30,10 @@ public class ReferenceFormsController(QueryFactory db) : ControllerBase
         var formIds = forms.Select(f => f.Id).ToList();
         var conditions = (await db.Query("ReferenceFormConditions").WhereIn("FormId", formIds)
             .GetAsync<ReferenceFormCondition>()).ToLookup(c => c.FormId);
+        // Typed rows: with dynamic ones the dictionary's values are dynamic, so a form with no questions came out null, not 0
         var questionCounts = (await db.Query("Questions").WhereIn("ReferenceFormId", formIds)
-            .GroupBy("ReferenceFormId").SelectRaw("ReferenceFormId, COUNT(*) AS Total").GetAsync<dynamic>())
-            .ToDictionary(r => (string)r.ReferenceFormId, r => Convert.ToInt32(r.Total));
+            .GroupBy("ReferenceFormId").SelectRaw("ReferenceFormId AS FormId, COUNT(*) AS Total").GetAsync<FormQuestionCount>())
+            .ToDictionary(r => r.FormId, r => r.Total);
 
         return Ok(forms.Select(f => new
         {
@@ -179,6 +180,12 @@ public class ReferenceFormsController(QueryFactory db) : ControllerBase
         if (db.Connection.State != ConnectionState.Open) db.Connection.Open();
         return db.Connection.BeginTransaction();
     }
+}
+
+internal class FormQuestionCount
+{
+    public string FormId { get; set; } = null!;
+    public int Total { get; set; }
 }
 
 public class ReferenceFormRequest
