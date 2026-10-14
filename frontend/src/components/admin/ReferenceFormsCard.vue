@@ -161,7 +161,9 @@ async function remove(form) {
           <p v-if="form.description" class="text-xs text-slate-400">{{ form.description }}</p>
           <div class="flex flex-wrap items-center gap-2">
             <v-chip color="primary" class="font-semibold">{{ form.requiredCount }} needed</v-chip>
-            <v-chip>{{ form.questionCount }} question{{ form.questionCount === 1 ? '' : 's' }}</v-chip>
+            <v-chip :color="form.questionCount ? undefined : 'warning'" :prepend-icon="form.questionCount ? undefined : 'mdi-alert-outline'">
+              {{ form.questionCount ?? 0 }} question{{ form.questionCount === 1 ? '' : 's' }}
+            </v-chip>
           </div>
           <p class="text-xs" :class="form.requirement === 'always' ? 'text-slate-400' : 'text-navy'">{{ requirementText(form) }}</p>
         </div>
