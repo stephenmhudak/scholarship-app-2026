@@ -118,6 +118,13 @@ const routes = [
     meta: { permission: 'view_scoring_overview' },
   },
   {
+    // The question builder, for one reference form's questions
+    path: '/admin/cycles/:cycleId/references/:formId',
+    name: 'ReferenceFormQuestions',
+    component: () => import('../pages/admin/CycleQuestionsPage.vue'),
+    meta: { permission: 'admin_scholarship' },
+  },
+  {
     path: '/admin/cycles/:cycleId/questions',
     name: 'CycleQuestions',
     component: () => import('../pages/admin/CycleQuestionsPage.vue'),
@@ -142,10 +149,11 @@ const routes = [
     meta: { permission: 'view_counselor_dashboard' },
   },
   {
-    path: '/reference',
-    name: 'ReferenceUpload',
-    component: () => import('../pages/reference/ReferenceUploadPage.vue'),
-    meta: { layout: 'auth', public: true },
+    // Reference links the applicant shares: /r/ + 10-character code. No account needed.
+    path: '/r/:code',
+    name: 'ReferenceForm',
+    component: () => import('../pages/reference/ReferenceFormPage.vue'),
+    meta: { layout: 'public', public: true },
   },
   {
     path: '/403',

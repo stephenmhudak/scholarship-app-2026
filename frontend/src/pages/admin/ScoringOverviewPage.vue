@@ -100,7 +100,7 @@ function scoringProgress(app) {
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   <v-card
                     v-for="section in item.sectionAverages"
-                    :key="section.sectionId ?? 'overall'"
+                    :key="section.referenceRequestId ?? section.sectionId ?? 'overall'"
                     rounded="lg"
                     class="px-4 py-3"
                   >

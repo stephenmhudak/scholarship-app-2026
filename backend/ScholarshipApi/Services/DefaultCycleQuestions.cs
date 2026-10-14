@@ -10,8 +10,8 @@ namespace ScholarshipApi.Services;
 /// them afterwards from the cycle's question builder.
 ///
 /// Deliberately omitted from the paper form:
-///   - Pages 4–5 (teacher / second reference forms) and the page 2 reference certification
-///     (#14) — references are collected through the References workflow, not the applicant.
+///   - The page 2 reference certification (#14). Pages 4–5 (teacher / second reference) become the
+///     default reference forms below; referees fill them in through a link, not the applicant.
 ///   - Duplicate prompts (repeated "Applicant's Name"/"School" headers, page 2's second
 ///     transcript line).
 /// </summary>
@@ -33,6 +33,8 @@ public static class DefaultCycleQuestions
         Rules? Rules = null);
 
     private record S(string Title, string? Description, Q[] Questions);
+
+    private record R(string Title, string? Description, Q[] Questions);
 
     private static readonly Rules Number = new(NumberOnly: true);
     private static readonly Rules Phone = new(PhoneFormat: true);
@@ -139,7 +141,62 @@ public static class DefaultCycleQuestions
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    // Pages 4–5. The referee sees the applicant's name and school automatically, and every reference ends
+    // with the referee's printed name, a drawn signature and the date, so those aren't questions here.
+    private static readonly R[] References =
+    [
+        new("Teacher Reference", "To be completed by a teacher or advisor who knows the applicant.",
+        [
+            new("How many months were you in frequent contact with the applicant?", "short_answer", Required: true, Rules: Number),
+            new("What was your relationship to the applicant?", "single_choice", Required: true,
+                Options: ["Teacher", "Advisor", "Other"]),
+            new("Course taught, advisory role, or other relationship", "short_answer", Required: true,
+                Description: "For example: Teacher for AP Biology."),
+            new("Please rate the applicant on overall promise", "single_choice", Required: true,
+                Description: "Compared with other students you have known, as a percentile (99 is highest).",
+                Options: [.. Enumerable.Range(80, 20).Reverse().Select(p => p.ToString()), "Below 80"]),
+            new("Summary comments", "long_answer", Required: true,
+                Description: "Can you tell something about this student that is not reflected in grades, test scores, or rank in class? What makes this applicant truly exceptional?"),
+        ]),
+        new("Second Reference", "From a pastor, employer, civic leader, or anyone else who knows the applicant well.",
+        [
+            new("Your relationship to the applicant", "short_answer", Required: true,
+                Description: "For example: pastor, teacher, employer, civic leader."),
+            new("Reference", "long_answer", Required: true,
+                Description: "Please share what you know about the applicant and why you recommend them."),
+        ]),
+    ];
+
     public static async Task SeedAsync(QueryFactory db, string cycleId, IDbTransaction transaction)
+    {
+        await SeedApplicationAsync(db, cycleId, transaction);
+        await SeedReferencesAsync(db, cycleId, transaction);
+    }
+
+    private static async Task SeedReferencesAsync(QueryFactory db, string cycleId, IDbTransaction transaction)
+    {
+        for (var r = 0; r < References.Length; r++)
+        {
+            var form = References[r];
+            var formId = Guid.NewGuid().ToString();
+            await db.Query("ReferenceForms").InsertAsync(new
+            {
+                Id = formId,
+                CycleId = cycleId,
+                form.Title,
+                form.Description,
+                RequiredCount = 1,
+                Requirement = "always",
+                Order = r,
+                CreatedAt = DateTime.UtcNow,
+            }, transaction);
+
+            for (var i = 0; i < form.Questions.Length; i++)
+                await InsertQuestionAsync(db, transaction, cycleId, form.Questions[i], i, sectionId: null, referenceFormId: formId);
+        }
+    }
+
+    private static async Task SeedApplicationAsync(QueryFactory db, string cycleId, IDbTransaction transaction)
     {
         var questionOrder = 0;
         for (var s = 0; s < Sections.Length; s++)
@@ -156,33 +213,38 @@ public static class DefaultCycleQuestions
             }, transaction);
 
             foreach (var q in section.Questions)
-            {
-                var questionId = Guid.NewGuid().ToString();
-                await db.Query("Questions").InsertAsync(new
-                {
-                    Id = questionId,
-                    CycleId = cycleId,
-                    q.Text,
-                    q.Type,
-                    Order = questionOrder++,
-                    IsRequired = q.Required,
-                    SectionId = sectionId,
-                    q.Description,
-                    ValidationRules = q.Rules != null ? JsonSerializer.Serialize(q.Rules, JsonOptions) : null,
-                }, transaction);
+                await InsertQuestionAsync(db, transaction, cycleId, q, questionOrder++, sectionId, referenceFormId: null);
+        }
+    }
 
-                if (q.Options == null) continue;
-                for (var o = 0; o < q.Options.Length; o++)
-                {
-                    await db.Query("QuestionOptions").InsertAsync(new
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        QuestionId = questionId,
-                        Text = q.Options[o],
-                        Order = o,
-                    }, transaction);
-                }
-            }
+    private static async Task InsertQuestionAsync(
+        QueryFactory db, IDbTransaction transaction, string cycleId, Q q, int order, string? sectionId, string? referenceFormId)
+    {
+        var questionId = Guid.NewGuid().ToString();
+        await db.Query("Questions").InsertAsync(new
+        {
+            Id = questionId,
+            CycleId = cycleId,
+            q.Text,
+            q.Type,
+            Order = order,
+            IsRequired = q.Required,
+            SectionId = sectionId,
+            ReferenceFormId = referenceFormId,
+            q.Description,
+            ValidationRules = q.Rules != null ? JsonSerializer.Serialize(q.Rules, JsonOptions) : null,
+        }, transaction);
+
+        if (q.Options == null) return;
+        for (var o = 0; o < q.Options.Length; o++)
+        {
+            await db.Query("QuestionOptions").InsertAsync(new
+            {
+                Id = Guid.NewGuid().ToString(),
+                QuestionId = questionId,
+                Text = q.Options[o],
+                Order = o,
+            }, transaction);
         }
     }
 }

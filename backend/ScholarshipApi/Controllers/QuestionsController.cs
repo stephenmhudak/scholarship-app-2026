@@ -15,11 +15,13 @@ public class QuestionsController(QueryFactory db) : ControllerBase
     // camelCase keys — the frontend reads validationRules.numberOnly etc. straight from the stored JSON
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    // Without referenceFormId: the application's questions. With it: that reference form's questions.
     [HttpGet]
-    public async Task<IActionResult> List(string cycleId)
+    public async Task<IActionResult> List(string cycleId, [FromQuery] string? referenceFormId)
     {
         var questions = await db.Query("Questions")
             .Where("CycleId", cycleId)
+            .When(referenceFormId is null, q => q.WhereNull("ReferenceFormId"), q => q.Where("ReferenceFormId", referenceFormId))
             .OrderBy("Order")
             .GetAsync<Question>();
 
@@ -39,6 +41,7 @@ public class QuestionsController(QueryFactory db) : ControllerBase
             q.Order,
             q.IsRequired,
             q.SectionId,
+            q.ReferenceFormId,
             q.Description,
             ValidationRules = q.ValidationRules != null
                 ? JsonSerializer.Deserialize<JsonElement>(q.ValidationRules)
@@ -51,10 +54,13 @@ public class QuestionsController(QueryFactory db) : ControllerBase
 
     [HttpPost]
     [Authorize(Policy = "AppAdmin")]
-    public async Task<IActionResult> Create(string cycleId, [FromBody] QuestionRequest request)
+    public async Task<IActionResult> Create(string cycleId, [FromBody] QuestionRequest request, [FromQuery] string? referenceFormId)
     {
         if (!await db.Query("ScholarshipCycles").Where("Id", cycleId).ExistsAsync()) throw new KeyNotFoundException("Cycle not found.");
-        await ValidateAsync(cycleId, request);
+        if (referenceFormId is not null
+            && !await db.Query("ReferenceForms").Where("Id", referenceFormId).Where("CycleId", cycleId).ExistsAsync())
+            throw new KeyNotFoundException("Reference form not found.");
+        await ValidateAsync(cycleId, request, referenceFormId);
         var id = Guid.NewGuid().ToString();
         await db.Query("Questions").InsertAsync(new
         {
@@ -65,6 +71,7 @@ public class QuestionsController(QueryFactory db) : ControllerBase
             Order = request.Order,
             request.IsRequired,
             request.SectionId,
+            ReferenceFormId = referenceFormId,
             request.Description,
             ValidationRules = request.ValidationRules != null
                 ? JsonSerializer.Serialize(request.ValidationRules, JsonOptions)
@@ -80,9 +87,9 @@ public class QuestionsController(QueryFactory db) : ControllerBase
     [Authorize(Policy = "AppAdmin")]
     public async Task<IActionResult> Update(string cycleId, string questionId, [FromBody] QuestionRequest request)
     {
-        if (!await db.Query("Questions").Where("Id", questionId).Where("CycleId", cycleId).ExistsAsync())
-            throw new KeyNotFoundException("Question not found.");
-        await ValidateAsync(cycleId, request);
+        var existing = await db.Query("Questions").Where("Id", questionId).Where("CycleId", cycleId).FirstOrDefaultAsync<Question>()
+            ?? throw new KeyNotFoundException("Question not found.");
+        await ValidateAsync(cycleId, request, existing.ReferenceFormId);
         await db.Query("Questions").Where("Id", questionId).Where("CycleId", cycleId).UpdateAsync(new
         {
             Text = request.Text,
@@ -96,7 +103,6 @@ public class QuestionsController(QueryFactory db) : ControllerBase
                 : null
         });
 
-        await db.Query("QuestionOptions").Where("QuestionId", questionId).DeleteAsync();
         await SaveOptionsAsync(questionId, request.Options);
 
         return NoContent();
@@ -107,9 +113,12 @@ public class QuestionsController(QueryFactory db) : ControllerBase
     public async Task<IActionResult> Delete(string cycleId, string questionId, [FromQuery] bool force = false)
     {
         // ApplicationAnswers.QuestionId has no ON DELETE rule, so answers must go first — only when the admin confirms.
-        var answerCount = await db.Query("ApplicationAnswers").Where("QuestionId", questionId).CountAsync<int>();
-        if (answerCount > 0 && !force)
-            return Conflict(new { error = $"{answerCount} application(s) have answered this question.", answerCount });
+        // Reference answers and reference conditions on this question are removed with it (ON DELETE CASCADE).
+        var answerCount = await db.Query("ApplicationAnswers").Where("QuestionId", questionId).CountAsync<int>()
+            + await db.Query("ReferenceAnswers").Where("QuestionId", questionId).CountAsync<int>();
+        var conditionCount = await db.Query("ReferenceFormConditions").Where("QuestionId", questionId).CountAsync<int>();
+        if ((answerCount > 0 || conditionCount > 0) && !force)
+            return Conflict(new { error = "This question has answers or reference conditions.", answerCount, conditionCount });
 
         if (db.Connection.State != System.Data.ConnectionState.Open) db.Connection.Open();
         using var transaction = db.Connection.BeginTransaction();
@@ -125,11 +134,18 @@ public class QuestionsController(QueryFactory db) : ControllerBase
     private const int MaxTextLength = 5000;
 
     // Normalizes the request in place: trimmed text, blank options dropped, options only kept for choice questions
-    private async Task ValidateAsync(string cycleId, QuestionRequest request)
+    private async Task ValidateAsync(string cycleId, QuestionRequest request, string? referenceFormId)
     {
         request.Text = InputValidation.Required(request.Text, "Question text", MaxTextLength);
         request.Description = InputValidation.Optional(request.Description, "Description", MaxTextLength);
         if (request.Type is null || !QuestionTypes.Contains(request.Type)) throw new ArgumentException("Choose a valid question type.");
+
+        if (referenceFormId is not null)
+        {
+            // Referees don't sign in, and the school list needs an account
+            if (request.Type == "school_select") throw new ArgumentException("School select isn't available on reference forms.");
+            request.SectionId = null;
+        }
 
         if (!string.IsNullOrEmpty(request.SectionId)
             && !await db.Query("Sections").Where("Id", request.SectionId).Where("CycleId", cycleId).ExistsAsync())
@@ -150,19 +166,33 @@ public class QuestionsController(QueryFactory db) : ControllerBase
         if (rules.RichText && request.Type != "long_answer") throw new ArgumentException("Rich text is only available on long answer questions.");
     }
 
+    // Keeps the id of every option whose text is unchanged, so saved answers and reference conditions that point
+    // at an option survive edits to the question. Options no longer listed are removed.
     private async Task SaveOptionsAsync(string questionId, List<string>? options)
     {
-        if (options is null || options.Count == 0) return;
-        for (int i = 0; i < options.Count; i++)
+        var existing = (await db.Query("QuestionOptions").Where("QuestionId", questionId).GetAsync<QuestionOption>()).ToList();
+        var kept = new HashSet<string>();
+        var texts = options ?? [];
+        for (int i = 0; i < texts.Count; i++)
         {
+            var match = existing.FirstOrDefault(o => o.Text == texts[i] && !kept.Contains(o.Id));
+            if (match is not null)
+            {
+                kept.Add(match.Id);
+                if (match.Order != i) await db.Query("QuestionOptions").Where("Id", match.Id).UpdateAsync(new { Order = i });
+                continue;
+            }
             await db.Query("QuestionOptions").InsertAsync(new
             {
                 Id = Guid.NewGuid().ToString(),
                 QuestionId = questionId,
-                Text = options[i],
+                Text = texts[i],
                 Order = i
             });
         }
+
+        var removed = existing.Where(o => !kept.Contains(o.Id)).Select(o => o.Id).ToList();
+        if (removed.Count > 0) await db.Query("QuestionOptions").WhereIn("Id", removed).DeleteAsync();
     }
 
     [HttpPut("reorder")]

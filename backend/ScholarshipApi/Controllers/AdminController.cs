@@ -57,10 +57,19 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
             .GetAsync<CountRow>())
             .ToDictionary(r => r.ApplicationId, r => r.Total);
 
+        // One row per section, overall score, or reference ("Reference: Teacher Reference (Ms. Smith)")
         var sectionAverages = (await db.Query("Scores as s")
             .LeftJoin("Sections as sec", "sec.Id", "s.SectionId")
-            .SelectRaw("s.ApplicationId, s.SectionId, COALESCE(sec.Title, 'Ungrouped') as SectionTitle, AVG(s.Score) as Average, COUNT(DISTINCT s.ScoredById) as ScorerCount")
-            .GroupBy("s.ApplicationId", "s.SectionId", "sec.Title")
+            .LeftJoin("ReferenceRequests as rr", "rr.Id", "s.ReferenceRequestId")
+            .LeftJoin("ReferenceForms as rf", "rf.Id", "rr.FormId")
+            .SelectRaw("""
+                s.ApplicationId, s.SectionId, s.ReferenceRequestId,
+                CASE WHEN rr.Id IS NOT NULL
+                     THEN CONCAT('Reference: ', rf.Title, IF(rr.Label IS NULL OR rr.Label = '', '', CONCAT(' (', rr.Label, ')')))
+                     ELSE COALESCE(sec.Title, 'Ungrouped') END as SectionTitle,
+                AVG(s.Score) as Average, COUNT(DISTINCT s.ScoredById) as ScorerCount
+                """)
+            .GroupBy("s.ApplicationId", "s.SectionId", "s.ReferenceRequestId", "sec.Title", "rr.Id", "rf.Title", "rr.Label")
             .GetAsync<SectionAvgRow>())
             .GroupBy(r => r.ApplicationId)
             .ToDictionary(g => g.Key, g => g.ToList());
@@ -84,6 +93,7 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
                 sectionAverages = sections.Select(s => new
                 {
                     sectionId = s.SectionId,
+                    referenceRequestId = s.ReferenceRequestId,
                     sectionTitle = s.SectionTitle,
                     average = Math.Round(s.Average, 2),
                     scorerCount = s.ScorerCount
@@ -384,6 +394,7 @@ internal class SectionAvgRow
 {
     public string ApplicationId { get; set; } = null!;
     public string? SectionId { get; set; }
+    public string? ReferenceRequestId { get; set; }
     public string SectionTitle { get; set; } = null!;
     public decimal Average { get; set; }
     public int ScorerCount { get; set; }

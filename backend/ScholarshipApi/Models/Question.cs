@@ -11,4 +11,6 @@ public class Question
     public string? SectionId { get; set; }
     public string? Description { get; set; }
     public string? ValidationRules { get; set; }
+    /// <summary>Set for questions on a reference form; null for application questions.</summary>
+    public string? ReferenceFormId { get; set; }
 }

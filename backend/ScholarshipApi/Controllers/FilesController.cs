@@ -34,7 +34,7 @@ public class FilesController(IFileStorageService fileStorage, ApplicationAccess 
         var cycle = await db.Query("ScholarshipCycles").Where("Id", application.CycleId).FirstOrDefaultAsync<ScholarshipCycle>();
         if (cycle is null || !CycleWindow.IsOpen(cycle, DateTime.UtcNow))
             throw new ArgumentException("This scholarship cycle has closed.");
-        if (questionId is not null && !await db.Query("Questions").Where("Id", questionId).Where("CycleId", application.CycleId).ExistsAsync())
+        if (questionId is not null && !await db.Query("Questions").Where("Id", questionId).Where("CycleId", application.CycleId).WhereNull("ReferenceFormId").ExistsAsync())
             throw new ArgumentException("Question not found in this application's cycle.");
 
         var storagePath = await fileStorage.StoreAsync(file, "application-files");

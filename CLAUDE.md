@@ -91,7 +91,9 @@ backend/ScholarshipApi/
 | `StatusBadge` | `status` (draft\|submitted\|under_review\|awarded\|rejected\|archived) → `v-chip` |
 | `ConfirmDialog` | none — mounted once in `App.vue`, driven by `useConfirm()` |
 | `DateField` | `modelValue` (`'YYYY-MM-DD'`), passes other props to `v-date-input` |
-| `QuestionRenderer` | `question`, `modelValue`, `error` — picks the per-type question component |
+| `QuestionRenderer` | `question`, `modelValue`, `error`, `uploadUrl?` (reference links) — picks the per-type question component |
+| `ApplicationReferences` | `applicationId`, `compact` — applicant's needed references, create/copy/delete links |
+| `SignaturePad` | `modelValue` (JPEG data URL or null), `error` |
 
 ---
 
@@ -145,7 +147,11 @@ backend/ScholarshipApi/
 | GET | `/api/admin/applications` | app_admin | `?status=&page=&pageSize=` → `{data, total, page, pageSize}` |
 | PATCH | `/api/admin/applications/{id}/status` | app_admin | `{ status }` |
 | POST | `/api/files/upload` | auth | Multipart `file`, `applicationId`, `questionId?` → `{ fileId }` |
-| GET/POST | `/api/references/{code}` | **PUBLIC** | Validate / upload reference |
+| GET/POST/PUT/DELETE | `/api/cycles/{id}/reference-forms` | app_admin | Reference forms: `{ title, description, requiredCount, requirement: always\|conditional, conditions: [{questionId, optionId?, textContains?}] }`; questions via `/api/cycles/{id}/questions?referenceFormId=` |
+| GET/POST/DELETE | `/api/applications/{id}/references` | applicant (own) / admin | Needed forms + links (status only). POST `{ formId, label? }` → link; DELETE `/{requestId}` (pending only) |
+| GET | `/api/reference-links/{code}` | **PUBLIC** | Referee's form: applicant name/school, questions, `status` open\|submitted\|closed |
+| POST | `/api/reference-links/{code}/files` · `/submit` | **PUBLIC** | Multipart `file`, `questionId` → `{ fileId }`; submit `{ signerName, signature (JPEG data URL), answers }` |
+| GET | `/api/scoring/{appId}/references` | scorer/admin | Submitted references with answers; `/api/scoring/references/{id}/signature`, `/references/files/{fileId}` |
 | GET | `/api/scoring/queue` | scorer | Assigned applications |
 | POST | `/api/scoring/{appId}/score` | scorer | `{ scoreValue, comments? }` |
 
@@ -168,7 +174,11 @@ backend/ScholarshipApi/
 
 **ApplicationAnswers:** ApplicationId, QuestionId, TextValue, SelectedOptions (JSON array of option IDs)
 
-**References:** Id, ApplicationId, Code (SHA-256 hash), Label, Status (`pending`/`received`), ExpiresAt
+**ReferenceForms:** Id, CycleId, Title, Description, RequiredCount, Requirement (`always`/`conditional`), Order. Questions with `ReferenceFormId` set belong to a form (application queries filter `WhereNull("ReferenceFormId")`).
+
+**ReferenceFormConditions:** FormId, QuestionId (application question), OptionId (choice) or TextContains (text, case-insensitive). A conditional form is required when any condition matches the saved answers (`ReferenceRequirements`).
+
+**ReferenceRequests:** Id, ApplicationId, FormId, Label, CodeHash, CodeEncrypted, Status (`pending`/`submitted`), SignerName, SignaturePath, SubmittedAt. Answers in **ReferenceAnswers**, uploads in **ReferenceFiles**. (The old `References`/`ReferenceDocuments` tables are unused.)
 
 ---
 
@@ -183,7 +193,8 @@ backend/ScholarshipApi/
 - **Account changes end sessions:** `SessionVersion.BumpAsync` (password reset/change, admin or school-admin password reset, 2FA enable/disable/reset) increments `Users.SessionVersion`; tokens carry it as the `sv` claim and `OnTokenValidated` rejects stale ones (and deleted users). When the change is the user's own, the endpoint returns a replacement token in `X-Session-Token`, which `api.js` stores.
 - **Input rules live in `InputValidation`:** 8+ character passwords (max 72 bytes, BCrypt's limit) everywhere a password is set, email format, roles, application statuses, required/max-length text. Use it for any new endpoint that takes user input.
 - **School admin invites** are stored as `TokenHash` (SHA-256); the link is only shown when generated. Registration claims the invite with a conditional update inside a transaction, so a link can only be used once.
-- **Reference codes are hashed** — store SHA-256, compare hash on lookup. Plaintext returned once.
+- **References:** the applicant creates a link per required reference (`/r/` + 10 chars `A–Z0–9`, `ReferenceCode`) and shares it; the referee answers the form, gives their name and draws a signature (`SignaturePad` → JPEG data URL, checked for the JPEG header, ≤ 1 MB). Codes are stored as SHA-256 for lookup and AES-GCM encrypted (two-factor key, request id as associated data) so the applicant can copy the link again. **Applicants never see reference answers**, only status; scorers see them once the application is scoreable and score each reference separately (`Scores.ReferenceRequestId`). Submitting an application requires every required form's `RequiredCount` references to be submitted. The applicant gets an email each time one arrives. Links close when the cycle closes. Reference forms can't use `school_select` (referees have no account).
+- **Editing a choice question keeps option ids** whose text didn't change (answers and reference conditions point at them); removed options cascade-delete conditions on them.
 - **Both frontend routing AND backend auth enforce roles** — check both when adding features.
 - **Who can read an application** (answers, references, files) is decided by `ApplicationAccess`: app_admin all, scorer once scoreable, applicant their own, everyone else denied. **Scoreable** = submitted (or later), or a draft/archived application whose cycle has ended; scores are 1–100, one per cycle section (or one with no section when the cycle has none). Use it for anything new hanging off an application. School endpoints are limited to the caller's own `schoolId` claim (app_admin excepted). Draft file answers must name the applicant's own uploads.
 - **Status transitions are manual** — no state machine. Admin can set any valid status. Exception: `ApplicationArchiveService` (hourly) archives drafts in closed cycles.

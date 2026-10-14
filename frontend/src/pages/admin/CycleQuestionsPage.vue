@@ -4,12 +4,17 @@ import { useRoute } from 'vue-router'
 import api from '../../services/api'
 import { isRichText } from '../../utils/richText'
 import { useConfirm } from '../../composables/useConfirm'
+import ReferenceFormsCard from '../../components/admin/ReferenceFormsCard.vue'
 
 const route = useRoute()
 const confirm = useConfirm()
 const cycleId = route.params.cycleId
+// Set when editing a reference form's questions (/admin/cycles/:cycleId/references/:formId): no sections there
+const formId = route.params.formId ?? null
+const questionParams = formId ? { referenceFormId: formId } : {}
 
 const cycleName = ref('')
+const formTitle = ref('')
 const questions = ref([])
 const sections = ref([])
 const loading = ref(true)
@@ -29,7 +34,7 @@ const editingSection = ref(null)
 const savingSection = ref(false)
 const insertAfterSectionId = ref(null)
 
-const QUESTION_TYPES = [
+const ALL_QUESTION_TYPES = [
   { value: 'short_answer',    label: 'Short Answer' },
   { value: 'long_answer',     label: 'Long Answer' },
   { value: 'multiple_choice', label: 'Multiple Choice' },
@@ -38,6 +43,8 @@ const QUESTION_TYPES = [
   { value: 'school_select',   label: 'School Select' },
   { value: 'date',            label: 'Date' },
 ]
+// Referees don't sign in, and the school list needs an account
+const QUESTION_TYPES = formId ? ALL_QUESTION_TYPES.filter((t) => t.value !== 'school_select') : ALL_QUESTION_TYPES
 
 const TEXT_TYPES = ['short_answer', 'long_answer']
 
@@ -77,8 +84,17 @@ const groupedQuestions = computed(() => {
 })
 
 onMounted(async () => {
-  await Promise.all([loadCycleName(), loadQuestions(), loadSections()])
+  await Promise.all([loadCycleName(), loadQuestions(), formId ? loadFormTitle() : loadSections()])
 })
+
+async function loadFormTitle() {
+  try {
+    const res = await api.get(`/cycles/${cycleId}/reference-forms`)
+    formTitle.value = res.data.find((f) => f.id === formId)?.title ?? 'Reference'
+  } catch {
+    formTitle.value = 'Reference'
+  }
+}
 
 async function loadCycleName() {
   try {
@@ -93,7 +109,7 @@ async function loadCycleName() {
 async function loadQuestions() {
   loading.value = true
   try {
-    const res = await api.get(`/cycles/${cycleId}/questions`)
+    const res = await api.get(`/cycles/${cycleId}/questions`, { params: questionParams })
     questions.value = res.data
   } catch {
     alert.value = { type: 'error', message: 'Failed to load questions.' }
@@ -221,7 +237,7 @@ async function save() {
   try {
     const wasNew = isNew.value
     if (isNew.value) {
-      await api.post(`/cycles/${cycleId}/questions`, payload)
+      await api.post(`/cycles/${cycleId}/questions`, payload, { params: questionParams })
     } else {
       await api.put(`/cycles/${cycleId}/questions/${editing.value.id}`, payload)
     }
@@ -229,8 +245,8 @@ async function save() {
     isNew.value = false
     await loadQuestions()
     alert.value = { type: 'success', message: wasNew ? 'Question added.' : 'Question updated.' }
-  } catch {
-    alert.value = { type: 'error', message: 'Failed to save question.' }
+  } catch (err) {
+    alert.value = { type: 'error', message: err.response?.data?.error || 'Failed to save question.' }
   } finally {
     saving.value = false
   }
@@ -240,12 +256,15 @@ async function deleteQuestion(q) {
   if (!await confirm({ title: 'Delete question', text: `Delete "${q.text}"?`, confirmText: 'Delete', color: 'error' })) return
   try {
     await api.delete(`/cycles/${cycleId}/questions/${q.id}`).catch(async (err) => {
-      const count = err.response?.status === 409 && err.response.data.answerCount
-      if (!count) throw err
+      if (err.response?.status !== 409) throw err
+      const { answerCount, conditionCount } = err.response.data
+      const consequences = []
+      if (answerCount) consequences.push(`deletes ${answerCount} answer(s) to it`)
+      if (conditionCount) consequences.push(`removes ${conditionCount} reference condition(s) that use it`)
       if (!await confirm({
-        title: 'Delete answers too?',
-        text: `${count} application(s) have answered this question. Deleting it also deletes their answers.`,
-        confirmText: 'Delete question and answers',
+        title: 'Delete question',
+        text: `Deleting this question also ${consequences.join(' and ')}.`,
+        confirmText: 'Delete',
         color: 'error',
       })) return
       await api.delete(`/cycles/${cycleId}/questions/${q.id}`, { params: { force: true } })
@@ -403,12 +422,20 @@ function globalIndex(q) {
   <div class="space-y-6 max-w-3xl">
     <!-- Header -->
     <div>
-      <v-btn variant="text" color="primary" size="small" prepend-icon="mdi-arrow-left" to="/admin/settings" class="-ml-3 mb-1">
+      <v-btn v-if="formId" variant="text" color="primary" size="small" prepend-icon="mdi-arrow-left" :to="`/admin/cycles/${cycleId}/questions`" class="-ml-3 mb-1">
+        Application questions
+      </v-btn>
+      <v-btn v-else variant="text" color="primary" size="small" prepend-icon="mdi-arrow-left" to="/admin/settings" class="-ml-3 mb-1">
         Settings
       </v-btn>
-      <h1 class="page-title">Questions</h1>
-      <p class="page-subtitle">{{ cycleName }}</p>
+      <h1 class="page-title">{{ formId ? formTitle : 'Questions' }}</h1>
+      <p class="page-subtitle">{{ formId ? `Reference questions · ${cycleName}` : cycleName }}</p>
     </div>
+
+    <p v-if="formId" class="text-sm text-slate-400">
+      The referee sees the applicant's name and school above these questions, and finishes by giving their name,
+      drawing their signature, and the date. You don't need questions for those.
+    </p>
 
     <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
@@ -418,7 +445,7 @@ function globalIndex(q) {
       Loading questions…
     </div>
 
-    <v-card v-else-if="questions.length === 0 && sections.length === 0 && !editing">
+    <v-card v-else-if="questions.length === 0 && sections.length === 0 && !editing && !formId">
       <v-empty-state icon="mdi-comment-question-outline" text="No questions yet." />
     </v-card>
 
@@ -695,7 +722,7 @@ function globalIndex(q) {
     </template>
 
     <!-- Add first section (when no sections exist) -->
-    <template v-if="sections.length === 0 && !editing">
+    <template v-if="sections.length === 0 && !editing && !formId">
       <v-sheet
         v-if="editingSection && !editingSection.id"
         rounded="lg"
@@ -724,6 +751,8 @@ function globalIndex(q) {
         Add section
       </v-btn>
     </template>
+
+    <ReferenceFormsCard v-if="!formId && !loading" :cycleId="cycleId" :questions="questions" />
 
   </div>
 </template>

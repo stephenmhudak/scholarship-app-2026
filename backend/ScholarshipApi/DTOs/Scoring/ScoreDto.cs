@@ -8,6 +8,7 @@ public class ScoreDto
     public string ScorerName { get; set; } = null!;
     public string? SectionId { get; set; }
     public string? SectionTitle { get; set; }
+    public string? ReferenceRequestId { get; set; }
     public decimal ScoreValue { get; set; }
     public string? Comments { get; set; }
     public DateTime ScoredAt { get; set; }

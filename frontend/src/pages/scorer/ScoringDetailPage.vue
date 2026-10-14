@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useScoringStore } from '../../stores/scoring'
 import RichTextAnswer from '../../components/application/RichTextAnswer.vue'
+import ReferenceResponse from '../../components/scoring/ReferenceResponse.vue'
 import { isRichText } from '../../utils/richText'
 
 const route = useRoute()
@@ -20,12 +21,31 @@ const applicantName = computed(() => {
   return `${app.applicantFirstName ?? ''} ${app.applicantLastName ?? ''}`.trim()
 })
 
+// What gets a score: each section (or one overall score when the cycle has none), then each submitted reference
 const formSections = computed(() => {
-  if (!scoringStore.sections?.length) {
-    return [{ id: null, label: 'Overall Score' }]
-  }
-  return scoringStore.sections.map((s) => ({ id: s.id, label: s.title }))
+  const application = scoringStore.sections?.length
+    ? scoringStore.sections.map((s) => ({ key: s.id, id: s.id, label: s.title }))
+    : [{ key: 'overall', id: null, label: 'Overall Score' }]
+  const references = scoringStore.references.map((r) => ({
+    key: `reference:${r.id}`,
+    id: null,
+    referenceRequestId: r.id,
+    label: `${r.formTitle}${r.label ? ` — ${r.label}` : ''}`,
+    reference: r,
+  }))
+  return [...application, ...references]
 })
+
+// Section labels are only worth showing when there's more than one thing to score
+const showLabels = computed(() => formSections.value.length > 1)
+
+// Choice answers hold option ids; show the option text
+function displayValue(answer, question) {
+  const optionText = (id) => question.options?.find((o) => o.id === id)?.text ?? id
+  if (answer.selectedOptions?.length) return answer.selectedOptions.map(optionText).join(', ')
+  if (question.type === 'single_choice' && answer.textValue) return optionText(answer.textValue)
+  return answer.textValue || '—'
+}
 
 const answersGroupedBySections = computed(() => {
   const app = scoringStore.currentApplication
@@ -44,7 +64,7 @@ const answersGroupedBySections = computed(() => {
       const section = sectionId ? sectionMap[sectionId] : null
       groups[key] = { sectionId, title: section?.title ?? null, order: section?.order ?? 9999, answers: [] }
     }
-    groups[key].answers.push({ ...answer, questionText: q.text, richText: isRichText(q) })
+    groups[key].answers.push({ ...answer, questionText: q.text, richText: isRichText(q), display: displayValue(answer, q) })
   }
 
   return Object.values(groups).sort((a, b) => a.order - b.order)
@@ -56,17 +76,23 @@ const sectionsData = computed(() => {
   )
   return scores.value.map((s, idx) => ({
     idx,
+    key: s.key,
     sectionId: s.sectionId,
     label: s.label,
-    answers: answersBySectionId[s.sectionId ?? 'null'] ?? [],
+    reference: s.reference,
+    answers: s.reference ? [] : (answersBySectionId[s.sectionId ?? 'null'] ?? []),
   }))
 })
 
 function buildScores() {
   scores.value = formSections.value.map((s) => {
-    const existing = scoringStore.existingScores.find((e) => e.sectionId === s.id)
+    const existing = scoringStore.existingScores.find((e) =>
+      (e.referenceRequestId ?? null) === (s.referenceRequestId ?? null) && (e.sectionId ?? null) === s.id)
     return {
+      key: s.key,
       sectionId: s.id,
+      referenceRequestId: s.referenceRequestId ?? null,
+      reference: s.reference,
       label: s.label,
       score: existing?.scoreValue ?? null,
       comments: existing?.comments ?? '',
@@ -95,13 +121,14 @@ async function handleSave() {
     await scoringStore.submitScore(applicationId, {
       sectionScores: filled.map((s) => ({
         sectionId: s.sectionId,
+        referenceRequestId: s.referenceRequestId,
         score: Number(s.score),
         comments: s.comments || null,
       })),
     })
     alert.value = { type: 'success', message: 'Scores saved.' }
-  } catch {
-    alert.value = { type: 'error', message: 'Failed to save scores.' }
+  } catch (err) {
+    alert.value = { type: 'error', message: err.response?.data?.error || 'Failed to save scores.' }
   } finally {
     saving.value = false
   }
@@ -124,15 +151,16 @@ async function handleSave() {
 
     <template v-if="!loading && scoringStore.currentApplication">
       <div class="space-y-8">
-        <div v-for="section in sectionsData" :key="section.sectionId ?? 'overall'" class="space-y-3">
-          <p v-if="scoringStore.sections?.length" class="text-xs font-bold text-slate-400 uppercase tracking-widest">
-            {{ section.label }}
+        <div v-for="section in sectionsData" :key="section.key" class="space-y-3">
+          <p v-if="showLabels" class="text-xs font-bold text-slate-400 uppercase tracking-widest">
+            <template v-if="section.reference">Reference · </template>{{ section.label }}
           </p>
 
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
             <!-- Answers -->
             <v-card class="pa-5 space-y-4">
-              <template v-if="section.answers.length">
+              <ReferenceResponse v-if="section.reference" :reference="section.reference" />
+              <template v-else-if="section.answers.length">
                 <div
                   v-for="answer in section.answers"
                   :key="answer.questionId"
@@ -141,9 +169,7 @@ async function handleSave() {
                     {{ answer.questionText || answer.questionId }}
                   </p>
                   <RichTextAnswer v-if="answer.richText" :html="answer.textValue" />
-                  <p v-else class="text-sm text-navy whitespace-pre-wrap">
-                    {{ answer.selectedOptions?.length ? answer.selectedOptions.join(', ') : (answer.textValue || '—') }}
-                  </p>
+                  <p v-else class="text-sm text-navy whitespace-pre-wrap">{{ answer.display }}</p>
                 </div>
               </template>
               <p v-else class="text-sm text-slate-400">No answers for this section.</p>

@@ -8,6 +8,8 @@ export const useScoringStore = defineStore('scoring', () => {
   const questions = ref([])
   const sections = ref([])
   const existingScores = ref([])
+  // Submitted references, each scored on its own
+  const references = ref([])
 
   const questionMap = ref({})
 
@@ -30,8 +32,12 @@ export const useScoringStore = defineStore('scoring', () => {
       questionMap.value = Object.fromEntries(qRes.data.map((q) => [q.id, q]))
     }
 
-    const scoresRes = await api.get(`/scoring/${id}/my-scores`)
+    const [scoresRes, referencesRes] = await Promise.all([
+      api.get(`/scoring/${id}/my-scores`),
+      api.get(`/scoring/${id}/references`),
+    ])
     existingScores.value = scoresRes.data
+    references.value = referencesRes.data
   }
 
   async function submitScore(applicationId, payload) {
@@ -44,5 +50,5 @@ export const useScoringStore = defineStore('scoring', () => {
     if (queueItem) queueItem.hasScored = true
   }
 
-  return { queue, currentApplication, questions, sections, existingScores, questionMap, fetchQueue, fetchApplication, submitScore }
+  return { queue, currentApplication, questions, sections, existingScores, references, questionMap, fetchQueue, fetchApplication, submitScore }
 })
