@@ -5,8 +5,8 @@ using ScholarshipApi.Models;
 namespace ScholarshipApi.Services;
 
 /// <summary>
-/// Copies a cycle's sections, questions and options into another cycle, along with its reference forms
-/// (their questions, and the conditions that tie them to application answers).
+/// Copies a cycle's sections, questions and options into another cycle, along with which questions are shown
+/// conditionally and its reference forms (their questions, and the conditions that tie them to application answers).
 /// </summary>
 public static class CycleQuestionCopier
 {
@@ -78,6 +78,8 @@ public static class CycleQuestionCopier
                 ReferenceFormId = question.ReferenceFormId != null && formIdMap.TryGetValue(question.ReferenceFormId, out var f) ? f : null,
                 question.Description,
                 question.ValidationRules,
+                question.Visibility,
+                question.ConditionMatch,
             }, transaction);
 
             foreach (var option in options[question.Id])
@@ -92,6 +94,23 @@ public static class CycleQuestionCopier
                     option.Order,
                 }, transaction);
             }
+        }
+
+        var questionConditions = await db.Query("QuestionConditions").WhereIn("QuestionId", questionIdMap.Keys)
+            .GetAsync<QuestionCondition>(transaction);
+        foreach (var condition in questionConditions)
+        {
+            if (!questionIdMap.TryGetValue(condition.SourceQuestionId, out var sourceId)) continue;
+            string? optionId = null;
+            if (condition.OptionId != null && !optionIdMap.TryGetValue(condition.OptionId, out optionId)) continue;
+            await db.Query("QuestionConditions").InsertAsync(new
+            {
+                Id = Guid.NewGuid().ToString(),
+                QuestionId = questionIdMap[condition.QuestionId],
+                SourceQuestionId = sourceId,
+                OptionId = optionId,
+                condition.TextContains,
+            }, transaction);
         }
 
         if (formIdMap.Count == 0) return;

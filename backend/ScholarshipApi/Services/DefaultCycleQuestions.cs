@@ -30,7 +30,11 @@ public static class DefaultCycleQuestions
         bool Required = false,
         string? Description = null,
         string[]? Options = null,
-        Rules? Rules = null);
+        Rules? Rules = null,
+        ShowWhen? ShowWhen = null);
+
+    /// <summary>Only show the question when an earlier question (by text) has one of these options chosen.</summary>
+    private record ShowWhen(string Question, params string[] Options);
 
     private record S(string Title, string? Description, Q[] Questions);
 
@@ -101,8 +105,8 @@ public static class DefaultCycleQuestions
                 Description: "The return on which the applicant is claimed as a dependent."),
             new("Parent's signature", "short_answer", Required: true, Description: "Parent or guardian: " + SignatureHint),
             new("Parent's signature date", "date", Required: true),
-            new("If you live with one parent, who is responsible for your education?", "single_choice",
-                Options: ["Father", "Mother"]),
+            new("If you live with one parent, who is responsible for your education?", "single_choice", Required: true,
+                Options: ["Father", "Mother"], ShowWhen: new("Applicant lives with", "Father", "Mother")),
             new("Father's occupation", "short_answer"),
             new("Father's employer", "short_answer"),
             new("Mother's occupation", "short_answer"),
@@ -119,8 +123,9 @@ public static class DefaultCycleQuestions
             new("Unusual circumstances", "long_answer",
                 Description: "E.g. illness of a parent, unexpected financial loss, unusually high cost of education such as medical school."),
             new("Are you employed?", "single_choice", Required: true, Options: ["Yes", "No"]),
-            new("Where are you employed?", "short_answer", Description: "If employed."),
-            new("Number of hours worked per week", "short_answer", Rules: Number, Description: "If employed."),
+            new("Where are you employed?", "short_answer", Required: true, ShowWhen: new("Are you employed?", "Yes")),
+            new("Number of hours worked per week", "short_answer", Required: true, Rules: Number,
+                ShowWhen: new("Are you employed?", "Yes")),
             new("Write a short history of your work experience (include volunteer work)", "long_answer", Required: true),
         ]),
 
@@ -199,6 +204,8 @@ public static class DefaultCycleQuestions
     private static async Task SeedApplicationAsync(QueryFactory db, string cycleId, IDbTransaction transaction)
     {
         var questionOrder = 0;
+        // Inserted questions by text, so ShowWhen can find the question (and option ids) it depends on
+        var inserted = new Dictionary<string, (string Id, Dictionary<string, string> OptionIds)>();
         for (var s = 0; s < Sections.Length; s++)
         {
             var section = Sections[s];
@@ -213,11 +220,27 @@ public static class DefaultCycleQuestions
             }, transaction);
 
             foreach (var q in section.Questions)
-                await InsertQuestionAsync(db, transaction, cycleId, q, questionOrder++, sectionId, referenceFormId: null);
+            {
+                var question = await InsertQuestionAsync(db, transaction, cycleId, q, questionOrder++, sectionId, referenceFormId: null);
+                inserted[q.Text] = question;
+                if (q.ShowWhen is null) continue;
+
+                var source = inserted[q.ShowWhen.Question];
+                foreach (var option in q.ShowWhen.Options)
+                {
+                    await db.Query("QuestionConditions").InsertAsync(new
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        QuestionId = question.Id,
+                        SourceQuestionId = source.Id,
+                        OptionId = source.OptionIds[option],
+                    }, transaction);
+                }
+            }
         }
     }
 
-    private static async Task InsertQuestionAsync(
+    private static async Task<(string Id, Dictionary<string, string> OptionIds)> InsertQuestionAsync(
         QueryFactory db, IDbTransaction transaction, string cycleId, Q q, int order, string? sectionId, string? referenceFormId)
     {
         var questionId = Guid.NewGuid().ToString();
@@ -233,18 +256,22 @@ public static class DefaultCycleQuestions
             ReferenceFormId = referenceFormId,
             q.Description,
             ValidationRules = q.Rules != null ? JsonSerializer.Serialize(q.Rules, JsonOptions) : null,
+            Visibility = q.ShowWhen is null ? "always" : "conditional",
         }, transaction);
 
-        if (q.Options == null) return;
-        for (var o = 0; o < q.Options.Length; o++)
+        var optionIds = new Dictionary<string, string>();
+        for (var o = 0; o < (q.Options?.Length ?? 0); o++)
         {
+            var optionId = Guid.NewGuid().ToString();
+            optionIds[q.Options![o]] = optionId;
             await db.Query("QuestionOptions").InsertAsync(new
             {
-                Id = Guid.NewGuid().ToString(),
+                Id = optionId,
                 QuestionId = questionId,
                 Text = q.Options[o],
                 Order = o,
             }, transaction);
         }
+        return (questionId, optionIds);
     }
 }

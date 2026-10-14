@@ -6,6 +6,7 @@ import { useAdminStore } from '../../stores/admin'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
 import RichTextAnswer from '../../components/application/RichTextAnswer.vue'
 import { isRichText } from '../../utils/richText'
+import { visibleQuestionIds, answerValue } from '../../utils/questionVisibility'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,6 +26,12 @@ const statusItems = statuses.map((s) => ({ title: s.replace('_', ' '), value: s 
 const answersMap = computed(() =>
   Object.fromEntries((application.value?.answers ?? []).map((a) => [a.questionId, a]))
 )
+
+// Conditional questions the applicant's answers didn't call for aren't part of their application
+const shownQuestions = computed(() => {
+  const visible = visibleQuestionIds(questions.value, (id) => answerValue(answersMap.value[id]))
+  return questions.value.filter((q) => visible.has(q.id))
+})
 
 const applicantName = computed(() => {
   if (!application.value) return ''
@@ -131,8 +138,8 @@ async function updateStatus() {
       <!-- Answers card -->
       <v-card title="Application Answers">
         <v-card-text class="pa-6">
-          <div v-if="questions.length" class="space-y-5">
-            <template v-for="(q, i) in questions" :key="q.id">
+          <div v-if="shownQuestions.length" class="space-y-5">
+            <template v-for="(q, i) in shownQuestions" :key="q.id">
               <v-divider v-if="i > 0" />
               <div>
                 <p class="eyebrow mb-1.5">{{ q.text }}</p>

@@ -35,6 +35,7 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
         var options = questionIds.Count > 0
             ? await db.Query("QuestionOptions").WhereIn("QuestionId", questionIds).OrderBy("Order").GetAsync<QuestionOption>()
             : [];
+        var conditions = await QuestionVisibility.LoadConditionsAsync(db, questionIds);
 
         var result = questionList.Select(q => new
         {
@@ -50,7 +51,11 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
             ValidationRules = q.ValidationRules != null
                 ? JsonSerializer.Deserialize<JsonElement>(q.ValidationRules)
                 : (JsonElement?)null,
-            Options = options.Where(o => o.QuestionId == q.Id).Select(o => new { o.Id, o.Text, o.Order })
+            Options = options.Where(o => o.QuestionId == q.Id).Select(o => new { o.Id, o.Text, o.Order }),
+            // The form shows a conditional question only while these match (frontend/src/utils/questionVisibility.js)
+            q.Visibility,
+            q.ConditionMatch,
+            Conditions = conditions[q.Id].Select(c => new { c.SourceQuestionId, c.OptionId, c.TextContains }),
         });
 
         return Ok(result);
@@ -64,7 +69,7 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
         if (referenceFormId is not null
             && !await db.Query("ReferenceForms").Where("Id", referenceFormId).Where("CycleId", cycleId).ExistsAsync())
             throw new KeyNotFoundException("Reference form not found.");
-        await ValidateAsync(cycleId, request, referenceFormId);
+        await ValidateAsync(cycleId, request, referenceFormId, questionId: null);
         var id = Guid.NewGuid().ToString();
         await db.Query("Questions").InsertAsync(new
         {
@@ -79,10 +84,13 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
             request.Description,
             ValidationRules = request.ValidationRules != null
                 ? JsonSerializer.Serialize(request.ValidationRules, JsonOptions)
-                : null
+                : null,
+            request.Visibility,
+            request.ConditionMatch,
         });
 
         await SaveOptionsAsync(id, request.Options);
+        await SaveConditionsAsync(id, request.Conditions);
 
         return CreatedAtAction(nameof(List), new { cycleId }, new { id });
     }
@@ -93,7 +101,7 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
     {
         var existing = await db.Query("Questions").Where("Id", questionId).Where("CycleId", cycleId).FirstOrDefaultAsync<Question>()
             ?? throw new KeyNotFoundException("Question not found.");
-        await ValidateAsync(cycleId, request, existing.ReferenceFormId);
+        await ValidateAsync(cycleId, request, existing.ReferenceFormId, questionId);
         await db.Query("Questions").Where("Id", questionId).Where("CycleId", cycleId).UpdateAsync(new
         {
             Text = request.Text,
@@ -104,10 +112,14 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
             request.Description,
             ValidationRules = request.ValidationRules != null
                 ? JsonSerializer.Serialize(request.ValidationRules, JsonOptions)
-                : null
+                : null,
+            request.Visibility,
+            request.ConditionMatch,
         });
 
         await SaveOptionsAsync(questionId, request.Options);
+        await db.Query("QuestionConditions").Where("QuestionId", questionId).DeleteAsync();
+        await SaveConditionsAsync(questionId, request.Conditions);
 
         return NoContent();
     }
@@ -117,12 +129,14 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
     public async Task<IActionResult> Delete(string cycleId, string questionId, [FromQuery] bool force = false)
     {
         // ApplicationAnswers.QuestionId has no ON DELETE rule, so answers must go first — only when the admin confirms.
-        // Reference answers and reference conditions on this question are removed with it (ON DELETE CASCADE).
+        // Reference answers, and reference/question conditions that look at this question, go with it (ON DELETE CASCADE).
+        // A conditional question left with no conditions stays hidden, so the admin is warned about those too.
         var answerCount = await db.Query("ApplicationAnswers").Where("QuestionId", questionId).CountAsync<int>()
             + await db.Query("ReferenceAnswers").Where("QuestionId", questionId).CountAsync<int>();
         var conditionCount = await db.Query("ReferenceFormConditions").Where("QuestionId", questionId).CountAsync<int>();
-        if ((answerCount > 0 || conditionCount > 0) && !force)
-            return Conflict(new { error = "This question has answers or reference conditions.", answerCount, conditionCount });
+        var dependentCount = await db.Query("QuestionConditions").Where("SourceQuestionId", questionId).CountAsync<int>();
+        if ((answerCount > 0 || conditionCount > 0 || dependentCount > 0) && !force)
+            return Conflict(new { error = "Other things depend on this question.", answerCount, conditionCount, dependentCount });
 
         if (db.Connection.State != System.Data.ConnectionState.Open) db.Connection.Open();
         using var transaction = db.Connection.BeginTransaction();
@@ -138,7 +152,7 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
     private const int MaxTextLength = 5000;
 
     // Normalizes the request in place: trimmed text, blank options dropped, options only kept for choice questions
-    private async Task ValidateAsync(string cycleId, QuestionRequest request, string? referenceFormId)
+    private async Task ValidateAsync(string cycleId, QuestionRequest request, string? referenceFormId, string? questionId)
     {
         request.Text = InputValidation.Required(request.Text, "Question text", MaxTextLength);
         request.Description = InputValidation.Optional(request.Description, "Description", MaxTextLength);
@@ -163,11 +177,102 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
         if (isChoice && request.Options!.Count == 0) throw new ArgumentException("Add at least one option.");
         if (request.Options?.Any(o => o.Length > 500) == true) throw new ArgumentException("Options must be at most 500 characters.");
 
+        await ValidateVisibilityAsync(cycleId, request, referenceFormId, questionId);
+
         var rules = request.ValidationRules;
         if (rules is null) return;
         if (rules.MinLength < 0 || rules.MaxLength < 0) throw new ArgumentException("Length limits can't be negative.");
         if (rules.MinLength > rules.MaxLength) throw new ArgumentException("The minimum length can't be more than the maximum.");
         if (rules.RichText && request.Type != "long_answer") throw new ArgumentException("Rich text is only available on long answer questions.");
+    }
+
+    private static readonly HashSet<string> ConditionChoiceTypes = ["single_choice", "multiple_choice"];
+    private static readonly HashSet<string> ConditionTextTypes = ["short_answer", "long_answer"];
+
+    // When the question is shown. Only application questions can be conditional, and only on other application
+    // questions in the cycle, without any question ending up depending on itself.
+    private async Task ValidateVisibilityAsync(string cycleId, QuestionRequest request, string? referenceFormId, string? questionId)
+    {
+        request.Visibility ??= "always";
+        request.ConditionMatch ??= "any";
+        if (request.Visibility is not ("always" or "conditional")) throw new ArgumentException("Choose when this question is shown.");
+        if (request.ConditionMatch is not ("any" or "all")) throw new ArgumentException("Choose whether any or all conditions must match.");
+
+        if (request.Visibility == "always" || referenceFormId is not null)
+        {
+            request.Visibility = "always";
+            request.Conditions = null;
+            return;
+        }
+
+        var conditions = request.Conditions ?? [];
+        if (conditions.Count == 0) throw new ArgumentException("Add at least one answer that shows this question, or always show it.");
+
+        foreach (var condition in conditions)
+        {
+            if (condition.SourceQuestionId == questionId) throw new ArgumentException("A question can't depend on its own answer.");
+            var source = await db.Query("Questions").Where("Id", condition.SourceQuestionId ?? "").Where("CycleId", cycleId)
+                .WhereNull("ReferenceFormId").FirstOrDefaultAsync<Question>()
+                ?? throw new ArgumentException("A condition uses a question that isn't on this cycle's application.");
+
+            if (ConditionChoiceTypes.Contains(source.Type))
+            {
+                if (!await db.Query("QuestionOptions").Where("Id", condition.OptionId ?? "").Where("QuestionId", source.Id).ExistsAsync())
+                    throw new ArgumentException($"Choose an answer for \"{source.Text}\".");
+                condition.TextContains = null;
+            }
+            else if (ConditionTextTypes.Contains(source.Type))
+            {
+                condition.TextContains = InputValidation.Required(condition.TextContains, "Text to look for", 255);
+                condition.OptionId = null;
+            }
+            else
+            {
+                throw new ArgumentException("Conditions can only use choice or text questions.");
+            }
+        }
+
+        // A new question has nothing depending on it yet, so it can't close a loop
+        if (questionId is not null && await WouldCreateCycleAsync(cycleId, questionId, conditions.Select(c => c.SourceQuestionId!)))
+            throw new ArgumentException("That would make this question depend on itself through another conditional question.");
+    }
+
+    // True when one of the new source questions already depends (directly or through others) on this question
+    private async Task<bool> WouldCreateCycleAsync(string cycleId, string questionId, IEnumerable<string> sourceIds)
+    {
+        var dependsOn = (await db.Query("QuestionConditions as c")
+                .Join("Questions as q", "q.Id", "c.QuestionId")
+                .Where("q.CycleId", cycleId)
+                .Where("c.QuestionId", "<>", questionId)
+                .Select("c.QuestionId", "c.SourceQuestionId")
+                .GetAsync<QuestionCondition>())
+            .ToLookup(c => c.QuestionId, c => c.SourceQuestionId);
+
+        var seen = new HashSet<string>();
+        var pending = new Stack<string>(sourceIds);
+        while (pending.Count > 0)
+        {
+            var id = pending.Pop();
+            if (id == questionId) return true;
+            if (!seen.Add(id)) continue;
+            foreach (var next in dependsOn[id]) pending.Push(next);
+        }
+        return false;
+    }
+
+    private async Task SaveConditionsAsync(string questionId, List<QuestionConditionRequest>? conditions)
+    {
+        foreach (var c in conditions ?? [])
+        {
+            await db.Query("QuestionConditions").InsertAsync(new
+            {
+                Id = Guid.NewGuid().ToString(),
+                QuestionId = questionId,
+                c.SourceQuestionId,
+                c.OptionId,
+                c.TextContains,
+            });
+        }
     }
 
     // Keeps the id of every option whose text is unchanged, so saved answers and reference conditions that point
@@ -235,6 +340,21 @@ public class QuestionRequest
     public string? Description { get; set; }
     public List<string>? Options { get; set; }
     public ValidationRulesRequest? ValidationRules { get; set; }
+    /// <summary><c>always</c> (default), or <c>conditional</c>: only shown when <see cref="Conditions"/> match. Application questions only.</summary>
+    public string? Visibility { get; set; }
+    /// <summary><c>any</c> (default) or <c>all</c> of the conditions must match.</summary>
+    public string? ConditionMatch { get; set; }
+    public List<QuestionConditionRequest>? Conditions { get; set; }
+}
+
+public class QuestionConditionRequest
+{
+    /// <summary>An earlier application question whose answer decides whether this one is shown.</summary>
+    public string? SourceQuestionId { get; set; }
+    /// <summary>For choice questions: shown when this option is chosen.</summary>
+    public string? OptionId { get; set; }
+    /// <summary>For text questions: shown when the answer contains this text (ignoring case).</summary>
+    public string? TextContains { get; set; }
 }
 
 public class ReorderItem
