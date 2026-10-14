@@ -66,7 +66,19 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 var currentVersion = userId is null ? null
                     : await db.Query("Users").Where("Id", userId).Select("SessionVersion").FirstOrDefaultAsync<int?>();
                 if (currentVersion is null || tokenVersion != currentVersion.Value.ToString())
+                {
                     context.Fail("This session has ended. Please sign in again.");
+                    return;
+                }
+
+                // An impersonation ends if the super admin behind it loses the role or has their sessions ended
+                var impersonatorId = context.Principal?.FindFirstValue(AppRoles.ImpersonatorClaim);
+                if (impersonatorId is null) return;
+                var impersonator = await db.Query("Users").Where("Id", impersonatorId)
+                    .Select("Role", "SessionVersion").FirstOrDefaultAsync<ScholarshipApi.Models.User>();
+                if (impersonator is null || impersonator.Role != AppRoles.SuperAdmin
+                    || context.Principal?.FindFirstValue(AppRoles.ImpersonatorSessionClaim) != impersonator.SessionVersion.ToString())
+                    context.Fail("This impersonation has ended. Please sign in again.");
             }
         };
     });

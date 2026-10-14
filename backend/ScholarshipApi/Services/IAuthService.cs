@@ -19,6 +19,8 @@ public interface IAuthService
     Task<IEnumerable<string>> GetPermissionsForRoleAsync(string roleName);
     Task<string> IssueTokenAsync(string userId);
     Task SendPasswordSetupEmailAsync(string userId);
+    Task<AuthResponse> ImpersonateAsync(string superAdminId, string targetUserId);
+    Task<AuthResponse> EndImpersonationAsync(string impersonatorId, string impersonatedUserId);
     Task<PasswordSetupInfoResponse> GetPasswordSetupAsync(string? token);
     Task<LoginResult> SetupPasswordAsync(PasswordSetupRequest request);
 }

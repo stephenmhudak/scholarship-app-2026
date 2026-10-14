@@ -1,3 +1,5 @@
+using ScholarshipApi.Authorization;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Cryptography;
@@ -176,6 +178,8 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
         var firstName = InputValidation.Required(request.FirstName, "First name", 100);
         var lastName = InputValidation.Required(request.LastName, "Last name", 100);
         var role = InputValidation.Role(request.Role);
+        if (role == AppRoles.SuperAdmin && !IsSuperAdmin)
+            throw new UnauthorizedAccessException("Only super admins can create super admins.");
         // Counselors are invited by email to create their own password; everyone else gets one from the admin
         var invite = role == "counselor";
         if (!invite) InputValidation.Password(request.Password);
@@ -292,9 +296,30 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
         return user;
     }
 
+    // ── Impersonation ────────────────────────────────────────────────────────
+
+    // Signs the super admin in as this user (their menus, data and permissions) until they end it
+    [HttpPost("users/{id}/impersonate")]
+    [Authorize(Policy = "SuperAdmin")]
+    public async Task<IActionResult> Impersonate(string id) => Ok(await authService.ImpersonateAsync(CurrentUserId, id));
+
+    private string CurrentUserId => User.FindFirstValue(ClaimTypes.NameIdentifier)
+        ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)!;
+    private bool IsSuperAdmin => User.IsInRole(AppRoles.SuperAdmin);
+
+    // App admins can't take over a super admin's account (password, 2FA, invitation)
+    private async Task EnsureCanManageAsync(string userId)
+    {
+        var role = await db.Query("Users").Where("Id", userId).Select("Role").FirstOrDefaultAsync<string>()
+            ?? throw new KeyNotFoundException("User not found.");
+        if (role == AppRoles.SuperAdmin && !IsSuperAdmin)
+            throw new UnauthorizedAccessException("Only super admins can manage super admin accounts.");
+    }
+
     [HttpPost("users/{id}/resend-invite")]
     public async Task<IActionResult> ResendInvite(string id)
     {
+        await EnsureCanManageAsync(id);
         await authService.SendPasswordSetupEmailAsync(id);
         return NoContent();
     }
@@ -303,8 +328,7 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
     public async Task<IActionResult> ResetPassword(string id, [FromBody] ResetPasswordRequest request)
     {
         InputValidation.Password(request.NewPassword);
-        var exists = await db.Query("Users").Where("Id", id).ExistsAsync();
-        if (!exists) throw new KeyNotFoundException("User not found.");
+        await EnsureCanManageAsync(id);
 
         await db.Query("Users").Where("Id", id).UpdateAsync(new
         {
@@ -317,6 +341,7 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
     [HttpPost("users/{id}/reset-2fa")]
     public async Task<IActionResult> ResetTwoFactor(string id)
     {
+        await EnsureCanManageAsync(id);
         await twoFactorService.ResetByAdminAsync(id);
         return NoContent();
     }

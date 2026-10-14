@@ -12,7 +12,7 @@ public static class InputValidation
     // BCrypt only uses the first 72 bytes, so a longer password would silently stop mattering past that point.
     private const int MaxPasswordBytes = 72;
 
-    public static readonly HashSet<string> Roles = ["applicant", "scorer", "app_admin", "school_admin", "counselor", "referee"];
+    public static readonly HashSet<string> Roles = ["applicant", "scorer", "app_admin", "school_admin", "counselor", "referee", "super_admin"];
 
     /// <summary>Every place a password is set or changed goes through here.</summary>
     public static void Password(string? password)

@@ -7,6 +7,9 @@ export const useAuthStore = defineStore('auth', {
     token: localStorage.getItem('auth_token') || null,
     role: localStorage.getItem('auth_role') || null,
     permissions: JSON.parse(localStorage.getItem('auth_permissions') || '[]'),
+    // Set while a super admin is impersonating someone: the super admin's name. Everything else above is the
+    // impersonated user's, so the app looks and behaves as it would for them.
+    impersonatorName: localStorage.getItem('impersonator_name') || null,
   }),
 
   getters: {
@@ -14,6 +17,7 @@ export const useAuthStore = defineStore('auth', {
     currentRole: (state) => state.role,
     fullName: (state) => state.user ? `${state.user.firstName} ${state.user.lastName}` : '',
     hasPermission: (state) => (perm) => state.permissions.includes(perm),
+    isImpersonating: (state) => !!state.impersonatorName,
   },
 
   actions: {
@@ -95,11 +99,25 @@ export const useAuthStore = defineStore('auth', {
       this._setTwoFactorEnabled(false)
     },
 
+    // Super admins: become this user until endImpersonation. The caller reloads the app so no page or store keeps
+    // the super admin's data.
+    async startImpersonation(userId) {
+      const response = await api.post(`/admin/users/${userId}/impersonate`)
+      this._applyAuthResponse(response.data)
+    },
+
+    async endImpersonation() {
+      const response = await api.post('/auth/end-impersonation')
+      this._applyAuthResponse(response.data)
+    },
+
     logout() {
       this.token = null
       this.user = null
       this.role = null
       this.permissions = []
+      this.impersonatorName = null
+      localStorage.removeItem('impersonator_name')
       localStorage.removeItem('auth_token')
       localStorage.removeItem('auth_role')
       localStorage.removeItem('auth_user')
@@ -154,6 +172,9 @@ export const useAuthStore = defineStore('auth', {
       localStorage.setItem('auth_role', data.role)
       localStorage.setItem('auth_user', JSON.stringify(this.user))
       localStorage.setItem('auth_permissions', JSON.stringify(this.permissions))
+      this.impersonatorName = data.impersonatorName ?? null
+      if (this.impersonatorName) localStorage.setItem('impersonator_name', this.impersonatorName)
+      else localStorage.removeItem('impersonator_name')
     },
   },
 })

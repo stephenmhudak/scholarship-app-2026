@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 using SqlKata.Execution;
+using ScholarshipApi.Authorization;
 using ScholarshipApi.DTOs.Application;
 using ScholarshipApi.DTOs.Reference;
 using ScholarshipApi.Models;
@@ -33,7 +34,7 @@ public class ReferenceService(
     public async Task<ApplicationReferencesDto> ListForApplicationAsync(string applicationId, string userId, string role)
     {
         var app = await GetApplicationAsync(applicationId);
-        if (!(role == "app_admin" || (role == "applicant" && app.ApplicantId == userId)))
+        if (!(AppRoles.IsAdmin(role) || (role == "applicant" && app.ApplicantId == userId)))
             throw new UnauthorizedAccessException("Access denied.");
 
         var cycle = await GetCycleAsync(app.CycleId);
@@ -452,7 +453,7 @@ public class ReferenceService(
     // Reference answers are for scoring only: scorers (once the application is scoreable) and admins, never the applicant
     private async Task EnsureScoringAccessAsync(string applicationId, string userId, string role)
     {
-        if (role is not ("scorer" or "app_admin")) throw new UnauthorizedAccessException("Access denied.");
+        if (!(role == "scorer" || AppRoles.IsAdmin(role))) throw new UnauthorizedAccessException("Access denied.");
         var app = await GetApplicationAsync(applicationId);
         if (!await access.CanViewAsync(app.Id, app.ApplicantId, app.Status, app.CycleId, userId, role))
             throw new UnauthorizedAccessException("Access denied.");

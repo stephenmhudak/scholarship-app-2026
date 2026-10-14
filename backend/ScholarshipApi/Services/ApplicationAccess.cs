@@ -1,5 +1,6 @@
 using SqlKata;
 using SqlKata.Execution;
+using ScholarshipApi.Authorization;
 using ScholarshipApi.Models;
 
 namespace ScholarshipApi.Services;
@@ -15,7 +16,7 @@ public class ApplicationAccess(QueryFactory db)
 
     public async Task<bool> CanViewAsync(string applicationId, string applicantId, string status, string cycleId, string userId, string role) => role switch
     {
-        "app_admin" => true,
+        "app_admin" or AppRoles.SuperAdmin => true,
         "scorer" => await IsScoreableAsync(status, cycleId) && await ScorerMaySeeAsync(userId, applicationId),
         "applicant" => applicantId == userId,
         _ => false,

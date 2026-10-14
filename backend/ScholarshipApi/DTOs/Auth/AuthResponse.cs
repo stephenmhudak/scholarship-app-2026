@@ -11,4 +11,6 @@ public class AuthResponse
     public string? SchoolId { get; set; }
     public string[] Permissions { get; set; } = [];
     public bool TwoFactorEnabled { get; set; }
+    /// <summary>Set while a super admin is impersonating this user: the super admin's name, for the "end" button.</summary>
+    public string? ImpersonatorName { get; set; }
 }

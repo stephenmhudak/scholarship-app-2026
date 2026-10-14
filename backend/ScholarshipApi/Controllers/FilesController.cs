@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SqlKata.Execution;
+using ScholarshipApi.Authorization;
 using ScholarshipApi.Models;
 using ScholarshipApi.Services;
 
@@ -87,7 +88,7 @@ public class FilesController(IFileStorageService fileStorage, ApplicationAccess 
     {
         var record = await GetRecordAsync(fileId);
 
-        if (UserRole != "app_admin")
+        if (!AppRoles.IsAdmin(UserRole))
         {
             // Applicants may only delete files attached to their own draft application.
             var application = await db.Query("Applications").Where("Id", record.ApplicationId).FirstOrDefaultAsync<Application>();

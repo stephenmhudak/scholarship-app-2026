@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using SqlKata.Execution;
+using ScholarshipApi.Authorization;
 using ScholarshipApi.DTOs.Auth;
 using ScholarshipApi.Models;
 
@@ -566,6 +567,10 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
 
     public async Task<IEnumerable<string>> GetPermissionsForRoleAsync(string roleName)
     {
+        // Super admins hold every permission, including ones added after the role was set up
+        if (roleName == AppRoles.SuperAdmin)
+            return (await db.Query("Permissions").Select("Name").GetAsync<string>()).ToList();
+
         var rows = await db.Query("Permissions as p")
             .Join("RolePermissions as rp", "rp.PermissionId", "p.Id")
             .Join("Roles as r", "r.Id", "rp.RoleId")
@@ -582,10 +587,37 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         return GenerateToken(user, (await GetPermissionsForRoleAsync(user.Role)).ToList());
     }
 
-    private AuthResponse BuildAuthResponse(User user, IEnumerable<string> permissions)
+    // ── Impersonation (super admins) ─────────────────────────────────────────
+
+    // A session as the target user, marked with the super admin behind it. It bypasses the target's password and
+    // two-factor, so only super admins can start one, never on another super admin.
+    public async Task<AuthResponse> ImpersonateAsync(string superAdminId, string targetUserId)
+    {
+        var admin = await GetCurrentUserAsync(superAdminId);
+        if (admin.Role != AppRoles.SuperAdmin) throw new UnauthorizedAccessException("Only super admins can impersonate users.");
+        if (targetUserId == superAdminId) throw new ArgumentException("You can't impersonate yourself.");
+        var target = await GetCurrentUserAsync(targetUserId);
+        if (target.Role == AppRoles.SuperAdmin) throw new ArgumentException("Super admins can't be impersonated.");
+
+        logger.LogWarning("Super admin {AdminId} ({AdminEmail}) started impersonating user {UserId} ({UserEmail})",
+            admin.Id, admin.Email, target.Id, target.Email);
+        return BuildAuthResponse(target, await GetPermissionsForRoleAsync(target.Role), impersonator: admin);
+    }
+
+    // Back to the super admin's own session
+    public async Task<AuthResponse> EndImpersonationAsync(string impersonatorId, string impersonatedUserId)
+    {
+        var admin = await GetCurrentUserAsync(impersonatorId);
+        if (admin.Role != AppRoles.SuperAdmin) throw new UnauthorizedAccessException("Your super admin access has been removed.");
+        logger.LogWarning("Super admin {AdminId} ({AdminEmail}) stopped impersonating user {UserId}",
+            admin.Id, admin.Email, impersonatedUserId);
+        return BuildAuthResponse(admin, await GetPermissionsForRoleAsync(admin.Role));
+    }
+
+    private AuthResponse BuildAuthResponse(User user, IEnumerable<string> permissions, User? impersonator = null)
     {
         var permList = permissions.ToList();
-        var token = GenerateToken(user, permList);
+        var token = GenerateToken(user, permList, impersonator);
         return new AuthResponse
         {
             Token = token,
@@ -596,11 +628,12 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
             Role = user.Role,
             SchoolId = user.SchoolId,
             Permissions = permList.ToArray(),
-            TwoFactorEnabled = user.TwoFactorMethod is not null
+            TwoFactorEnabled = user.TwoFactorMethod is not null,
+            ImpersonatorName = impersonator is null ? null : $"{impersonator.FirstName} {impersonator.LastName}".Trim(),
         };
     }
 
-    private string GenerateToken(User user, List<string> permissions)
+    private string GenerateToken(User user, List<string> permissions, User? impersonator = null)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -619,6 +652,11 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
             claims.Add(new Claim("schoolId", user.SchoolId));
         foreach (var p in permissions)
             claims.Add(new Claim("permission", p));
+        if (impersonator is not null)
+        {
+            claims.Add(new Claim(AppRoles.ImpersonatorClaim, impersonator.Id));
+            claims.Add(new Claim(AppRoles.ImpersonatorSessionClaim, impersonator.SessionVersion.ToString()));
+        }
 
         var token = new JwtSecurityToken(
             issuer: config["Jwt:Issuer"],

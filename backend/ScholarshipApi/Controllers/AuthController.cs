@@ -98,7 +98,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     }
 
     [HttpPost("change-password")]
-    [Authorize]
+    [Authorize(Policy = "NotImpersonating")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {
         await authService.ChangePasswordAsync(UserId, request);
@@ -115,7 +115,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     }
 
     [HttpPost("2fa/setup")]
-    [Authorize]
+    [Authorize(Policy = "NotImpersonating")]
     public async Task<IActionResult> BeginTwoFactorSetup()
     {
         var result = await twoFactorService.BeginSetupAsync(UserId);
@@ -123,7 +123,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     }
 
     [HttpPost("2fa/enable")]
-    [Authorize]
+    [Authorize(Policy = "NotImpersonating")]
     public async Task<IActionResult> EnableTwoFactor([FromBody] TwoFactorEnableRequest request)
     {
         var result = await twoFactorService.EnableAsync(UserId, request.Code);
@@ -132,7 +132,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     }
 
     [HttpPost("2fa/email/setup")]
-    [Authorize]
+    [Authorize(Policy = "NotImpersonating")]
     public async Task<IActionResult> BeginEmailTwoFactorSetup()
     {
         await twoFactorService.BeginEmailSetupAsync(UserId);
@@ -140,7 +140,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     }
 
     [HttpPost("2fa/email/enable")]
-    [Authorize]
+    [Authorize(Policy = "NotImpersonating")]
     public async Task<IActionResult> EnableEmailTwoFactor([FromBody] TwoFactorEnableRequest request)
     {
         await twoFactorService.EnableEmailAsync(UserId, request.Code);
@@ -149,7 +149,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     }
 
     [HttpPost("2fa/disable")]
-    [Authorize]
+    [Authorize(Policy = "NotImpersonating")]
     public async Task<IActionResult> DisableTwoFactor([FromBody] TwoFactorPasswordRequest request)
     {
         await twoFactorService.DisableAsync(UserId, request.Password);
@@ -158,11 +158,21 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     }
 
     [HttpPost("2fa/recovery-codes")]
-    [Authorize]
+    [Authorize(Policy = "NotImpersonating")]
     public async Task<IActionResult> RegenerateRecoveryCodes([FromBody] TwoFactorPasswordRequest request)
     {
         var result = await twoFactorService.RegenerateRecoveryCodesAsync(UserId, request.Password);
         return Ok(result);
+    }
+
+    // Back to the impersonating super admin's own session
+    [HttpPost("end-impersonation")]
+    [Authorize]
+    public async Task<IActionResult> EndImpersonation()
+    {
+        var impersonatorId = User.FindFirstValue(AppRoles.ImpersonatorClaim)
+            ?? throw new ArgumentException("You aren't impersonating anyone.");
+        return Ok(await authService.EndImpersonationAsync(impersonatorId, UserId));
     }
 
     [HttpGet("invite/{token}")]

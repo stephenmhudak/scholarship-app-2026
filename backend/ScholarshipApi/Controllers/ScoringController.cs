@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ScholarshipApi.Authorization;
 using ScholarshipApi.DTOs.Scoring;
 using ScholarshipApi.Services;
 
@@ -14,7 +15,7 @@ public class ScoringController(IScoringService scoringService, IReferenceService
     private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)
         ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)!;
 
-    private bool IsAdmin => User.IsInRole("app_admin");
+    private bool IsAdmin => AppRoles.IsAdmin(User.FindFirstValue(ClaimTypes.Role));
     private string UserRole => User.FindFirstValue(ClaimTypes.Role)!;
 
     [HttpGet("queue")]

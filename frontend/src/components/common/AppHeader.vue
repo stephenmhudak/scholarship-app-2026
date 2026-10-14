@@ -1,13 +1,33 @@
 <script setup>
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
+import { roleHome } from '../../utils/roleHome'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const ending = ref(false)
+
+const displayName = computed(() =>
+  `${authStore.user?.firstName ?? ''} ${authStore.user?.lastName ?? ''}`.trim() || authStore.user?.email || 'User')
 
 function logout() {
   authStore.logout()
   router.push('/login')
+}
+
+// Back to the super admin's own account; a full reload so nothing from the impersonated user stays on screen
+async function endImpersonation() {
+  ending.value = true
+  try {
+    await authStore.endImpersonation()
+    window.location.assign('/admin/settings')
+  } catch {
+    // Their impersonation (or super admin access) already ended
+    logout()
+  } finally {
+    ending.value = false
+  }
 }
 </script>
 
@@ -30,7 +50,7 @@ function logout() {
           <v-icon icon="mdi-account" size="18" />
         </v-avatar>
         <div class="text-sm leading-tight hidden sm:block">
-          <p class="font-semibold text-navy">{{ authStore.user?.name || authStore.user?.email || 'User' }}</p>
+          <p class="font-semibold text-navy">{{ displayName }}</p>
           <p v-if="authStore.role" class="text-slate-400 text-xs capitalize">
             {{ authStore.role?.replace('_', ' ') }}
           </p>
@@ -39,7 +59,15 @@ function logout() {
       <v-btn variant="text" prepend-icon="mdi-account-cog-outline" to="/account">
         <span class="hidden sm:inline">Account</span>
       </v-btn>
-      <v-btn variant="text" color="error" prepend-icon="mdi-logout" @click="logout">
+      <template v-if="authStore.isImpersonating">
+        <v-chip color="warning" prepend-icon="mdi-incognito" class="hidden md:flex" :title="`Signed in as ${authStore.impersonatorName}`">
+          Viewing as {{ displayName }}
+        </v-chip>
+        <v-btn color="warning" variant="flat" prepend-icon="mdi-account-arrow-left" :loading="ending" @click="endImpersonation">
+          <span class="hidden sm:inline">End impersonation</span>
+        </v-btn>
+      </template>
+      <v-btn v-else variant="text" color="error" prepend-icon="mdi-logout" @click="logout">
         <span class="hidden sm:inline">Logout</span>
       </v-btn>
     </div>
