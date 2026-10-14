@@ -1,5 +1,6 @@
 import axios from 'axios'
 import router from '../router'
+import { restoreReturnSession } from '../utils/authStorage'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -30,6 +31,12 @@ api.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401) {
+      // An impersonated session was rejected (expired, or the user's sessions were reset): return the super admin to
+      // their own account rather than signing them out. Full reload so nothing of the other user stays on screen.
+      if (localStorage.getItem('impersonator_name') && restoreReturnSession()) {
+        window.location.assign('/admin/settings')
+        return new Promise(() => {})
+      }
       localStorage.removeItem('auth_token')
       localStorage.removeItem('impersonator_name')
       router.push('/login')

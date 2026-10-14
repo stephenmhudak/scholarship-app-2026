@@ -16,18 +16,16 @@ function logout() {
   router.push('/login')
 }
 
-// Back to the super admin's own account; a full reload so nothing from the impersonated user stays on screen
+// Back to the super admin's own account; a full reload so nothing from the impersonated user stays on screen.
+// Only if there's no way back (their own session has ended too) do they sign in again.
 async function endImpersonation() {
   ending.value = true
-  try {
-    await authStore.endImpersonation()
+  if (await authStore.endImpersonation()) {
     window.location.assign('/admin/settings')
-  } catch {
-    // Their impersonation (or super admin access) already ended
-    logout()
-  } finally {
-    ending.value = false
+    return
   }
+  ending.value = false
+  logout()
 }
 </script>
 

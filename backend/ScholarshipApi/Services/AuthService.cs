@@ -601,7 +601,9 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
 
         logger.LogWarning("Super admin {AdminId} ({AdminEmail}) started impersonating user {UserId} ({UserEmail})",
             admin.Id, admin.Email, target.Id, target.Email);
-        return BuildAuthResponse(target, await GetPermissionsForRoleAsync(target.Role), impersonator: admin);
+        var response = BuildAuthResponse(target, await GetPermissionsForRoleAsync(target.Role), impersonator: admin);
+        response.ReturnSession = BuildAuthResponse(admin, await GetPermissionsForRoleAsync(admin.Role));
+        return response;
     }
 
     // Back to the super admin's own session
