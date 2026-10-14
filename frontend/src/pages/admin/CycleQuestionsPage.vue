@@ -622,7 +622,7 @@ function globalIndex(q) {
     </div>
 
     <p v-if="formId" class="text-sm text-slate-400">
-      The referee sees the applicant's name and school above these questions, and finishes by giving their name,
+      The Reference Provider sees the applicant's name and school above these questions, and finishes by giving their name,
       drawing their signature, and the date. You don't need questions for those.
     </p>
 

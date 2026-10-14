@@ -27,7 +27,9 @@ const resending = ref(false)
 const resendMessage = ref(null)
 
 // /register?as=referee: an account for writing references rather than applying
-const isReferee = route.query.as === 'referee' && !route.query.invite
+// /register?as=reference-provider: an account for submitting references (the 'referee' role) rather than applying.
+// ?as=referee is the older link and still works.
+const isReferee = ['reference-provider', 'referee'].includes(route.query.as) && !route.query.invite
 
 const inviteToken = ref(null)
 const inviteInfo = ref(null)
@@ -119,7 +121,7 @@ async function resend() {
 
   <div v-else class="space-y-5">
     <div>
-      <h2 class="text-xl font-bold text-navy">{{ isReferee ? 'Create a referee account' : 'Create an account' }}</h2>
+      <h2 class="text-xl font-bold text-navy">{{ isReferee ? 'Create a Reference Provider account' : 'Create an account' }}</h2>
       <p v-if="inviteInfo" class="text-sm text-slate-400 mt-0.5">You're registering as a school admin. Enter your school information below.</p>
       <p v-else-if="isReferee" class="text-sm text-slate-400 mt-0.5">Write references for scholarship applicants and see the ones you've submitted.</p>
       <p v-else class="text-sm text-slate-400 mt-0.5">Register to apply for the scholarship</p>

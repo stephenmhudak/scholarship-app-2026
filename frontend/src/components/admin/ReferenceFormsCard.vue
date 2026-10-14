@@ -134,7 +134,7 @@ async function remove(form) {
 
     <v-card-text class="pa-6 space-y-4">
       <p class="text-sm text-slate-400">
-        Applicants send each reference's link (or its code) to the person writing it, who signs in with a referee,
+        Applicants send each reference's link (or its code) to the person writing it, who signs in with a Reference Provider,
         counselor or school admin account, answers its questions and signs online.
         Only scorers see what's submitted, and each reference is scored on its own. Applicants can't submit until
         every required reference is in.
@@ -178,7 +178,7 @@ async function remove(form) {
       <v-card-text class="pa-6 space-y-5">
         <v-alert v-if="dialogError" type="error" :text="dialogError" />
         <v-text-field v-model="editing.title" label="Title *" placeholder="e.g. Teacher Reference" hide-details="auto" />
-        <v-textarea v-model="editing.description" label="Instructions for the referee" rows="2" hide-details="auto" />
+        <v-textarea v-model="editing.description" label="Instructions for the Reference Provider" rows="2" hide-details="auto" />
         <v-number-input v-model="editing.requiredCount" label="How many are needed" :min="1" :max="10" control-variant="split" class="max-w-[14rem]" hide-details />
 
         <v-radio-group v-model="editing.requirement" hide-details>

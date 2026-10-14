@@ -125,7 +125,7 @@ function formatDate(value) {
     <v-card-text class="pa-6 space-y-5">
       <p v-if="!compact" class="text-sm text-slate-400">
         Create a link for each reference and send it to the person writing it. They'll sign in (or create a free
-        referee account), fill it in and sign it online. It goes straight to the scholarship committee, so you won't
+        Reference Provider account), fill it in and sign it online. It goes straight to the scholarship committee, so you won't
         see what they wrote. We'll email you as each one comes in. You can submit your application once every
         reference has been received.
       </p>

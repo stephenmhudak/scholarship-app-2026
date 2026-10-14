@@ -42,13 +42,13 @@ function signOut() {
     <template v-if="wrongAccount">
       <v-alert type="warning">
         You're signed in as <strong>{{ authStore.user?.email }}</strong>, which can't submit references.
-        Sign out, then sign in with a referee, counselor or school admin account, or create a referee account.
+        Sign out, then sign in with a Reference Provider, counselor or school admin account, or create a Reference Provider account.
       </v-alert>
       <v-btn color="primary" size="large" block @click="signOut">Sign out</v-btn>
     </template>
 
     <template v-else>
-      <v-btn color="primary" size="large" block to="/register?as=referee">Create a referee account</v-btn>
+      <v-btn color="primary" size="large" block to="/register?as=reference-provider">Create a Reference Provider account</v-btn>
       <v-btn variant="outlined" size="large" block to="/login">I already have an account</v-btn>
       <p class="text-xs text-slate-400 text-center">
         Counselors and school admins can sign in with their existing account.

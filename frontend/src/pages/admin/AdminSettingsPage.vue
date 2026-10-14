@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import ScorerScopeDialog from '../../components/admin/ScorerScopeDialog.vue'
 import { useAuthStore } from '../../stores/auth'
 import { roleHome } from '../../utils/roleHome'
+import { roleLabel } from '../../utils/roleLabels'
 import api from '../../services/api'
 import { useConfirm } from '../../composables/useConfirm'
 
@@ -24,7 +25,7 @@ const ALL_ROLES = [
   { title: 'App Admin', value: 'app_admin' },
   { title: 'School Admin', value: 'school_admin' },
   { title: 'Counselor', value: 'counselor' },
-  { title: 'Referee', value: 'referee' },
+  { title: 'Reference Provider', value: 'referee' },
   { title: 'Super Admin', value: 'super_admin' },
 ]
 
@@ -341,7 +342,7 @@ onMounted(() => { loadUsers(); loadSchools() })
             <span class="text-slate-400">{{ value }}</span>
           </template>
           <template #item.Role="{ value }">
-            <v-chip color="primary">{{ value }}</v-chip>
+            <v-chip color="primary">{{ roleLabel(value) }}</v-chip>
           </template>
           <template #item.SchoolName="{ value }">
             <span class="text-slate-400">{{ value ?? '—' }}</span>
