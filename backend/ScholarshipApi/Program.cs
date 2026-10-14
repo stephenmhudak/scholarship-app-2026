@@ -123,6 +123,21 @@ builder.Services.AddControllers();
 
 var app = builder.Build();
 
+// Conditional questions only ever depend on earlier questions. Saving and reordering keep it that way; this tidies
+// any condition saved before that rule existed. Idempotent, so it simply runs on every start.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<SqlKata.Execution.QueryFactory>();
+    foreach (var cycleId in await db.Query("ScholarshipCycles").Select("Id").GetAsync<string>())
+    {
+        var pruned = await QuestionOrder.PruneConditionsAsync(db, cycleId);
+        if (pruned.ConditionsRemovedFrom.Count > 0 || pruned.NowAlwaysShown.Count > 0)
+            app.Logger.LogWarning(
+                "Cycle {CycleId}: removed conditions that depended on later questions from {Removed}; now always shown: {Shown}",
+                cycleId, pruned.ConditionsRemovedFrom, pruned.NowAlwaysShown);
+    }
+}
+
 if (string.IsNullOrEmpty(app.Configuration["Email:Resend:ApiKey"]))
     app.Logger.LogWarning("Email:Resend:ApiKey is not set: emails will be written to the console instead of being sent.");
 

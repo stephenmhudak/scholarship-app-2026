@@ -39,7 +39,7 @@ public static class QuestionVisibility
             bool Matches(QuestionCondition c) =>
                 IsVisible(c.SourceQuestionId)
                 && AnswerConditions.Matches(c.OptionId, c.TextContains, answers.GetValueOrDefault(c.SourceQuestionId));
-            // A conditional question whose conditions were all removed (with their source question) stays hidden
+            // Normally impossible (QuestionOrder makes a conditional question with no conditions always-shown), but stay hidden
             var visible = own.Count > 0 && (question.ConditionMatch == "all" ? own.All(Matches) : own.Any(Matches));
 
             visiting.Remove(id);

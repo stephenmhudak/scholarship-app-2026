@@ -26,7 +26,8 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
         var questions = await db.Query("Questions")
             .Where("CycleId", cycleId)
             .When(referenceFormId is null, q => q.WhereNull("ReferenceFormId"), q => q.Where("ReferenceFormId", referenceFormId))
-            .OrderBy("Order")
+            // Ties broken by id, as QuestionOrder.Positions does, so the form and the "comes before" rule agree
+            .OrderBy("Order", "Id")
             .GetAsync<Question>();
 
         var questionList = questions.ToList();
@@ -69,6 +70,11 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
         if (referenceFormId is not null
             && !await db.Query("ReferenceForms").Where("Id", referenceFormId).Where("CycleId", cycleId).ExistsAsync())
             throw new KeyNotFoundException("Reference form not found.");
+        // New questions go last (in their section, or on their reference form). Orders can have gaps after moves,
+        // so it's worked out here rather than taken from the client.
+        request.Order = (await db.Query("Questions").Where("CycleId", cycleId)
+            .When(referenceFormId is null, q => q.WhereNull("ReferenceFormId"), q => q.Where("ReferenceFormId", referenceFormId))
+            .MaxAsync<int?>("Order") ?? -1) + 1;
         await ValidateAsync(cycleId, request, referenceFormId, questionId: null);
         var id = Guid.NewGuid().ToString();
         await db.Query("Questions").InsertAsync(new
@@ -121,30 +127,76 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
         await db.Query("QuestionConditions").Where("QuestionId", questionId).DeleteAsync();
         await SaveConditionsAsync(questionId, request.Conditions);
 
-        return NoContent();
+        // A new section, or options removed from this question, can strand other questions' conditions on it
+        return Ok(await QuestionOrder.PruneConditionsAsync(db, cycleId));
     }
 
     [HttpDelete("{questionId}")]
     [Authorize(Policy = "AppAdmin")]
-    public async Task<IActionResult> Delete(string cycleId, string questionId, [FromQuery] bool force = false)
+    public Task<IActionResult> Delete(string cycleId, string questionId, [FromQuery] bool force = false) =>
+        DeleteQuestionsAsync(cycleId, [questionId], force);
+
+    // Several questions at once (application or reference form questions), with the same dependency check
+    [HttpPost("bulk-delete")]
+    [Authorize(Policy = "AppAdmin")]
+    public Task<IActionResult> BulkDelete(string cycleId, [FromBody] BulkQuestionsRequest request, [FromQuery] bool force = false) =>
+        DeleteQuestionsAsync(cycleId, request.QuestionIds, force);
+
+    // Moves application questions into a section (null = ungrouped), after the questions already there,
+    // keeping their order relative to each other
+    [HttpPut("move")]
+    [Authorize(Policy = "AppAdmin")]
+    public async Task<IActionResult> Move(string cycleId, [FromBody] MoveQuestionsRequest request)
     {
+        var ids = (request.QuestionIds ?? []).Distinct().ToList();
+        if (ids.Count == 0) throw new ArgumentException("Choose at least one question.");
+        var questions = (await db.Query("Questions").WhereIn("Id", ids).Where("CycleId", cycleId).WhereNull("ReferenceFormId")
+            .OrderBy("Order").GetAsync<Question>()).ToList();
+        if (questions.Count != ids.Count) throw new ArgumentException("Only this cycle's application questions can be moved between sections.");
+
+        var sectionId = string.IsNullOrEmpty(request.SectionId) ? null : request.SectionId;
+        if (sectionId is not null && !await db.Query("Sections").Where("Id", sectionId).Where("CycleId", cycleId).ExistsAsync())
+            throw new ArgumentException("That section isn't part of this cycle.");
+
+        // Order is cycle-wide (sections group by it), so putting them after the last question lands them at the end of the section
+        var nextOrder = (await db.Query("Questions").Where("CycleId", cycleId).WhereNull("ReferenceFormId").MaxAsync<int?>("Order") ?? -1) + 1;
+        if (db.Connection.State != System.Data.ConnectionState.Open) db.Connection.Open();
+        using var transaction = db.Connection.BeginTransaction();
+        foreach (var question in questions)
+            await db.Query("Questions").Where("Id", question.Id).UpdateAsync(new { SectionId = sectionId, Order = nextOrder++ }, transaction);
+        var result = await QuestionOrder.PruneConditionsAsync(db, cycleId, transaction);
+        transaction.Commit();
+
+        return Ok(result);
+    }
+
+    private async Task<IActionResult> DeleteQuestionsAsync(string cycleId, List<string>? questionIds, bool force)
+    {
+        var ids = (questionIds ?? []).Distinct().ToList();
+        if (ids.Count == 0) throw new ArgumentException("Choose at least one question.");
+        if (await db.Query("Questions").WhereIn("Id", ids).Where("CycleId", cycleId).CountAsync<int>() != ids.Count)
+            throw new KeyNotFoundException("Question not found.");
+
         // ApplicationAnswers.QuestionId has no ON DELETE rule, so answers must go first — only when the admin confirms.
-        // Reference answers, and reference/question conditions that look at this question, go with it (ON DELETE CASCADE).
-        // A conditional question left with no conditions stays hidden, so the admin is warned about those too.
-        var answerCount = await db.Query("ApplicationAnswers").Where("QuestionId", questionId).CountAsync<int>()
-            + await db.Query("ReferenceAnswers").Where("QuestionId", questionId).CountAsync<int>();
-        var conditionCount = await db.Query("ReferenceFormConditions").Where("QuestionId", questionId).CountAsync<int>();
-        var dependentCount = await db.Query("QuestionConditions").Where("SourceQuestionId", questionId).CountAsync<int>();
+        // Reference answers, and reference/question conditions that look at these questions, go with them (ON DELETE CASCADE).
+        // A conditional question left with no conditions is then shown to everyone, so the admin is warned about
+        // those too (unless it's being deleted as well).
+        var answerCount = await db.Query("ApplicationAnswers").WhereIn("QuestionId", ids).CountAsync<int>()
+            + await db.Query("ReferenceAnswers").WhereIn("QuestionId", ids).CountAsync<int>();
+        var conditionCount = await db.Query("ReferenceFormConditions").WhereIn("QuestionId", ids).CountAsync<int>();
+        var dependentCount = await db.Query("QuestionConditions").WhereIn("SourceQuestionId", ids).WhereNotIn("QuestionId", ids)
+            .CountAsync<int>();
         if ((answerCount > 0 || conditionCount > 0 || dependentCount > 0) && !force)
-            return Conflict(new { error = "Other things depend on this question.", answerCount, conditionCount, dependentCount });
+            return Conflict(new { error = "Other things depend on these questions.", answerCount, conditionCount, dependentCount });
 
         if (db.Connection.State != System.Data.ConnectionState.Open) db.Connection.Open();
         using var transaction = db.Connection.BeginTransaction();
-        await db.Query("ApplicationAnswers").Where("QuestionId", questionId).DeleteAsync(transaction);
-        await db.Query("Questions").Where("Id", questionId).Where("CycleId", cycleId).DeleteAsync(transaction);
+        await db.Query("ApplicationAnswers").WhereIn("QuestionId", ids).DeleteAsync(transaction);
+        await db.Query("Questions").WhereIn("Id", ids).Where("CycleId", cycleId).DeleteAsync(transaction);
+        var result = await QuestionOrder.PruneConditionsAsync(db, cycleId, transaction);
         transaction.Commit();
 
-        return NoContent();
+        return Ok(result);
     }
 
     private static readonly HashSet<string> QuestionTypes =
@@ -232,7 +284,17 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
             }
         }
 
-        // A new question has nothing depending on it yet, so it can't close a loop
+        // Only questions that come before this one on the form, where it will be after this save
+        var questions = (await db.Query("Questions").Where("CycleId", cycleId).WhereNull("ReferenceFormId").GetAsync<Question>()).ToList();
+        if (questionId is null) questions.Add(new Question { Id = "", SectionId = request.SectionId, Order = request.Order });
+        var sections = await db.Query("Sections").Where("CycleId", cycleId).GetAsync<Section>();
+        var position = QuestionOrder.Positions(questions, sections,
+            q => q.Id == (questionId ?? "") ? (request.SectionId, request.Order) : (q.SectionId, q.Order));
+        var own = position[questionId ?? ""];
+        if (conditions.Any(c => position[c.SourceQuestionId!] >= own))
+            throw new ArgumentException("A question can only depend on questions that come before it on the form.");
+
+        // Before-only dependencies can't loop, but a stale condition elsewhere shouldn't either
         if (questionId is not null && await WouldCreateCycleAsync(cycleId, questionId, conditions.Select(c => c.SourceQuestionId!)))
             throw new ArgumentException("That would make this question depend on itself through another conditional question.");
     }
@@ -315,7 +377,7 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
                 .Where("CycleId", cycleId)
                 .UpdateAsync(new { Order = item.Order });
         }
-        return NoContent();
+        return Ok(await QuestionOrder.PruneConditionsAsync(db, cycleId));
     }
 }
 
@@ -345,6 +407,18 @@ public class QuestionRequest
     /// <summary><c>any</c> (default) or <c>all</c> of the conditions must match.</summary>
     public string? ConditionMatch { get; set; }
     public List<QuestionConditionRequest>? Conditions { get; set; }
+}
+
+public class BulkQuestionsRequest
+{
+    public List<string>? QuestionIds { get; set; }
+}
+
+public class MoveQuestionsRequest
+{
+    public List<string>? QuestionIds { get; set; }
+    /// <summary>The section to move into; null or empty for ungrouped.</summary>
+    public string? SectionId { get; set; }
 }
 
 public class QuestionConditionRequest

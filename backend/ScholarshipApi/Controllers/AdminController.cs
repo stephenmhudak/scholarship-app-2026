@@ -310,6 +310,8 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
             await DefaultCycleQuestions.SeedAsync(db, id, transaction);
         else
             await CycleQuestionCopier.CopyAsync(db, request.CopyFromCycleId, id, transaction);
+        // Conditions only ever look back up the form, even if the copied cycle had older ones that didn't
+        await QuestionOrder.PruneConditionsAsync(db, id, transaction);
 
         transaction.Commit();
         return CreatedAtAction(nameof(ListCycles), new { }, new { id });

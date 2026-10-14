@@ -16,7 +16,7 @@ public class SectionsController(QueryFactory db) : ControllerBase
     {
         var sections = await db.Query("Sections")
             .Where("CycleId", cycleId)
-            .OrderBy("Order")
+            .OrderBy("Order", "Id")
             .GetAsync<Section>();
         return Ok(sections);
     }
@@ -64,10 +64,10 @@ public class SectionsController(QueryFactory db) : ControllerBase
     [Authorize(Policy = "AppAdmin")]
     public async Task<IActionResult> Delete(string cycleId, string sectionId)
     {
-        // Unlink questions from this section before deleting
+        // Unlink questions from this section before deleting; they move to the ungrouped questions at the end
         await db.Query("Questions").Where("SectionId", sectionId).UpdateAsync(new { SectionId = (string?)null });
         await db.Query("Sections").Where("Id", sectionId).Where("CycleId", cycleId).DeleteAsync();
-        return NoContent();
+        return Ok(await QuestionOrder.PruneConditionsAsync(db, cycleId));
     }
 
     [HttpPut("reorder")]
@@ -81,7 +81,7 @@ public class SectionsController(QueryFactory db) : ControllerBase
                 .Where("CycleId", cycleId)
                 .UpdateAsync(new { Order = item.Order });
         }
-        return NoContent();
+        return Ok(await QuestionOrder.PruneConditionsAsync(db, cycleId));
     }
 }
 
