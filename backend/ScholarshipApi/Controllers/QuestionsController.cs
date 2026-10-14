@@ -10,15 +10,19 @@ namespace ScholarshipApi.Controllers;
 [ApiController]
 [Route("api/cycles/{cycleId}/questions")]
 [Authorize]
-public class QuestionsController(QueryFactory db) : ControllerBase
+public class QuestionsController(QueryFactory db, IAuthorizationService authorization) : ControllerBase
 {
     // camelCase keys — the frontend reads validationRules.numberOnly etc. straight from the stored JSON
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    // Without referenceFormId: the application's questions. With it: that reference form's questions.
+    // Without referenceFormId: the application's questions, for anyone signed in. With it: that reference form's
+    // questions, for admins building the form only; referees get them through their code (/api/reference-links).
     [HttpGet]
     public async Task<IActionResult> List(string cycleId, [FromQuery] string? referenceFormId)
     {
+        if (referenceFormId is not null && !(await authorization.AuthorizeAsync(User, "AppAdmin")).Succeeded)
+            return Forbid();
+
         var questions = await db.Query("Questions")
             .Where("CycleId", cycleId)
             .When(referenceFormId is null, q => q.WhereNull("ReferenceFormId"), q => q.Where("ReferenceFormId", referenceFormId))

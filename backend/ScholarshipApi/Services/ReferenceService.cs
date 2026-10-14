@@ -281,6 +281,10 @@ public class ReferenceService(
             ?? throw new KeyNotFoundException("File not found.");
         var request = await db.Query("ReferenceRequests").Where("Id", file.RequestId).FirstAsync<ReferenceRequest>();
         if (request.Status != "submitted") throw new KeyNotFoundException("File not found.");
+        // Only files that are part of the submitted reference. Anyone holding the code can upload while it's open,
+        // so a file someone else uploaded but never attached isn't the submitter's (or anyone's) to read.
+        var attached = await db.Query("ReferenceAnswers").Where("RequestId", request.Id).Where("TextValue", file.Id).ExistsAsync();
+        if (!attached) throw new KeyNotFoundException("File not found.");
         await EnsureCanReadSubmittedAsync(request, userId, role);
         return await fileStorage.RetrieveAsync(file.StoragePath, file.FileName);
     }
