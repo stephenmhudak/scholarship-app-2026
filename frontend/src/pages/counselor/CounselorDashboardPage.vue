@@ -10,14 +10,15 @@ const nudging = ref({})
 
 const headers = [
   { title: 'Student', key: 'name' },
-  { title: 'Application Status', key: 'application_status' },
-  { title: 'Last Activity', key: 'last_activity' },
+  { title: 'Application Status', key: 'applicationStatus' },
+  { title: 'Last Activity', key: 'lastActivity' },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' },
 ]
 
+// No students is a normal, empty table; the error is only for a request that actually failed
 onMounted(async () => {
   try {
-    const response = await api.get('/counselor/students')
+    const response = await api.get('/counselor/applicants')
     students.value = response.data
   } catch {
     alert.value = { type: 'error', message: 'Failed to load student data.' }
@@ -29,10 +30,10 @@ onMounted(async () => {
 async function sendNudge(studentId) {
   nudging.value[studentId] = true
   try {
-    await api.post(`/counselor/students/${studentId}/nudge`)
-    alert.value = { type: 'success', message: 'Reminder sent successfully.' }
-  } catch {
-    alert.value = { type: 'error', message: 'Failed to send reminder.' }
+    const { data } = await api.post(`/counselor/nudge/${studentId}`)
+    alert.value = { type: 'success', message: data.message || 'Reminder sent.' }
+  } catch (err) {
+    alert.value = { type: 'error', message: err.response?.data?.error || 'Failed to send reminder.' }
   } finally {
     nudging.value[studentId] = false
   }
@@ -61,12 +62,13 @@ async function sendNudge(studentId) {
           <p class="font-semibold text-navy">{{ item.name }}</p>
           <p class="text-xs text-slate-400">{{ item.email }}</p>
         </template>
-        <template #item.application_status="{ item }">
-          <StatusBadge :status="item.application_status || 'draft'" />
+        <template #item.applicationStatus="{ item }">
+          <StatusBadge v-if="item.applicationStatus" :status="item.applicationStatus" />
+          <v-chip v-else>Not started</v-chip>
         </template>
-        <template #item.last_activity="{ item }">
+        <template #item.lastActivity="{ item }">
           <span class="text-slate-400">
-            {{ item.last_activity ? new Date(item.last_activity).toLocaleDateString() : 'No activity' }}
+            {{ item.lastActivity ? new Date(item.lastActivity).toLocaleDateString() : 'No activity' }}
           </span>
         </template>
         <template #item.actions="{ item }">
