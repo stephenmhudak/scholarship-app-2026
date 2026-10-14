@@ -112,6 +112,8 @@ async function loadQuestions() {
   try {
     const res = await api.get(`/cycles/${cycleId}/questions`, { params: questionParams })
     questions.value = res.data
+    const ids = new Set(res.data.map((q) => q.id))
+    selectedIds.value = selectedIds.value.filter((id) => ids.has(id))
   } catch {
     alert.value = { type: 'error', message: 'Failed to load questions.' }
   } finally {
@@ -252,6 +254,24 @@ function removeOption(i) {
   editing.value.options.splice(i, 1)
 }
 
+// Reordering, moving or deleting questions makes the API drop conditions whose question no longer comes first
+// (QuestionOrder.PruneConditionsAsync). Tell the admin which questions that changed; returns true if any.
+function quoteList(texts) {
+  const quoted = texts.slice(0, 3).map((t) => `"${t.length > 50 ? t.slice(0, 47) + '…' : t}"`)
+  return texts.length > 3 ? `${quoted.join(', ')} and ${texts.length - 3} more` : quoted.join(', ')
+}
+
+function reportConditionChanges(result) {
+  const removed = result?.conditionsRemovedFrom ?? []
+  const nowShown = result?.nowAlwaysShown ?? []
+  const parts = []
+  if (removed.length) parts.push(`Removed conditions from ${quoteList(removed)}, because the question they depended on no longer comes before ${removed.length === 1 ? 'it' : 'them'}.`)
+  if (nowShown.length) parts.push(`${quoteList(nowShown)} ${nowShown.length === 1 ? 'has' : 'have'} no conditions left, so ${nowShown.length === 1 ? 'it is' : 'they are'} now shown to every applicant.`)
+  if (!parts.length) return false
+  alert.value = { type: 'warning', message: parts.join(' ') }
+  return true
+}
+
 async function save() {
   if (!editing.value.text.trim()) {
     alert.value = { type: 'error', message: 'Question text is required.' }
@@ -299,15 +319,17 @@ async function save() {
 
   try {
     const wasNew = isNew.value
+    let result = null
     if (isNew.value) {
       await api.post(`/cycles/${cycleId}/questions`, payload, { params: questionParams })
     } else {
-      await api.put(`/cycles/${cycleId}/questions/${editing.value.id}`, payload)
+      result = (await api.put(`/cycles/${cycleId}/questions/${editing.value.id}`, payload)).data
     }
     editing.value = null
     isNew.value = false
     await loadQuestions()
     alert.value = { type: 'success', message: wasNew ? 'Question added.' : 'Question updated.' }
+    reportConditionChanges(result)
   } catch (err) {
     alert.value = { type: 'error', message: err.response?.data?.error || 'Failed to save question.' }
   } finally {
@@ -315,27 +337,111 @@ async function save() {
   }
 }
 
+// What else goes when questions are deleted, from the API's 409 (see QuestionsController.DeleteQuestionsAsync)
+function deleteConsequences({ answerCount, conditionCount, dependentCount }, it) {
+  const consequences = []
+  if (answerCount) consequences.push(`deletes ${answerCount} answer(s) to ${it}`)
+  if (conditionCount) consequences.push(`removes ${conditionCount} reference condition(s) that use ${it}`)
+  if (dependentCount) consequences.push(`removes ${dependentCount} condition(s) that show other questions (any left with no conditions will be shown to everyone)`)
+  return consequences.join(' and ')
+}
+
 async function deleteQuestion(q) {
   if (!await confirm({ title: 'Delete question', text: `Delete "${q.text}"?`, confirmText: 'Delete', color: 'error' })) return
   try {
-    await api.delete(`/cycles/${cycleId}/questions/${q.id}`).catch(async (err) => {
+    const res = await api.delete(`/cycles/${cycleId}/questions/${q.id}`).catch(async (err) => {
       if (err.response?.status !== 409) throw err
-      const { answerCount, conditionCount, dependentCount } = err.response.data
-      const consequences = []
-      if (answerCount) consequences.push(`deletes ${answerCount} answer(s) to it`)
-      if (conditionCount) consequences.push(`removes ${conditionCount} reference condition(s) that use it`)
-      if (dependentCount) consequences.push(`removes ${dependentCount} condition(s) that show other questions, which may leave them hidden`)
       if (!await confirm({
         title: 'Delete question',
-        text: `Deleting this question also ${consequences.join(' and ')}.`,
+        text: `Deleting this question also ${deleteConsequences(err.response.data, 'it')}.`,
         confirmText: 'Delete',
         color: 'error',
-      })) return
-      await api.delete(`/cycles/${cycleId}/questions/${q.id}`, { params: { force: true } })
+      })) return null
+      return api.delete(`/cycles/${cycleId}/questions/${q.id}`, { params: { force: true } })
     })
     await loadQuestions()
+    reportConditionChanges(res?.data)
   } catch {
     alert.value = { type: 'error', message: 'Failed to delete question.' }
+  }
+}
+
+// ── Selecting several questions to delete or move between sections ──────────
+
+const selectedIds = ref([])
+const bulkWorking = ref(false)
+const selectedSet = computed(() => new Set(selectedIds.value))
+const allSelected = computed(() => questions.value.length > 0 && questions.value.every((q) => selectedSet.value.has(q.id)))
+
+// Sections in form order, then ungrouped
+const moveTargets = computed(() => [
+  ...[...sections.value].sort((a, b) => a.order - b.order).map((s) => ({ title: s.title, value: s.id })),
+  { title: 'Ungrouped', value: null },
+])
+
+function setSelected(ids, on) {
+  const set = new Set(selectedIds.value)
+  for (const id of ids) on ? set.add(id) : set.delete(id)
+  selectedIds.value = [...set]
+}
+
+// 'all', 'some' or 'none' of a section's questions are selected
+function groupSelection(group) {
+  const count = group.questions.filter((q) => selectedSet.value.has(q.id)).length
+  return count === 0 ? 'none' : count === group.questions.length ? 'all' : 'some'
+}
+
+async function moveSelected(sectionId) {
+  const count = selectedIds.value.length
+  bulkWorking.value = true
+  alert.value = null
+  try {
+    const { data } = await api.put(`/cycles/${cycleId}/questions/move`, { questionIds: selectedIds.value, sectionId })
+    selectedIds.value = []
+    await loadQuestions()
+    const target = moveTargets.value.find((t) => t.value === sectionId)?.title ?? 'the section'
+    alert.value = { type: 'success', message: `Moved ${count} question${count === 1 ? '' : 's'} to ${target}.` }
+    reportConditionChanges(data)
+  } catch (err) {
+    alert.value = { type: 'error', message: err.response?.data?.error || 'Failed to move questions.' }
+  } finally {
+    bulkWorking.value = false
+  }
+}
+
+async function deleteSelected() {
+  const count = selectedIds.value.length
+  const them = count === 1 ? 'it' : 'them'
+  if (!await confirm({
+    title: 'Delete questions',
+    text: `Delete ${count} question${count === 1 ? '' : 's'}?`,
+    confirmText: 'Delete',
+    color: 'error',
+  })) return
+  bulkWorking.value = true
+  alert.value = null
+  const url = `/cycles/${cycleId}/questions/bulk-delete`
+  try {
+    let deleted = true
+    const res = await api.post(url, { questionIds: selectedIds.value }).catch(async (err) => {
+      if (err.response?.status !== 409) throw err
+      deleted = await confirm({
+        title: 'Delete questions',
+        text: `Deleting ${count === 1 ? 'this question' : 'these questions'} also ${deleteConsequences(err.response.data, them)}.`,
+        confirmText: 'Delete',
+        color: 'error',
+      })
+      return deleted ? api.post(url, { questionIds: selectedIds.value }, { params: { force: true } }) : null
+    })
+    if (!deleted) return
+    selectedIds.value = []
+    await loadQuestions()
+    alert.value = { type: 'success', message: `Deleted ${count} question${count === 1 ? '' : 's'}.` }
+    reportConditionChanges(res?.data)
+  } catch (err) {
+    alert.value = { type: 'error', message: err.response?.data?.error || 'Failed to delete questions.' }
+  } finally {
+    bulkWorking.value = false
   }
 }
 
@@ -356,8 +462,9 @@ async function moveDown(i) {
 async function reorder(ordered) {
   const items = ordered.map((q, idx) => ({ id: q.id, order: idx }))
   try {
-    await api.put(`/cycles/${cycleId}/questions/reorder`, items)
+    const { data } = await api.put(`/cycles/${cycleId}/questions/reorder`, items)
     await loadQuestions()
+    reportConditionChanges(data)
   } catch {
     alert.value = { type: 'error', message: 'Failed to reorder questions.' }
   }
@@ -417,7 +524,7 @@ async function saveSection() {
         await reorderSections(all)
       }
 
-      alert.value = { type: 'success', message: 'Section added.' }
+      if (!sectionReorderWarned) alert.value = { type: 'success', message: 'Section added.' }
     }
 
     editingSection.value = null
@@ -436,8 +543,9 @@ async function deleteSection(s) {
     color: 'error',
   })) return
   try {
-    await api.delete(`/cycles/${cycleId}/sections/${s.id}`)
+    const { data } = await api.delete(`/cycles/${cycleId}/sections/${s.id}`)
     await Promise.all([loadSections(), loadQuestions()])
+    reportConditionChanges(data)
   } catch {
     alert.value = { type: 'error', message: 'Failed to delete section.' }
   }
@@ -459,11 +567,17 @@ async function moveSectionDown(s) {
   await reorderSections(updated)
 }
 
+// Set when the last section reorder reported condition changes, so saveSection doesn't cover it with "Section added."
+let sectionReorderWarned = false
+
 async function reorderSections(ordered) {
+  sectionReorderWarned = false
   const items = ordered.map((s, idx) => ({ id: s.id, order: idx }))
   try {
-    await api.put(`/cycles/${cycleId}/sections/reorder`, items)
-    await loadSections()
+    const { data } = await api.put(`/cycles/${cycleId}/sections/reorder`, items)
+    // Questions too: reordering sections can remove conditions (and change which questions are conditional)
+    await Promise.all([loadSections(), loadQuestions()])
+    if (reportConditionChanges(data)) sectionReorderWarned = true
   } catch {
     alert.value = { type: 'error', message: 'Failed to reorder sections.' }
   }
@@ -502,6 +616,35 @@ function globalIndex(q) {
     </p>
 
     <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
+
+    <!-- Selection toolbar -->
+    <v-card v-if="!loading && questions.length && !editing" class="px-4 py-2 flex items-center gap-3 flex-wrap">
+      <v-checkbox-btn
+        :model-value="allSelected"
+        :indeterminate="selectedIds.length > 0 && !allSelected"
+        title="Select all questions"
+        class="flex-none"
+        @update:model-value="(on) => setSelected(questions.map((q) => q.id), on)"
+      />
+      <span class="text-sm font-semibold text-navy">
+        {{ selectedIds.length ? `${selectedIds.length} selected` : 'Select questions to move or delete' }}
+      </span>
+      <div class="flex-1" />
+      <template v-if="selectedIds.length">
+        <v-menu v-if="!formId && sections.length">
+          <template #activator="{ props }">
+            <v-btn v-bind="props" variant="outlined" prepend-icon="mdi-folder-move-outline" :loading="bulkWorking">
+              Move to section
+            </v-btn>
+          </template>
+          <v-list density="compact">
+            <v-list-item v-for="t in moveTargets" :key="t.value ?? '__ungrouped'" :title="t.title" @click="moveSelected(t.value)" />
+          </v-list>
+        </v-menu>
+        <v-btn color="error" variant="tonal" prepend-icon="mdi-trash-can" :loading="bulkWorking" @click="deleteSelected">Delete</v-btn>
+        <v-btn variant="text" @click="selectedIds = []">Clear</v-btn>
+      </template>
+    </v-card>
 
     <!-- Questions List -->
     <div v-if="loading" class="flex items-center gap-3 text-slate-400 py-4">
@@ -543,6 +686,14 @@ function globalIndex(q) {
 
         <!-- Normal section header -->
         <div v-else class="flex items-center gap-2 pt-1">
+          <v-checkbox-btn
+            :model-value="groupSelection(group) === 'all'"
+            :indeterminate="groupSelection(group) === 'some'"
+            :disabled="!group.questions.length || !!editing"
+            :title="`Select all questions in ${group.title}`"
+            class="flex-none"
+            @update:model-value="(on) => setSelected(group.questions.map((q) => q.id), on)"
+          />
           <div class="flex flex-col">
             <v-btn
               icon="mdi-chevron-up"
@@ -575,6 +726,14 @@ function globalIndex(q) {
 
       <!-- Ungrouped header (only when named sections exist) -->
       <div v-else-if="sections.length > 0" class="flex items-center gap-3 pt-1">
+        <v-checkbox-btn
+          :model-value="groupSelection(group) === 'all'"
+          :indeterminate="groupSelection(group) === 'some'"
+          :disabled="!group.questions.length || !!editing"
+          title="Select all ungrouped questions"
+          class="flex-none"
+          @update:model-value="(on) => setSelected(group.questions.map((q) => q.id), on)"
+        />
         <h3 class="text-sm font-bold text-slate-400 shrink-0">Ungrouped</h3>
         <div class="flex-1 border-t border-dashed border-[#E9EDF7]"></div>
       </div>
@@ -745,7 +904,14 @@ function globalIndex(q) {
             </v-card-text>
           </v-card>
 
-          <v-card v-else class="pa-4 flex items-start gap-3">
+          <v-card v-else class="pa-4 flex items-start gap-3" :class="{ 'border-primary': selectedSet.has(q.id) }">
+            <v-checkbox-btn
+              :model-value="selectedSet.has(q.id)"
+              :disabled="!!editing"
+              title="Select question"
+              class="flex-none"
+              @update:model-value="(on) => setSelected([q.id], on)"
+            />
             <!-- Order controls -->
             <div class="flex flex-col">
               <v-btn
