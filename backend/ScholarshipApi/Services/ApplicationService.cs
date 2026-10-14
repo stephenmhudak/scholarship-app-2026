@@ -39,7 +39,7 @@ public class ApplicationService(QueryFactory db, ApplicationAccess access) : IAp
             .FirstOrDefaultAsync<ApplicationDto>()
             ?? throw new KeyNotFoundException("Application not found.");
 
-        if (!await access.CanViewAsync(app.ApplicantId, app.Status, app.CycleId, requestingUserId, requestingRole))
+        if (!await access.CanViewAsync(app.Id, app.ApplicantId, app.Status, app.CycleId, requestingUserId, requestingRole))
             throw new UnauthorizedAccessException("Access denied.");
 
         await FillCycleInfoAsync([app]);

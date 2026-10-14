@@ -18,5 +18,16 @@ public class User
     public string? EmailOtpSetupHash { get; set; }
     public DateTime? EmailOtpSetupExpiresAt { get; set; }
     public int SessionVersion { get; set; }
+    /// <summary>Scorers: <c>all</c>, or <c>filtered</c> to applications matching their <see cref="ScorerFilter"/>s.</summary>
+    public string ScoringScope { get; set; } = "all";
     public DateTime CreatedAt { get; set; }
+}
+
+public class ScorerFilter
+{
+    public string Id { get; set; } = null!;
+    public string ScorerId { get; set; } = null!;
+    public string QuestionId { get; set; } = null!;
+    public string? OptionId { get; set; }
+    public string? TextContains { get; set; }
 }

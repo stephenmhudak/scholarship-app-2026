@@ -21,6 +21,10 @@ public class ScoringService(QueryFactory db, IApplicationService applicationServ
             .OrderByDesc("a.SubmittedAt")
             .GetAsync<ScoringQueueItemDto>()).ToList();
 
+        // Scorers limited to certain answers only get the applications that match
+        var allowed = await access.ScorerAllowedAsync(scorerId, apps.Select(a => a.Id).ToList());
+        if (allowed is not null) apps = apps.Where(a => allowed.Contains(a.Id)).ToList();
+
         if (!apps.Any()) return apps;
 
         var cycleIds = apps.Select(a => a.CycleId).Distinct().ToList();
@@ -80,6 +84,8 @@ public class ScoringService(QueryFactory db, IApplicationService applicationServ
             ?? throw new KeyNotFoundException("Application not found.");
         if (!await access.IsScoreableAsync(app.Status, app.CycleId))
             throw new ArgumentException("This application can't be scored until it's submitted or its cycle has ended.");
+        if (!isAdmin && !await access.ScorerMaySeeAsync(scorerId, applicationId))
+            throw new UnauthorizedAccessException("You're not assigned to score this application.");
 
         var sectionScores = request.SectionScores ?? [];
         if (sectionScores.Count == 0) throw new ArgumentException("Enter at least one score.");

@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import ScorerScopeDialog from '../../components/admin/ScorerScopeDialog.vue'
 import api from '../../services/api'
 import { useConfirm } from '../../composables/useConfirm'
 
@@ -93,6 +94,18 @@ async function submitAddUser() {
   } finally {
     addUserLoading.value = false
   }
+}
+
+// Scorers can be limited to applications with certain answers
+const scopeUser = ref(null)
+const showScope = ref(false)
+function openScope(user) {
+  scopeUser.value = user
+  showScope.value = true
+}
+function onScopeSaved(scope) {
+  scopeUser.value.ScoringScope = scope
+  showAlert('success', scope === 'all' ? 'This scorer can see all applications.' : 'This scorer now only sees matching applications.')
 }
 
 async function resendInvite(user) {
@@ -312,6 +325,10 @@ onMounted(() => { loadUsers(); loadSchools() })
             <span v-else class="text-slate-400">—</span>
           </template>
           <template #item.actions="{ item }">
+            <template v-if="item.Role === 'scorer'">
+              <v-chip v-if="item.ScoringScope === 'filtered'" color="primary" class="mr-1">Limited</v-chip>
+              <v-btn variant="text" color="primary" size="small" @click="openScope(item)">Scoring Access</v-btn>
+            </template>
             <template v-if="item.InvitePending">
               <v-chip color="warning" class="mr-2">Invite pending</v-chip>
               <v-btn variant="text" color="primary" size="small" @click="resendInvite(item)">Resend Invite</v-btn>
@@ -412,6 +429,8 @@ onMounted(() => { loadUsers(); loadSchools() })
       </v-card>
     </div>
   </div>
+
+  <ScorerScopeDialog v-model="showScope" :user="scopeUser" @saved="onScopeSaved" />
 
   <!-- ── Add User Dialog ─────────────────────────────────────────────────── -->
   <v-dialog v-model="showAddUser">

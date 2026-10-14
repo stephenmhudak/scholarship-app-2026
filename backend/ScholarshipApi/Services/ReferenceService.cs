@@ -454,7 +454,7 @@ public class ReferenceService(
     {
         if (role is not ("scorer" or "app_admin")) throw new UnauthorizedAccessException("Access denied.");
         var app = await GetApplicationAsync(applicationId);
-        if (!await access.CanViewAsync(app.ApplicantId, app.Status, app.CycleId, userId, role))
+        if (!await access.CanViewAsync(app.Id, app.ApplicantId, app.Status, app.CycleId, userId, role))
             throw new UnauthorizedAccessException("Access denied.");
     }
 
