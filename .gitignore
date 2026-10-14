@@ -22,3 +22,6 @@ k8s/*-secret.yaml
 
 # Applicants' documents saved by local storage (Storage:Provider = Local)
 backend/ScholarshipApi/wwwroot/uploads/
+
+# Per-machine compose tweaks (e.g. exposing MySQL on a LAN for admin access)
+docker-compose.override.yml

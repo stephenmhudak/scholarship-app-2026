@@ -37,9 +37,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
 
-  # Not published to the host: only the backend reaches it, over the compose network.
+  # Published on the server's loopback only, so it's reachable from the server itself or through an SSH tunnel,
+  # never directly from the network. To expose it on one machine, use a gitignored docker-compose.override.yml.
   mysql:
     image: mysql:8.0
+    ports:
+      - "127.0.0.1:3306:3306"
     env_file:
       - path: ./secrets/mysql.env
     volumes:
