@@ -26,7 +26,8 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
         var questions = await db.Query("Questions")
             .Where("CycleId", cycleId)
             .When(referenceFormId is null, q => q.WhereNull("ReferenceFormId"), q => q.Where("ReferenceFormId", referenceFormId))
-            .OrderBy("Order")
+            // Ties broken by id, as QuestionOrder.Positions does, so the form and the "comes before" rule agree
+            .OrderBy("Order", "Id")
             .GetAsync<Question>();
 
         var questionList = questions.ToList();

@@ -151,23 +151,34 @@ function blankQuestion() {
 // Questions in the order applicants see them: sections in order, ungrouped last
 const displayOrder = computed(() => groupedQuestions.value.flatMap((g) => g.questions))
 
-// What a question can depend on: choice or text questions that come before it on the form, plus any it already uses
-const conditionSources = computed(() => {
-  if (!editing.value || formId) return []
-  let earlier
-  if (isNew.value) {
-    const groups = groupedQuestions.value
-    const upTo = groups.findIndex((g) => g.id === addingToGroupId.value)
-    earlier = groups.slice(0, upTo === -1 ? groups.length : upTo + 1).flatMap((g) => g.questions)
-  } else {
-    const idx = displayOrder.value.findIndex((q) => q.id === editing.value.id)
-    earlier = displayOrder.value.slice(0, Math.max(idx, 0))
+// Questions that will come before this one once it's saved: everything above it, or, when it's new or moving to
+// another section, everything up to the end of that section (where it lands)
+const earlierQuestions = computed(() => {
+  if (!editing.value) return []
+  const original = questions.value.find((q) => q.id === editing.value.id)
+  const sectionId = editing.value.sectionId || null
+  if (original && (original.sectionId ?? null) === sectionId) {
+    const idx = displayOrder.value.findIndex((q) => q.id === original.id)
+    return displayOrder.value.slice(0, Math.max(idx, 0))
   }
-  const used = new Set(editing.value.conditions.map((c) => c.sourceQuestionId))
-  return questions.value.filter((q) =>
-    q.id !== editing.value.id &&
-    [...CHOICE_TYPES, ...TEXT_TYPES].includes(q.type) &&
-    (earlier.some((e) => e.id === q.id) || used.has(q.id)))
+  const groups = groupedQuestions.value
+  const upTo = groups.findIndex((g) => g.id === sectionId)
+  return groups.slice(0, upTo === -1 ? groups.length : upTo + 1).flatMap((g) => g.questions)
+    .filter((q) => q.id !== editing.value.id)
+})
+
+// What a question can depend on: choice or text questions that come before it. Never a later one (the API refuses
+// those, and drops existing ones when questions are reordered).
+const conditionSources = computed(() => {
+  if (formId) return []
+  const earlier = new Set(earlierQuestions.value.map((q) => q.id))
+  return questions.value.filter((q) => earlier.has(q.id) && [...CHOICE_TYPES, ...TEXT_TYPES].includes(q.type))
+})
+
+// Conditions in the editor that would point at a later question (e.g. after changing the section above)
+const laterConditionCount = computed(() => {
+  const allowed = new Set(conditionSources.value.map((q) => q.id))
+  return (editing.value?.conditions ?? []).filter((c) => c.sourceQuestionId && !allowed.has(c.sourceQuestionId)).length
 })
 
 const questionById = computed(() => Object.fromEntries(questions.value.map((q) => [q.id, q])))
@@ -854,6 +865,10 @@ function globalIndex(q) {
                       />
                       <v-btn icon="mdi-close" variant="text" size="small" class="mt-2" title="Remove" @click="editing.conditions.splice(i, 1)" />
                     </div>
+                    <p v-if="laterConditionCount" class="text-xs font-medium text-danger-dark">
+                      {{ laterConditionCount }} condition{{ laterConditionCount === 1 ? ' uses a question' : 's use questions' }}
+                      that would come after this one. Remove {{ laterConditionCount === 1 ? 'it' : 'them' }} or keep this question in its section.
+                    </p>
                     <p v-if="conditionSources.length === 0" class="text-xs font-medium text-warning-dark">
                       There are no earlier choice or text questions to depend on.
                     </p>

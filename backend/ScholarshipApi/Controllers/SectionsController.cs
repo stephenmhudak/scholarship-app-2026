@@ -16,7 +16,7 @@ public class SectionsController(QueryFactory db) : ControllerBase
     {
         var sections = await db.Query("Sections")
             .Where("CycleId", cycleId)
-            .OrderBy("Order")
+            .OrderBy("Order", "Id")
             .GetAsync<Section>();
         return Ok(sections);
     }
