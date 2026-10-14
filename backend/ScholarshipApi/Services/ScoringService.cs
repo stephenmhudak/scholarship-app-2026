@@ -31,6 +31,8 @@ public class ScoringService(QueryFactory db, IApplicationService applicationServ
         var sectionsPerCycle = (await db.Query("Sections")
             .SelectRaw("CycleId, COUNT(*) as Total")
             .WhereIn("CycleId", cycleIds)
+            // Scholarship eligibility and scholarship sections are shown to scorers but not scored
+            .WhereNull("Kind").WhereNull("ScholarshipId")
             .GroupBy("CycleId")
             .GetAsync<CycleSectionCountRow>())
             .ToDictionary(r => r.CycleId, r => r.Total);
@@ -94,7 +96,8 @@ public class ScoringService(QueryFactory db, IApplicationService applicationServ
 
         // Cycles with sections are scored per section; cycles without get one overall score (no section).
         // Each submitted reference gets its own score.
-        var sectionIds = (await db.Query("Sections").Where("CycleId", app.CycleId).Select("Id").GetAsync<string>()).ToHashSet();
+        var sectionIds = (await db.Query("Sections").Where("CycleId", app.CycleId).WhereNull("Kind").WhereNull("ScholarshipId")
+            .Select("Id").GetAsync<string>()).ToHashSet();
         var referenceIds = (await db.Query("ReferenceRequests").Where("ApplicationId", applicationId).Where("Status", "submitted")
             .Select("Id").GetAsync<string>()).ToHashSet();
         foreach (var s in sectionScores)

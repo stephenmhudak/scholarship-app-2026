@@ -21,10 +21,14 @@ const applicantName = computed(() => {
   return `${app.applicantFirstName ?? ''} ${app.applicantLastName ?? ''}`.trim()
 })
 
+// Scholarship eligibility and scholarship sections are shown for context but not scored (the API doesn't count them)
+const isScholarshipSection = (s) => !!(s.kind || s.scholarshipId)
+const scoredSections = computed(() => (scoringStore.sections ?? []).filter((s) => !isScholarshipSection(s)))
+
 // What gets a score: each section (or one overall score when the cycle has none), then each submitted reference
 const formSections = computed(() => {
-  const application = scoringStore.sections?.length
-    ? scoringStore.sections.map((s) => ({ key: s.id, id: s.id, label: s.title }))
+  const application = scoredSections.value.length
+    ? scoredSections.value.map((s) => ({ key: s.id, id: s.id, label: s.title }))
     : [{ key: 'overall', id: null, label: 'Overall Score' }]
   const references = scoringStore.references.map((r) => ({
     key: `reference:${r.id}`,
@@ -34,6 +38,12 @@ const formSections = computed(() => {
     reference: r,
   }))
   return [...application, ...references]
+})
+
+// Answers in scholarship sections, read-only (sections with no answers, e.g. a scholarship they weren't eligible for, are left out)
+const scholarshipAnswerGroups = computed(() => {
+  const scholarshipIds = new Set((scoringStore.sections ?? []).filter(isScholarshipSection).map((s) => s.id))
+  return answersGroupedBySections.value.filter((g) => g.sectionId && scholarshipIds.has(g.sectionId))
 })
 
 // Section labels are only worth showing when there's more than one thing to score
@@ -151,6 +161,17 @@ async function handleSave() {
 
     <template v-if="!loading && scoringStore.currentApplication">
       <div class="space-y-8">
+        <div v-for="group in scholarshipAnswerGroups" :key="group.sectionId" class="space-y-3">
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">{{ group.title }} · not scored</p>
+          <v-card class="pa-5 space-y-4">
+            <div v-for="answer in group.answers" :key="answer.questionId">
+              <p class="eyebrow mb-1.5">{{ answer.questionText }}</p>
+              <RichTextAnswer v-if="answer.richText" :html="answer.textValue" />
+              <p v-else class="text-sm text-navy whitespace-pre-wrap">{{ answer.display }}</p>
+            </div>
+          </v-card>
+        </div>
+
         <div v-for="section in sectionsData" :key="section.key" class="space-y-3">
           <p v-if="showLabels" class="text-xs font-bold text-slate-400 uppercase tracking-widest">
             <template v-if="section.reference">Reference · </template>{{ section.label }}

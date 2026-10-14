@@ -17,15 +17,22 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
 
     // Without referenceFormId: the application's questions, for anyone signed in. With it: that reference form's
     // questions, for admins building the form only; referees get them through their code (/api/reference-links).
+    // With scholarshipId and part (eligibility | details): one scholarship's eligibility or own questions, for the builder.
     [HttpGet]
-    public async Task<IActionResult> List(string cycleId, [FromQuery] string? referenceFormId)
+    public async Task<IActionResult> List(string cycleId, [FromQuery] string? referenceFormId,
+        [FromQuery] string? scholarshipId, [FromQuery] string? part)
     {
         if (referenceFormId is not null && !(await authorization.AuthorizeAsync(User, "AppAdmin")).Succeeded)
             return Forbid();
 
+        var scholarshipSectionId = scholarshipId is not null && part == "details"
+            ? await db.Query("Sections").Where("ScholarshipId", scholarshipId).Select("Id").FirstOrDefaultAsync<string>() ?? ""
+            : null;
         var questions = await db.Query("Questions")
             .Where("CycleId", cycleId)
             .When(referenceFormId is null, q => q.WhereNull("ReferenceFormId"), q => q.Where("ReferenceFormId", referenceFormId))
+            .When(scholarshipId is not null && part == "eligibility", q => q.Where("ScholarshipId", scholarshipId))
+            .When(scholarshipSectionId is not null, q => q.Where("SectionId", scholarshipSectionId))
             // Ties broken by id, as QuestionOrder.Positions does, so the form and the "comes before" rule agree
             .OrderBy("Order", "Id")
             .GetAsync<Question>();
@@ -37,6 +44,7 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
             ? await db.Query("QuestionOptions").WhereIn("QuestionId", questionIds).OrderBy("Order").GetAsync<QuestionOption>()
             : [];
         var conditions = await QuestionVisibility.LoadConditionsAsync(db, questionIds);
+        var gates = await QuestionVisibility.LoadGatesAsync(db, questionList);
 
         var result = questionList.Select(q => new
         {
@@ -57,6 +65,19 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
             q.Visibility,
             q.ConditionMatch,
             Conditions = conditions[q.Id].Select(c => new { c.SourceQuestionId, c.OptionId, c.SchoolId, c.TextContains }),
+            q.ScholarshipId,
+            // In a conditional scholarship's section: also only shown while the applicant is eligible for it
+            Gate = gates.TryGetValue(q.Id, out var gate)
+                ? new
+                {
+                    gate.ScholarshipId,
+                    gate.Match,
+                    Conditions = gate.Conditions.Select(c => new
+                    {
+                        SourceQuestionId = c.QuestionId, c.OptionId, c.SchoolId, c.TextContains,
+                    }),
+                }
+                : null,
         });
 
         return Ok(result);
@@ -64,9 +85,29 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
 
     [HttpPost]
     [Authorize(Policy = "AppAdmin")]
-    public async Task<IActionResult> Create(string cycleId, [FromBody] QuestionRequest request, [FromQuery] string? referenceFormId)
+    public async Task<IActionResult> Create(string cycleId, [FromBody] QuestionRequest request, [FromQuery] string? referenceFormId,
+        [FromQuery] string? scholarshipId, [FromQuery] string? part)
     {
         if (!await db.Query("ScholarshipCycles").Where("Id", cycleId).ExistsAsync()) throw new KeyNotFoundException("Cycle not found.");
+
+        // A scholarship's questions go in its sections: eligibility ones in the shared eligibility section (tagged
+        // with the scholarship), its own in its section (shown only to eligible applicants)
+        string? eligibilityFor = null;
+        if (scholarshipId is not null)
+        {
+            var scholarship = await db.Query("Scholarships").Where("Id", scholarshipId).Where("CycleId", cycleId)
+                .FirstOrDefaultAsync<Scholarship>() ?? throw new KeyNotFoundException("Scholarship not found.");
+            if (part == "eligibility")
+            {
+                request.SectionId = await ScholarshipSections.EnsureEligibilitySectionAsync(db, cycleId);
+                eligibilityFor = scholarship.Id;
+            }
+            else if (part == "details")
+            {
+                request.SectionId = await ScholarshipSections.EnsureScholarshipSectionAsync(db, scholarship);
+            }
+            else throw new ArgumentException("Choose eligibility or scholarship questions.");
+        }
         if (referenceFormId is not null
             && !await db.Query("ReferenceForms").Where("Id", referenceFormId).Where("CycleId", cycleId).ExistsAsync())
             throw new KeyNotFoundException("Reference form not found.");
@@ -87,6 +128,7 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
             request.IsRequired,
             request.SectionId,
             ReferenceFormId = referenceFormId,
+            ScholarshipId = eligibilityFor,
             request.Description,
             ValidationRules = request.ValidationRules != null
                 ? JsonSerializer.Serialize(request.ValidationRules, JsonOptions)

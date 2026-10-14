@@ -188,7 +188,7 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
     public async Task<IActionResult> Me()
     {
         var user = await authService.GetCurrentUserAsync(UserId);
-        var permissions = await authService.GetPermissionsForRoleAsync(user.Role);
+        var permissions = await authService.GetPermissionsForUserAsync(user);
         return Ok(new { user.Id, user.Email, user.FirstName, user.LastName, user.Role, user.SchoolId, Permissions = permissions });
     }
 }

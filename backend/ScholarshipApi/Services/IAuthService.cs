@@ -17,6 +17,7 @@ public interface IAuthService
     Task<User> GetCurrentUserAsync(string userId);
     Task<InviteInfoResponse> GetInviteAsync(string token);
     Task<IEnumerable<string>> GetPermissionsForRoleAsync(string roleName);
+    Task<IEnumerable<string>> GetPermissionsForUserAsync(User user);
     Task<string> IssueTokenAsync(string userId);
     Task SendPasswordSetupEmailAsync(string userId);
     Task<AuthResponse> ImpersonateAsync(string superAdminId, string targetUserId);
