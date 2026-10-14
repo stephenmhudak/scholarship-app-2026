@@ -99,7 +99,7 @@ backend/ScholarshipApi/
 
 ## Auth & Roles
 
-**Roles:** `super_admin` (every permission, incl. future ones via `GetPermissionsForRoleAsync`; passes every admin check through `AppRoles.IsAdmin`; can impersonate), `applicant`, `scorer`, `app_admin`, `school_admin` (principals: managing their school plus everything a counselor can do, incl. the counselor dashboard), `counselor`, `referee` (self-registers via `/register?as=referee`; `submit_references` permission, which counselors and school admins also have)
+**Roles:** `super_admin` (every permission, incl. future ones via `GetPermissionsForRoleAsync`; passes every admin check through `AppRoles.IsAdmin`; can impersonate), `applicant`, `scorer`, `app_admin`, `school_admin` (principals: managing their school plus everything a counselor can do, incl. the counselor dashboard), `counselor`, `referee` (shown as **Reference Provider** everywhere on screen, via `utils/roleLabels.js`; never say "referee" in UI text; self-registers via `/register?as=reference-provider`; `submit_references` permission, which counselors and school admins also have)
 
 - Token: `localStorage.auth_token` — Axios interceptor attaches it; 401 clears + redirects `/login`
 - Frontend: `meta.requiredRole` / `meta.anyRole` in `router/index.js`

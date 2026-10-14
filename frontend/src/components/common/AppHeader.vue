@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { roleHome } from '../../utils/roleHome'
+import { roleLabel } from '../../utils/roleLabels'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -49,8 +50,8 @@ async function endImpersonation() {
         </v-avatar>
         <div class="text-sm leading-tight hidden sm:block">
           <p class="font-semibold text-navy">{{ displayName }}</p>
-          <p v-if="authStore.role" class="text-slate-400 text-xs capitalize">
-            {{ authStore.role?.replace('_', ' ') }}
+          <p v-if="authStore.role" class="text-slate-400 text-xs">
+            {{ roleLabel(authStore.role) }}
           </p>
         </div>
       </div>

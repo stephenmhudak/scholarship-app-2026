@@ -116,7 +116,7 @@ async function resend() {
     </p>
     <p class="text-sm text-center text-slate-400 -mt-3">
       Writing a reference?
-      <RouterLink to="/register?as=referee" class="text-primary font-semibold hover:underline">Create a referee account</RouterLink>
+      <RouterLink to="/register?as=reference-provider" class="text-primary font-semibold hover:underline">Create a Reference Provider account</RouterLink>
     </p>
   </div>
 </template>
