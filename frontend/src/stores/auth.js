@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import api from '../services/api'
+import { userFromAuth, writeAuth, saveReturnSession, clearReturnSession, restoreReturnSession } from '../utils/authStorage'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -103,12 +104,22 @@ export const useAuthStore = defineStore('auth', {
     // the super admin's data.
     async startImpersonation(userId) {
       const response = await api.post(`/admin/users/${userId}/impersonate`)
+      saveReturnSession(response.data.returnSession)
       this._applyAuthResponse(response.data)
     },
 
+    // Back to the super admin. Asks the API first (fresh session, logged); if that fails, falls back to the session
+    // kept when the impersonation started, so they return to their account rather than being signed out.
+    // Resolves to false only when neither works.
     async endImpersonation() {
-      const response = await api.post('/auth/end-impersonation')
-      this._applyAuthResponse(response.data)
+      try {
+        const response = await api.post('/auth/end-impersonation')
+        clearReturnSession()
+        this._applyAuthResponse(response.data)
+        return true
+      } catch {
+        return restoreReturnSession()
+      }
     },
 
     logout() {
@@ -118,6 +129,7 @@ export const useAuthStore = defineStore('auth', {
       this.permissions = []
       this.impersonatorName = null
       localStorage.removeItem('impersonator_name')
+      clearReturnSession()
       localStorage.removeItem('auth_token')
       localStorage.removeItem('auth_role')
       localStorage.removeItem('auth_user')
@@ -159,22 +171,9 @@ export const useAuthStore = defineStore('auth', {
       this.token = data.token
       this.role = data.role
       this.permissions = data.permissions ?? []
-      this.user = {
-        id: data.userId,
-        email: data.email,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        role: data.role,
-        schoolId: data.schoolId ?? null,
-        twoFactorEnabled: !!data.twoFactorEnabled,
-      }
-      localStorage.setItem('auth_token', data.token)
-      localStorage.setItem('auth_role', data.role)
-      localStorage.setItem('auth_user', JSON.stringify(this.user))
-      localStorage.setItem('auth_permissions', JSON.stringify(this.permissions))
+      this.user = userFromAuth(data)
       this.impersonatorName = data.impersonatorName ?? null
-      if (this.impersonatorName) localStorage.setItem('impersonator_name', this.impersonatorName)
-      else localStorage.removeItem('impersonator_name')
+      writeAuth(data)
     },
   },
 })

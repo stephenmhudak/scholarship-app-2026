@@ -13,4 +13,9 @@ public class AuthResponse
     public bool TwoFactorEnabled { get; set; }
     /// <summary>Set while a super admin is impersonating this user: the super admin's name, for the "end" button.</summary>
     public string? ImpersonatorName { get; set; }
+    /// <summary>
+    /// Only when an impersonation starts: a fresh session for the super admin, which the browser keeps so it can always
+    /// return them to their own account, even if the impersonated session is rejected (expired, or reset).
+    /// </summary>
+    public AuthResponse? ReturnSession { get; set; }
 }
