@@ -1,6 +1,3 @@
-using System.Net;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using SqlKata.Execution;
 using ScholarshipApi.Models;
 
@@ -10,7 +7,7 @@ namespace ScholarshipApi.Services;
 /// Which of a cycle's reference forms an application needs, based on its saved answers. A form is required when its
 /// <c>Requirement</c> is <c>always</c>, or when it's <c>conditional</c> and any one of its conditions matches.
 /// </summary>
-public static partial class ReferenceRequirements
+public static class ReferenceRequirements
 {
     public record FormRequirement(ReferenceForm Form, bool Required);
 
@@ -44,23 +41,7 @@ public static partial class ReferenceRequirements
             .ToList();
     }
 
-    private static bool Matches(ReferenceFormCondition condition, Dictionary<string, ApplicationAnswer> answers)
-    {
-        if (!answers.TryGetValue(condition.QuestionId, out var answer)) return false;
-
-        if (condition.OptionId is not null)
-        {
-            if (answer.TextValue == condition.OptionId) return true;
-            return answer.SelectedOptions is not null
-                && (JsonSerializer.Deserialize<List<string>>(answer.SelectedOptions) ?? []).Contains(condition.OptionId);
-        }
-
-        if (string.IsNullOrWhiteSpace(condition.TextContains) || string.IsNullOrEmpty(answer.TextValue)) return false;
-        // Rich text answers are HTML; match the visible text
-        var text = WebUtility.HtmlDecode(Tags().Replace(answer.TextValue, " "));
-        return text.Contains(condition.TextContains.Trim(), StringComparison.OrdinalIgnoreCase);
-    }
-
-    [GeneratedRegex("<[^>]*>")]
-    private static partial Regex Tags();
+    private static bool Matches(ReferenceFormCondition condition, Dictionary<string, ApplicationAnswer> answers) =>
+        answers.TryGetValue(condition.QuestionId, out var answer)
+        && AnswerConditions.Matches(condition.OptionId, condition.TextContains, AnswerValue.From(answer));
 }

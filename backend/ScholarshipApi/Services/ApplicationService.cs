@@ -107,9 +107,18 @@ public class ApplicationService(QueryFactory db, ApplicationAccess access) : IAp
         var richTextQuestionIds = questions.Where(QuestionRules.IsRichText).Select(q => q.Id).ToHashSet();
         var fileQuestionIds = questions.Where(q => q.Type == "file_upload").Select(q => q.Id).ToHashSet();
 
+        // Keep answers to this cycle's questions that the applicant can see. A conditional question hidden by their
+        // other answers loses its answer, so it can't count toward anything (references, scoring) later.
+        var answers = request.Answers.Where(a => questionIds.Contains(a.QuestionId))
+            .GroupBy(a => a.QuestionId).Select(g => g.First()).ToList();
+        var conditions = await QuestionVisibility.LoadConditionsAsync(db, questionIds);
+        var visible = QuestionVisibility.VisibleIds(questions, conditions,
+            answers.ToDictionary(a => a.QuestionId, AnswerValue.From));
+        answers = answers.Where(a => visible.Contains(a.QuestionId)).ToList();
+
         // A file answer grants access to the file (see ApplicationAccess), so it may only name the
         // applicant's own uploads: from this application, or one they copied answers from.
-        var fileIds = request.Answers
+        var fileIds = answers
             .Where(a => fileQuestionIds.Contains(a.QuestionId) && !string.IsNullOrEmpty(a.TextValue))
             .Select(a => a.TextValue!).Distinct().ToList();
         if (fileIds.Count > 0)
@@ -125,7 +134,7 @@ public class ApplicationService(QueryFactory db, ApplicationAccess access) : IAp
 
         await db.Query("ApplicationAnswers").Where("ApplicationId", id).DeleteAsync();
 
-        foreach (var answer in request.Answers.Where(a => questionIds.Contains(a.QuestionId)))
+        foreach (var answer in answers)
         {
             await db.Query("ApplicationAnswers").InsertAsync(new
             {
@@ -150,6 +159,8 @@ public class ApplicationService(QueryFactory db, ApplicationAccess access) : IAp
         if (app.ApplicantId != applicantId) throw new UnauthorizedAccessException("Access denied.");
         if (app.Status != "draft") throw new ArgumentException("Only draft applications can be submitted.");
         await EnsureCycleOpenAsync(app.CycleId);
+
+        await EnsureVisibleQuestionsAnsweredAsync(app);
 
         var missing = await ReferenceRequirements.MissingAsync(db, id, app.CycleId);
         if (missing.Count > 0)
@@ -295,6 +306,28 @@ public class ApplicationService(QueryFactory db, ApplicationAccess access) : IAp
 
     private static string Normalize(string text) =>
         string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
+
+    // Only what the applicant could see counts: answers left on questions their other answers now hide are removed
+    // (e.g. after copying answers), and every required question that's shown needs an answer.
+    private async Task EnsureVisibleQuestionsAnsweredAsync(Application app)
+    {
+        var questions = (await db.Query("Questions").Where("CycleId", app.CycleId).WhereNull("ReferenceFormId")
+            .OrderBy("Order").GetAsync<Question>()).ToList();
+        var conditions = await QuestionVisibility.LoadConditionsAsync(db, questions.Select(q => q.Id));
+        var saved = (await db.Query("ApplicationAnswers").Where("ApplicationId", app.Id).GetAsync<ApplicationAnswer>()).ToList();
+        var visible = QuestionVisibility.VisibleIds(questions, conditions,
+            saved.GroupBy(a => a.QuestionId).ToDictionary(g => g.Key, g => AnswerValue.From(g.First())));
+
+        var hidden = saved.Where(a => !visible.Contains(a.QuestionId)).Select(a => a.Id).ToList();
+        if (hidden.Count > 0) await db.Query("ApplicationAnswers").WhereIn("Id", hidden).DeleteAsync();
+
+        var answered = saved.Where(a => visible.Contains(a.QuestionId) && HasValue(a)).Select(a => a.QuestionId).ToHashSet();
+        var unanswered = questions.Where(q => q.IsRequired && visible.Contains(q.Id) && !answered.Contains(q.Id))
+            .Select(q => q.Text.Length <= 60 ? q.Text : q.Text[..57] + "…").ToList();
+        if (unanswered.Count > 0)
+            throw new ArgumentException("Please answer every required question before submitting: "
+                + string.Join("; ", unanswered.Take(5)) + (unanswered.Count > 5 ? $"; and {unanswered.Count - 5} more." : "."));
+    }
 
     private static bool HasValue(ApplicationAnswer a) =>
         !string.IsNullOrWhiteSpace(a.TextValue) || (a.SelectedOptions != null && a.SelectedOptions != "[]");

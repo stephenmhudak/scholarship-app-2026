@@ -47,6 +47,7 @@ const ALL_QUESTION_TYPES = [
 const QUESTION_TYPES = formId ? ALL_QUESTION_TYPES.filter((t) => t.value !== 'school_select') : ALL_QUESTION_TYPES
 
 const TEXT_TYPES = ['short_answer', 'long_answer']
+const CHOICE_TYPES = ['multiple_choice', 'single_choice']
 
 const sectionItems = computed(() => [
   { title: 'No section (ungrouped)', value: '' },
@@ -137,7 +138,57 @@ function blankQuestion() {
     options: [],
     newOption: '',
     validationRules: { numberOnly: false, phoneFormat: false, emailFormat: false, minLength: null, maxLength: null, richText: false },
+    visibility: 'always',
+    conditionMatch: 'any',
+    conditions: [],
   }
+}
+
+// ── Conditional questions (application only) ─────────────────────────────────
+
+// Questions in the order applicants see them: sections in order, ungrouped last
+const displayOrder = computed(() => groupedQuestions.value.flatMap((g) => g.questions))
+
+// What a question can depend on: choice or text questions that come before it on the form, plus any it already uses
+const conditionSources = computed(() => {
+  if (!editing.value || formId) return []
+  let earlier
+  if (isNew.value) {
+    const groups = groupedQuestions.value
+    const upTo = groups.findIndex((g) => g.id === addingToGroupId.value)
+    earlier = groups.slice(0, upTo === -1 ? groups.length : upTo + 1).flatMap((g) => g.questions)
+  } else {
+    const idx = displayOrder.value.findIndex((q) => q.id === editing.value.id)
+    earlier = displayOrder.value.slice(0, Math.max(idx, 0))
+  }
+  const used = new Set(editing.value.conditions.map((c) => c.sourceQuestionId))
+  return questions.value.filter((q) =>
+    q.id !== editing.value.id &&
+    [...CHOICE_TYPES, ...TEXT_TYPES].includes(q.type) &&
+    (earlier.some((e) => e.id === q.id) || used.has(q.id)))
+})
+
+const questionById = computed(() => Object.fromEntries(questions.value.map((q) => [q.id, q])))
+
+function isChoiceSource(sourceQuestionId) {
+  return CHOICE_TYPES.includes(questionById.value[sourceQuestionId]?.type)
+}
+
+function addCondition() {
+  editing.value.conditions.push({ sourceQuestionId: null, optionId: null, textContains: '' })
+}
+
+function conditionText(c) {
+  const source = questionById.value[c.sourceQuestionId]
+  if (!source) return null
+  if (c.optionId) return `"${source.text}" is "${source.options?.find((o) => o.id === c.optionId)?.text ?? '?'}"`
+  return `"${source.text}" contains "${c.textContains}"`
+}
+
+function visibilityText(q) {
+  const parts = (q.conditions ?? []).map(conditionText).filter(Boolean)
+  if (!parts.length) return 'Hidden: the answers it depended on were removed'
+  return `Shown when ${parts.join(q.conditionMatch === 'all' ? ' and ' : ' or ')}`
 }
 
 // A group's questions, plus a placeholder row for the form when adding a question to it.
@@ -179,6 +230,9 @@ function startEdit(q) {
       maxLength: vr.maxLength ?? null,
       richText: vr.richText ?? false,
     },
+    visibility: q.visibility ?? 'always',
+    conditionMatch: q.conditionMatch ?? 'any',
+    conditions: (q.conditions ?? []).map((c) => ({ ...c, textContains: c.textContains ?? '' })),
   }
 }
 
@@ -232,6 +286,15 @@ async function save() {
     sectionId: editing.value.sectionId || null,
     options: hasOptions.value ? editing.value.options : [],
     validationRules,
+    visibility: formId ? 'always' : editing.value.visibility,
+    conditionMatch: editing.value.conditionMatch,
+    conditions: !formId && editing.value.visibility === 'conditional'
+      ? editing.value.conditions.map((c) => ({
+          sourceQuestionId: c.sourceQuestionId,
+          optionId: isChoiceSource(c.sourceQuestionId) ? c.optionId : null,
+          textContains: isChoiceSource(c.sourceQuestionId) ? null : c.textContains,
+        }))
+      : [],
   }
 
   try {
@@ -257,10 +320,11 @@ async function deleteQuestion(q) {
   try {
     await api.delete(`/cycles/${cycleId}/questions/${q.id}`).catch(async (err) => {
       if (err.response?.status !== 409) throw err
-      const { answerCount, conditionCount } = err.response.data
+      const { answerCount, conditionCount, dependentCount } = err.response.data
       const consequences = []
       if (answerCount) consequences.push(`deletes ${answerCount} answer(s) to it`)
       if (conditionCount) consequences.push(`removes ${conditionCount} reference condition(s) that use it`)
+      if (dependentCount) consequences.push(`removes ${dependentCount} condition(s) that show other questions, which may leave them hidden`)
       if (!await confirm({
         title: 'Delete question',
         text: `Deleting this question also ${consequences.join(' and ')}.`,
@@ -583,6 +647,66 @@ function globalIndex(q) {
                 </p>
               </div>
 
+              <!-- When the question is shown (application questions only) -->
+              <template v-if="!formId">
+                <v-divider />
+                <div class="space-y-3">
+                  <p class="text-sm font-bold text-navy">Show this question</p>
+                  <v-radio-group v-model="editing.visibility" hide-details>
+                    <v-radio label="Always" value="always" />
+                    <v-radio label="Only when earlier answers match" value="conditional" />
+                  </v-radio-group>
+
+                  <template v-if="editing.visibility === 'conditional'">
+                    <v-select
+                      v-model="editing.conditionMatch"
+                      :items="[{ title: 'Any of these match', value: 'any' }, { title: 'All of these match', value: 'all' }]"
+                      label="Show when"
+                      hide-details
+                      class="max-w-[16rem]"
+                    />
+                    <div v-for="(c, i) in editing.conditions" :key="i" class="flex items-start gap-2">
+                      <v-select
+                        v-model="c.sourceQuestionId"
+                        :items="conditionSources"
+                        item-title="text"
+                        item-value="id"
+                        label="Question"
+                        hide-details
+                        class="flex-1 min-w-0"
+                        @update:model-value="c.optionId = null; c.textContains = ''"
+                      />
+                      <v-select
+                        v-if="c.sourceQuestionId && isChoiceSource(c.sourceQuestionId)"
+                        v-model="c.optionId"
+                        :items="questionById[c.sourceQuestionId]?.options ?? []"
+                        item-title="text"
+                        item-value="id"
+                        label="Answer is"
+                        hide-details
+                        class="flex-1 min-w-0"
+                      />
+                      <v-text-field
+                        v-else-if="c.sourceQuestionId"
+                        v-model="c.textContains"
+                        label="Answer contains"
+                        hide-details
+                        class="flex-1 min-w-0"
+                      />
+                      <v-btn icon="mdi-close" variant="text" size="small" class="mt-2" title="Remove" @click="editing.conditions.splice(i, 1)" />
+                    </div>
+                    <p v-if="conditionSources.length === 0" class="text-xs font-medium text-warning-dark">
+                      There are no earlier choice or text questions to depend on.
+                    </p>
+                    <v-btn v-else variant="outlined" size="small" prepend-icon="mdi-plus" @click="addCondition">Add condition</v-btn>
+                    <p class="text-xs text-slate-400">
+                      Applicants won't see this question, and it isn't required, until the answers match. If they change
+                      those answers later, it's hidden again and its answer is discarded.
+                    </p>
+                  </template>
+                </div>
+              </template>
+
               <!-- Validation rules -->
               <template v-if="showValidationRules">
                 <v-divider />
@@ -656,11 +780,13 @@ function globalIndex(q) {
               <div class="flex items-center gap-2 mt-1.5 flex-wrap">
                 <v-chip color="primary" class="font-semibold">{{ typLabel(q.type) }}</v-chip>
                 <v-chip v-if="isRichText(q)" color="primary" class="font-semibold">Rich Text</v-chip>
+                <v-chip v-if="q.visibility === 'conditional'" color="warning" class="font-semibold">Conditional</v-chip>
                 <span v-if="q.isRequired" class="text-xs text-danger font-semibold">Required</span>
                 <span v-if="q.options?.length" class="text-xs text-slate-400">
                   {{ q.options.length }} option{{ q.options.length !== 1 ? 's' : '' }}
                 </span>
               </div>
+              <p v-if="q.visibility === 'conditional'" class="text-xs text-navy mt-1.5">{{ visibilityText(q) }}</p>
               <div v-if="q.options?.length" class="mt-2 flex flex-wrap gap-1.5">
                 <v-chip v-for="opt in q.options" :key="opt.id" variant="outlined" rounded="lg">
                   {{ opt.text }}

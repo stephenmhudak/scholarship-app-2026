@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import api from '../../services/api'
 import { useApplicationStore } from '../../stores/application'
 import { validateForm } from '../../utils/validate'
+import { visibleQuestionIds } from '../../utils/questionVisibility'
 import QuestionRenderer from '../../components/application/QuestionRenderer.vue'
 import ApplicationProgress from '../../components/application/ApplicationProgress.vue'
 import NoApplicationCard from '../../components/application/NoApplicationCard.vue'
@@ -61,16 +62,23 @@ onMounted(async () => {
   }
 })
 
+// Conditional questions only appear once the answers they depend on match, and disappear again if those answers
+// change. Hidden questions aren't validated, and the server drops their answers when the draft is saved.
+const visibleQuestions = computed(() => {
+  const visible = visibleQuestionIds(appStore.questions, (id) => appStore.answers[id])
+  return appStore.questions.filter((q) => visible.has(q.id))
+})
+
 // Group questions by section, preserving section order.
 // Questions with no sectionId go into an implicit "Other" group at the end.
 const groupedSections = computed(() => {
   const orderedSections = [...sections.value].sort((a, b) => a.order - b.order)
   const groups = orderedSections.map((s) => ({
     ...s,
-    questions: appStore.questions.filter((q) => q.sectionId === s.id),
+    questions: visibleQuestions.value.filter((q) => q.sectionId === s.id),
   })).filter((g) => g.questions.length > 0)
 
-  const ungrouped = appStore.questions.filter((q) => !q.sectionId)
+  const ungrouped = visibleQuestions.value.filter((q) => !q.sectionId)
   if (ungrouped.length > 0) {
     groups.push({ id: null, title: null, description: null, questions: ungrouped })
   }
@@ -79,7 +87,7 @@ const groupedSections = computed(() => {
 })
 
 const answeredCount = computed(() =>
-  appStore.questions.filter((q) => {
+  visibleQuestions.value.filter((q) => {
     const v = appStore.answers[q.id]
     return v != null && v !== '' && !(Array.isArray(v) && v.length === 0)
   }).length
@@ -139,7 +147,7 @@ function sourceLabel(a) {
 
 async function submit() {
   // Run validation
-  const errors = validateForm(appStore.questions, appStore.answers)
+  const errors = validateForm(visibleQuestions.value, appStore.answers)
   validationErrors.value = errors
 
   if (Object.keys(errors).length > 0) {
@@ -181,7 +189,7 @@ async function submit() {
     <NoApplicationCard v-else-if="noApplication" />
 
     <template v-else>
-      <ApplicationProgress :answered="answeredCount" :total="appStore.questions.length" />
+      <ApplicationProgress :answered="answeredCount" :total="visibleQuestions.length" />
 
       <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 

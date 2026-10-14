@@ -166,7 +166,7 @@ backend/ScholarshipApi/
 
 **Sections:** Id, CycleId, Title, Description, Order
 
-**Questions:** Id, CycleId, SectionId (nullable), Text, Type, Order, IsRequired, ValidationRules (JSON)
+**Questions:** Id, CycleId, SectionId (nullable), Text, Type, Order, IsRequired, ValidationRules (JSON), Visibility (`always`/`conditional`), ConditionMatch (`any`/`all`)
 - Types: `short_answer`, `long_answer`, `multiple_choice`, `single_choice`, `file_upload`, `school_select`, `date`
 - ValidationRules: `{ numberOnly, phoneFormat, emailFormat, minLength, maxLength, richText }`
 - `richText` (long_answer only, check with `isRichText()` in `utils/richText.js`): Tiptap editor, answer stored as HTML — sanitized on save by `RichTextSanitizer` and again on render by `RichTextAnswer` (DOMPurify); keep their tag allow-lists in sync
@@ -202,4 +202,5 @@ backend/ScholarshipApi/
 - **Multiple open cycles** — a cycle is open when `IsActive` and today is within Open/CloseDate, through the end of the close day (`CycleWindow`). One application per applicant per cycle. Save/submit/copy reject closed cycles.
 - **Copying answers** between cycles only fills unanswered questions whose text, type, rich text flag, and option texts match; choice answers are remapped by option text.
 - **Counselors are scoped to SchoolId** — set at creation, no UI to change. Filter lists by school.
+- **Conditional questions:** an application question with `Visibility = 'conditional'` is only shown when any/all of its **QuestionConditions** (SourceQuestionId + OptionId for choice, or TextContains for text) match, and a condition only counts while its source question is itself shown. The same rule runs in `QuestionVisibility` (server) and `utils/questionVisibility.js` (form, status and admin views); keep them in sync. Saving a draft drops answers to hidden questions; submitting removes any left over and requires every shown required question. Saving rejects self-references and loops. Removing a source question or option removes its conditions, leaving a conditional question with none hidden. `AnswerConditions` is shared with reference-form conditions.
 - **Sections are optional** — `SectionId = null` = ungrouped. Form groups them at the end.
