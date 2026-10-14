@@ -18,4 +18,7 @@ public interface IAuthService
     Task<InviteInfoResponse> GetInviteAsync(string token);
     Task<IEnumerable<string>> GetPermissionsForRoleAsync(string roleName);
     Task<string> IssueTokenAsync(string userId);
+    Task SendPasswordSetupEmailAsync(string userId);
+    Task<PasswordSetupInfoResponse> GetPasswordSetupAsync(string? token);
+    Task<LoginResult> SetupPasswordAsync(PasswordSetupRequest request);
 }

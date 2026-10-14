@@ -11,7 +11,7 @@ namespace ScholarshipApi.Controllers;
 [ApiController]
 [Route("api/admin")]
 [Authorize(Policy = "AppAdmin")]
-public class AdminController(IApplicationService applicationService, ITwoFactorService twoFactorService, QueryFactory db) : ControllerBase
+public class AdminController(IApplicationService applicationService, ITwoFactorService twoFactorService, IAuthService authService, QueryFactory db) : ControllerBase
 {
     private const int MaxPageSize = 100;
 
@@ -162,6 +162,8 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
             .Select("u.Id", "u.Email", "u.FirstName", "u.LastName", "u.Role", "u.SchoolId",
                     "s.Name as SchoolName", "u.CreatedAt")
             .SelectRaw("u.TwoFactorMethod IS NOT NULL AS TwoFactorEnabled")
+            .SelectRaw("u.PasswordHash = '' AS InvitePending")
+            .Select("u.ScoringScope")
             .OrderBy("u.LastName", "u.FirstName")
             .GetAsync<dynamic>();
         return Ok(users);
@@ -171,10 +173,12 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
     public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request)
     {
         var email = InputValidation.Email(request.Email);
-        InputValidation.Password(request.Password);
         var firstName = InputValidation.Required(request.FirstName, "First name", 100);
         var lastName = InputValidation.Required(request.LastName, "Last name", 100);
         var role = InputValidation.Role(request.Role);
+        // Counselors are invited by email to create their own password; everyone else gets one from the admin
+        var invite = role == "counselor";
+        if (!invite) InputValidation.Password(request.Password);
 
         // School staff belong to a school; nobody else does
         string? schoolId = null;
@@ -194,15 +198,105 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
         {
             Id = id,
             Email = email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            PasswordHash = invite ? "" : BCrypt.Net.BCrypt.HashPassword(request.Password),
             FirstName = firstName,
             LastName = lastName,
             Role = role,
             SchoolId = schoolId,
-            EmailVerifiedAt = DateTime.UtcNow,
+            // Invited users verify their email by using the setup link
+            EmailVerifiedAt = invite ? (DateTime?)null : DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
         });
-        return CreatedAtAction(nameof(ListUsers), new { }, new { id });
+        var emailSent = true;
+        if (invite)
+        {
+            try { await authService.SendPasswordSetupEmailAsync(id); }
+            catch (ArgumentException) { emailSent = false; }
+        }
+        return CreatedAtAction(nameof(ListUsers), new { }, new { id, emailSent });
+    }
+
+    // ── Scorer scope: which applications a scorer can see and score ──────────
+
+    [HttpGet("users/{id}/scoring-scope")]
+    public async Task<IActionResult> GetScoringScope(string id)
+    {
+        var scorer = await GetScorerAsync(id);
+        var filters = await db.Query("ScorerFilters as f")
+            .Join("Questions as q", "q.Id", "f.QuestionId")
+            .Join("ScholarshipCycles as c", "c.Id", "q.CycleId")
+            .LeftJoin("QuestionOptions as o", "o.Id", "f.OptionId")
+            .Where("f.ScorerId", id)
+            .OrderBy("c.Name", "q.Order")
+            .Select("f.QuestionId", "f.OptionId", "f.TextContains", "q.CycleId", "q.Text as QuestionText",
+                    "c.Name as CycleName", "o.Text as OptionText")
+            .GetAsync<dynamic>();
+        return Ok(new { scope = scorer.ScoringScope, filters });
+    }
+
+    [HttpPut("users/{id}/scoring-scope")]
+    public async Task<IActionResult> UpdateScoringScope(string id, [FromBody] ScoringScopeRequest request)
+    {
+        await GetScorerAsync(id);
+        if (request.Scope is not ("all" or "filtered")) throw new ArgumentException("Choose which applications this scorer sees.");
+        var filters = request.Scope == "filtered" ? request.Filters ?? [] : [];
+        if (request.Scope == "filtered" && filters.Count == 0)
+            throw new ArgumentException("Add at least one answer to limit this scorer to, or let them see all applications.");
+
+        foreach (var filter in filters)
+        {
+            var question = await db.Query("Questions").Where("Id", filter.QuestionId ?? "").WhereNull("ReferenceFormId")
+                .FirstOrDefaultAsync<Question>()
+                ?? throw new ArgumentException("A filter uses a question that isn't on an application.");
+            if (question.Type is "single_choice" or "multiple_choice")
+            {
+                if (!await db.Query("QuestionOptions").Where("Id", filter.OptionId ?? "").Where("QuestionId", question.Id).ExistsAsync())
+                    throw new ArgumentException($"Choose an answer for \"{question.Text}\".");
+                filter.TextContains = null;
+            }
+            else if (question.Type is "short_answer" or "long_answer")
+            {
+                filter.TextContains = InputValidation.Required(filter.TextContains, "Text to look for", 255);
+                filter.OptionId = null;
+            }
+            else
+            {
+                throw new ArgumentException("Filters can only use choice or text questions.");
+            }
+        }
+
+        if (db.Connection.State != System.Data.ConnectionState.Open) db.Connection.Open();
+        using var transaction = db.Connection.BeginTransaction();
+        await db.Query("Users").Where("Id", id).UpdateAsync(new { ScoringScope = request.Scope }, transaction);
+        await db.Query("ScorerFilters").Where("ScorerId", id).DeleteAsync(transaction);
+        foreach (var filter in filters)
+        {
+            await db.Query("ScorerFilters").InsertAsync(new
+            {
+                Id = Guid.NewGuid().ToString(),
+                ScorerId = id,
+                filter.QuestionId,
+                filter.OptionId,
+                filter.TextContains,
+            }, transaction);
+        }
+        transaction.Commit();
+        return NoContent();
+    }
+
+    private async Task<User> GetScorerAsync(string id)
+    {
+        var user = await db.Query("Users").Where("Id", id).FirstOrDefaultAsync<User>()
+            ?? throw new KeyNotFoundException("User not found.");
+        if (user.Role != "scorer") throw new ArgumentException("Only scorers can be limited to certain applications.");
+        return user;
+    }
+
+    [HttpPost("users/{id}/resend-invite")]
+    public async Task<IActionResult> ResendInvite(string id)
+    {
+        await authService.SendPasswordSetupEmailAsync(id);
+        return NoContent();
     }
 
     [HttpPost("users/{id}/reset-password")]
@@ -350,9 +444,27 @@ public class CreateUserRequest
     public string FirstName { get; set; } = null!;
     public string LastName { get; set; } = null!;
     public string Email { get; set; } = null!;
-    public string Password { get; set; } = null!;
+    /// <summary>Not used for counselors, who are emailed a link to create their own.</summary>
+    public string? Password { get; set; }
     public string Role { get; set; } = null!;
     public string? SchoolId { get; set; }
+}
+
+public class ScoringScopeRequest
+{
+    /// <summary><c>all</c>, or <c>filtered</c>: only applications matching any of <see cref="Filters"/>.</summary>
+    public string? Scope { get; set; }
+    public List<ScorerFilterRequest>? Filters { get; set; }
+}
+
+public class ScorerFilterRequest
+{
+    /// <summary>An application question (any cycle).</summary>
+    public string? QuestionId { get; set; }
+    /// <summary>For choice questions: applications where this option was chosen.</summary>
+    public string? OptionId { get; set; }
+    /// <summary>For text questions: applications whose answer contains this text (ignoring case).</summary>
+    public string? TextContains { get; set; }
 }
 
 public class ResetPasswordRequest { public string NewPassword { get; set; } = null!; }

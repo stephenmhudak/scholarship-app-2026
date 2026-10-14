@@ -83,6 +83,20 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
         return Ok(result.Body);
     }
 
+    // Invited counselors create their password from the emailed link; until then the account can't sign in
+    [HttpPost("setup-password/check")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
+    public async Task<IActionResult> CheckPasswordSetup([FromBody] PasswordSetupCheckRequest request) =>
+        Ok(await authService.GetPasswordSetupAsync(request.Token));
+
+    [HttpPost("setup-password")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
+    public async Task<IActionResult> SetupPassword([FromBody] PasswordSetupRequest request)
+    {
+        var result = await authService.SetupPasswordAsync(request);
+        return Ok(result.Body);
+    }
+
     [HttpPost("change-password")]
     [Authorize]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)

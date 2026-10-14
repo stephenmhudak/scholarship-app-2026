@@ -10,7 +10,7 @@ namespace ScholarshipApi.Controllers;
 [ApiController]
 [Route("api/schools")]
 [Authorize]
-public class SchoolsController(QueryFactory db, ITwoFactorService twoFactorService) : ControllerBase
+public class SchoolsController(QueryFactory db, ITwoFactorService twoFactorService, IAuthService authService) : ControllerBase
 {
     private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)
         ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)!;
@@ -100,6 +100,8 @@ public class SchoolsController(QueryFactory db, ITwoFactorService twoFactorServi
             .Where("SchoolId", id)
             .Select("Id", "FirstName", "LastName", "Email", "CreatedAt")
             .SelectRaw("TwoFactorMethod IS NOT NULL AS TwoFactorEnabled")
+            // Invited but hasn't created a password from the emailed link yet
+            .SelectRaw("PasswordHash = '' AS InvitePending")
             .OrderBy("LastName")
             .GetAsync<dynamic>();
         return Ok(counselors);
@@ -116,7 +118,6 @@ public class SchoolsController(QueryFactory db, ITwoFactorService twoFactorServi
         if (!schoolExists) throw new KeyNotFoundException("School not found.");
 
         var email = InputValidation.Email(request.Email);
-        InputValidation.Password(request.Password);
         var firstName = InputValidation.Required(request.FirstName, "First name", 100);
         var lastName = InputValidation.Required(request.LastName, "Last name", 100);
 
@@ -128,16 +129,40 @@ public class SchoolsController(QueryFactory db, ITwoFactorService twoFactorServi
         {
             Id = counselorId,
             Email = email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            // No password: they create one from the emailed link, and can't sign in until they do.
+            // Using the link also verifies their email.
+            PasswordHash = "",
             FirstName = firstName,
             LastName = lastName,
             Role = "counselor",
             SchoolId = id,
-            EmailVerifiedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
         });
 
-        return Ok(new { id = counselorId, firstName, lastName, email });
+        // The counselor is added either way; if the email fails, the school admin can resend it
+        var emailSent = true;
+        try { await authService.SendPasswordSetupEmailAsync(counselorId); }
+        catch (ArgumentException) { emailSent = false; }
+
+        return Ok(new { id = counselorId, firstName, lastName, email, emailSent });
+    }
+
+    [HttpPost("{id}/counselors/{counselorId}/resend-invite")]
+    [Authorize(Policy = "SchoolAdmin")]
+    public async Task<IActionResult> ResendCounselorInvite(string id, string counselorId)
+    {
+        var guard = EnforceSchoolOwnership(id);
+        if (guard != null) return guard;
+
+        var exists = await db.Query("Users")
+            .Where("Id", counselorId)
+            .Where("SchoolId", id)
+            .Where("Role", "counselor")
+            .ExistsAsync();
+        if (!exists) throw new KeyNotFoundException("Counselor not found.");
+
+        await authService.SendPasswordSetupEmailAsync(counselorId);
+        return NoContent();
     }
 
     [HttpDelete("{id}/counselors/{counselorId}")]
@@ -166,12 +191,15 @@ public class SchoolsController(QueryFactory db, ITwoFactorService twoFactorServi
         if (guard != null) return guard;
         InputValidation.Password(request.NewPassword);
 
-        var exists = await db.Query("Users")
+        var counselor = await db.Query("Users")
             .Where("Id", counselorId)
             .Where("SchoolId", id)
             .Where("Role", "counselor")
-            .ExistsAsync();
-        if (!exists) throw new KeyNotFoundException("Counselor not found.");
+            .FirstOrDefaultAsync<User>()
+            ?? throw new KeyNotFoundException("Counselor not found.");
+        // Counselors choose their own first password
+        if (!AuthService.HasPassword(counselor))
+            throw new ArgumentException("This counselor hasn't created their password yet. Resend their invitation instead.");
 
         await db.Query("Users").Where("Id", counselorId).UpdateAsync(new
         {
@@ -215,7 +243,6 @@ public class AddCounselorRequest
     public string FirstName { get; set; } = null!;
     public string LastName { get; set; } = null!;
     public string Email { get; set; } = null!;
-    public string Password { get; set; } = null!;
 }
 
 public class ResetCounselorPasswordRequest

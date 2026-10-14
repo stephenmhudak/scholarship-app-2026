@@ -45,6 +45,12 @@ export const useAuthStore = defineStore('auth', {
       await api.post('/auth/forgot-password', { email })
     },
 
+    // From an invitation link: creates the first password and signs in (or returns a 2FA challenge)
+    async setupPassword({ token, newPassword }) {
+      const response = await api.post('/auth/setup-password', { token, newPassword })
+      return this._applySignInResponse(response.data)
+    },
+
     async resetPassword({ email, code, newPassword }) {
       const response = await api.post('/auth/reset-password', { email, code, newPassword })
       return this._applySignInResponse(response.data)

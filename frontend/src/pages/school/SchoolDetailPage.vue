@@ -72,23 +72,39 @@ async function saveSchool() {
 // ── Add counselor ─────────────────────────────────────────────────────────────
 const showAddCounselor = ref(false)
 const addCounselorLoading = ref(false)
-const addCounselorForm = ref({ firstName: '', lastName: '', email: '', password: '' })
+const addCounselorForm = ref({ firstName: '', lastName: '', email: '' })
 
+async function loadCounselors() {
+  const res = await api.get(`/schools/${schoolId}/counselors`)
+  counselors.value = res.data
+}
+
+// The counselor gets an email to create their own password; they can't sign in until they do
 async function submitAddCounselor() {
-  if (!addCounselorForm.value.firstName || !addCounselorForm.value.lastName ||
-      !addCounselorForm.value.email || !addCounselorForm.value.password) return
+  const f = addCounselorForm.value
+  if (!f.firstName || !f.lastName || !f.email) return
 
   addCounselorLoading.value = true
   try {
-    const res = await api.post(`/schools/${schoolId}/counselors`, addCounselorForm.value)
-    counselors.value.push(res.data)
+    const { data } = await api.post(`/schools/${schoolId}/counselors`, f)
     showAddCounselor.value = false
-    addCounselorForm.value = { firstName: '', lastName: '', email: '', password: '' }
-    showAlert('success', 'Counselor added.')
+    addCounselorForm.value = { firstName: '', lastName: '', email: '' }
+    await loadCounselors()
+    if (data.emailSent) showAlert('success', `Counselor added. We emailed ${data.email} a link to create their password.`)
+    else showAlert('warning', `Counselor added, but the invitation email couldn't be sent. Use Resend Invite to try again.`)
   } catch (err) {
     showAlert('error', err.response?.data?.error || 'Failed to add counselor.')
   } finally {
     addCounselorLoading.value = false
+  }
+}
+
+async function resendInvite(counselor) {
+  try {
+    await api.post(`/schools/${schoolId}/counselors/${counselor.Id}/resend-invite`)
+    showAlert('success', `Invitation sent to ${counselor.Email}.`)
+  } catch (err) {
+    showAlert('error', err.response?.data?.error || 'Failed to resend the invitation.')
   }
 }
 
@@ -206,7 +222,11 @@ async function submitResetPassword() {
               <v-divider v-if="i > 0" />
               <v-list-item class="px-0" :title="`${c.FirstName} ${c.LastName}`" :subtitle="c.Email">
                 <template #append>
-                  <v-btn variant="text" color="primary" size="small" @click="openResetPassword(c)">Reset Password</v-btn>
+                  <template v-if="c.InvitePending">
+                    <v-chip color="warning" class="mr-2">Invite pending</v-chip>
+                    <v-btn variant="text" color="primary" size="small" @click="resendInvite(c)">Resend Invite</v-btn>
+                  </template>
+                  <v-btn v-else variant="text" color="primary" size="small" @click="openResetPassword(c)">Reset Password</v-btn>
                   <v-btn v-if="c.TwoFactorEnabled" variant="text" color="error" size="small" @click="resetCounselorTwoFactor(c)">Reset 2FA</v-btn>
                   <v-btn variant="text" color="error" size="small" @click="removeCounselor(c)">Remove</v-btn>
                 </template>
@@ -256,10 +276,12 @@ async function submitResetPassword() {
             <v-text-field v-model="addCounselorForm.lastName" label="Last Name" required hide-details="auto" />
           </div>
           <v-text-field v-model="addCounselorForm.email" type="email" label="Email" required hide-details="auto" />
-          <v-text-field v-model="addCounselorForm.password" type="password" label="Password" required hide-details="auto" />
+          <p class="text-sm text-slate-400">
+            We'll email them a link to create their own password. They can't sign in until they do.
+          </p>
           <div class="flex justify-end gap-2 pt-2">
             <v-btn variant="text" @click="showAddCounselor = false">Cancel</v-btn>
-            <v-btn type="submit" color="primary" :loading="addCounselorLoading">Add Counselor</v-btn>
+            <v-btn type="submit" color="primary" :loading="addCounselorLoading">Add and Send Invite</v-btn>
           </div>
         </v-form>
       </v-card-text>

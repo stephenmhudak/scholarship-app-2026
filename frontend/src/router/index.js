@@ -157,6 +157,13 @@ const routes = [
     meta: { permission: 'submit_references' },
   },
   {
+    // Invitation emails for counselors: create the first password
+    path: '/setup-password',
+    name: 'SetupPassword',
+    component: () => import('../pages/auth/SetupPasswordPage.vue'),
+    meta: { layout: 'auth', public: true },
+  },
+  {
     path: '/reference-start',
     name: 'ReferenceStart',
     component: () => import('../pages/reference/ReferenceStartPage.vue'),

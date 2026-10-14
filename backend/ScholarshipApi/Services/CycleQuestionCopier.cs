@@ -113,6 +113,24 @@ public static class CycleQuestionCopier
             }, transaction);
         }
 
+        // Scorers limited to answers on the old cycle's questions get the same limits on the new cycle's questions,
+        // so they keep seeing (only) the same kind of application
+        var scorerFilters = await db.Query("ScorerFilters").WhereIn("QuestionId", questionIdMap.Keys)
+            .GetAsync<ScorerFilter>(transaction);
+        foreach (var filter in scorerFilters)
+        {
+            string? optionId = null;
+            if (filter.OptionId != null && !optionIdMap.TryGetValue(filter.OptionId, out optionId)) continue;
+            await db.Query("ScorerFilters").InsertAsync(new
+            {
+                Id = Guid.NewGuid().ToString(),
+                filter.ScorerId,
+                QuestionId = questionIdMap[filter.QuestionId],
+                OptionId = optionId,
+                filter.TextContains,
+            }, transaction);
+        }
+
         if (formIdMap.Count == 0) return;
         var conditions = await db.Query("ReferenceFormConditions").WhereIn("FormId", formIdMap.Keys)
             .GetAsync<ReferenceFormCondition>(transaction);
