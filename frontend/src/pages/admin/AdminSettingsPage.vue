@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import ScorerScopeDialog from '../../components/admin/ScorerScopeDialog.vue'
+import { useAuthStore } from '../../stores/auth'
+import { roleHome } from '../../utils/roleHome'
 import api from '../../services/api'
 import { useConfirm } from '../../composables/useConfirm'
 
@@ -16,14 +18,20 @@ function showAlert(type, message) {
 }
 
 // ── Users ────────────────────────────────────────────────────────────────────
-const ROLES = [
+const ALL_ROLES = [
   { title: 'Applicant', value: 'applicant' },
   { title: 'Scorer', value: 'scorer' },
   { title: 'App Admin', value: 'app_admin' },
   { title: 'School Admin', value: 'school_admin' },
   { title: 'Counselor', value: 'counselor' },
   { title: 'Referee', value: 'referee' },
+  { title: 'Super Admin', value: 'super_admin' },
 ]
+
+const authStore = useAuthStore()
+const isSuperAdmin = computed(() => authStore.role === 'super_admin')
+// Only super admins can create super admins (the API enforces it too)
+const ROLES = computed(() => ALL_ROLES.filter((r) => r.value !== 'super_admin' || isSuperAdmin.value))
 
 const userHeaders = [
   { title: 'Name', key: 'name', value: (u) => `${u.FirstName} ${u.LastName}` },
@@ -93,6 +101,24 @@ async function submitAddUser() {
     showAlert('error', err.response?.data?.error || 'Failed to create user.')
   } finally {
     addUserLoading.value = false
+  }
+}
+
+// Super admins can see the app exactly as another user does; a full reload so nothing of theirs stays on screen
+const impersonating = ref(null)
+async function impersonate(user) {
+  if (!await confirm({
+    title: 'Impersonate user',
+    text: `You'll see and use the app exactly as ${user.FirstName} ${user.LastName} (${user.Email}) until you choose End impersonation. Anything you do is done as them.`,
+    confirmText: 'Impersonate',
+  })) return
+  impersonating.value = user.Id
+  try {
+    await authStore.startImpersonation(user.Id)
+    window.location.assign(roleHome(authStore.role, authStore.user?.schoolId))
+  } catch (err) {
+    showAlert('error', err.response?.data?.error || 'Failed to impersonate this user.')
+    impersonating.value = null
   }
 }
 
@@ -325,6 +351,17 @@ onMounted(() => { loadUsers(); loadSchools() })
             <span v-else class="text-slate-400">—</span>
           </template>
           <template #item.actions="{ item }">
+            <v-btn
+              v-if="isSuperAdmin && item.Role !== 'super_admin' && item.Id !== authStore.user?.id"
+              variant="text"
+              color="warning"
+              size="small"
+              prepend-icon="mdi-incognito"
+              :loading="impersonating === item.Id"
+              @click="impersonate(item)"
+            >
+              Impersonate
+            </v-btn>
             <template v-if="item.Role === 'scorer'">
               <v-chip v-if="item.ScoringScope === 'filtered'" color="primary" class="mr-1">Limited</v-chip>
               <v-btn variant="text" color="primary" size="small" @click="openScope(item)">Scoring Access</v-btn>

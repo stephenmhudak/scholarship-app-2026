@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { roleHome } from '../utils/roleHome'
 import { useAuthStore } from '../stores/auth'
 
 const Forbidden = {
@@ -190,30 +191,21 @@ const routes = [
     path: '/',
     redirect: () => {
       const role = localStorage.getItem('auth_role')
-      return roleHome(role)
+      return storedRoleHome(role)
     },
   },
   {
     path: '/:pathMatch(.*)*',
     redirect: () => {
       const role = localStorage.getItem('auth_role')
-      return roleHome(role)
+      return storedRoleHome(role)
     },
   },
 ]
 
-function roleHome(role) {
-  switch (role) {
-    case 'scorer': return '/scoring'
-    case 'app_admin': return '/admin/applications'
-    case 'school_admin': {
-      const user = JSON.parse(localStorage.getItem('auth_user') || 'null')
-      return user?.schoolId ? `/schools/${user.schoolId}` : '/schools'
-    }
-    case 'counselor': return '/counselor'
-    case 'referee': return '/references'
-    default: return '/dashboard'
-  }
+function storedRoleHome(role) {
+  const user = JSON.parse(localStorage.getItem('auth_user') || 'null')
+  return roleHome(role, user?.schoolId)
 }
 
 const router = createRouter({

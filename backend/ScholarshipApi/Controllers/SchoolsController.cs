@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using SqlKata.Execution;
+using ScholarshipApi.Authorization;
 using ScholarshipApi.Models;
 using ScholarshipApi.Services;
 
@@ -21,7 +22,7 @@ public class SchoolsController(QueryFactory db, ITwoFactorService twoFactorServi
     // App admins see every school; everyone else (school admins, counselors, scorers) only their own.
     private IActionResult? EnforceSchoolOwnership(string schoolId)
     {
-        if (!User.IsInRole("app_admin") && UserSchoolId != schoolId)
+        if (!AppRoles.IsAdmin(User.FindFirstValue(ClaimTypes.Role)) && UserSchoolId != schoolId)
             return Forbid();
         return null;
     }
