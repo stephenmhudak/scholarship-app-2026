@@ -37,12 +37,13 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
 
-  # Published on the server's loopback only, so it's reachable from the server itself or through an SSH tunnel,
-  # never directly from the network. To expose it on one machine, use a gitignored docker-compose.override.yml.
+  # Published on all of the host's interfaces so admins can connect from other computers. Anyone who can reach the
+  # host on 3306 can try to log in: keep a strong password in secrets/mysql.env and limit 3306 to trusted IPs with a
+  # firewall (on Linux, Docker-published ports bypass ufw; restrict them in the DOCKER-USER iptables chain instead).
   mysql:
     image: mysql:8.0
     ports:
-      - "127.0.0.1:3306:3306"
+      - "3306:3306"
     env_file:
       - path: ./secrets/mysql.env
     volumes:
