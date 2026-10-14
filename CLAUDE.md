@@ -99,7 +99,7 @@ backend/ScholarshipApi/
 
 ## Auth & Roles
 
-**Roles:** `applicant`, `scorer`, `app_admin`, `school_admin`, `counselor`, `referee` (self-registers via `/register?as=referee`; `submit_references` permission, which counselors and school admins also have)
+**Roles:** `applicant`, `scorer`, `app_admin`, `school_admin` (principals: managing their school plus everything a counselor can do, incl. the counselor dashboard), `counselor`, `referee` (self-registers via `/register?as=referee`; `submit_references` permission, which counselors and school admins also have)
 
 - Token: `localStorage.auth_token` — Axios interceptor attaches it; 401 clears + redirects `/login`
 - Frontend: `meta.requiredRole` / `meta.anyRole` in `router/index.js`
