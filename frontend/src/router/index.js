@@ -118,6 +118,13 @@ const routes = [
     meta: { permission: 'view_scoring_overview' },
   },
   {
+    // The question builder, for one reference form's questions
+    path: '/admin/cycles/:cycleId/references/:formId',
+    name: 'ReferenceFormQuestions',
+    component: () => import('../pages/admin/CycleQuestionsPage.vue'),
+    meta: { permission: 'admin_scholarship' },
+  },
+  {
     path: '/admin/cycles/:cycleId/questions',
     name: 'CycleQuestions',
     component: () => import('../pages/admin/CycleQuestionsPage.vue'),
@@ -142,10 +149,30 @@ const routes = [
     meta: { permission: 'view_counselor_dashboard' },
   },
   {
-    path: '/reference',
-    name: 'ReferenceUpload',
-    component: () => import('../pages/reference/ReferenceUploadPage.vue'),
+    // Reference links the applicant shares: /r/ + 10-character code. Needs a referee, counselor or school admin
+    // account; anyone else is sent to /reference-start (see the guard below).
+    path: '/r/:code',
+    name: 'ReferenceForm',
+    component: () => import('../pages/reference/ReferenceFormPage.vue'),
+    meta: { permission: 'submit_references' },
+  },
+  {
+    path: '/reference-start',
+    name: 'ReferenceStart',
+    component: () => import('../pages/reference/ReferenceStartPage.vue'),
     meta: { layout: 'auth', public: true },
+  },
+  {
+    path: '/references',
+    name: 'MyReferences',
+    component: () => import('../pages/reference/MyReferencesPage.vue'),
+    meta: { permission: 'submit_references' },
+  },
+  {
+    path: '/references/:id',
+    name: 'MyReference',
+    component: () => import('../pages/reference/MyReferenceDetailPage.vue'),
+    meta: { permission: 'submit_references' },
   },
   {
     path: '/403',
@@ -177,6 +204,7 @@ function roleHome(role) {
       return user?.schoolId ? `/schools/${user.schoolId}` : '/schools'
     }
     case 'counselor': return '/counselor'
+    case 'referee': return '/references'
     default: return '/dashboard'
   }
 }
@@ -190,6 +218,10 @@ router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore()
 
   if (to.meta.public) return next()
+
+  // Reference links explain what kind of account is needed (and remember the code) instead of a bare login or 403
+  if (to.name === 'ReferenceForm' && !(authStore.isAuthenticated && authStore.hasPermission('submit_references')))
+    return next({ path: '/reference-start', query: { code: to.params.code } })
 
   if (!authStore.isAuthenticated) return next('/login')
 

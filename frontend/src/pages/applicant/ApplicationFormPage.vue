@@ -7,6 +7,7 @@ import { validateForm } from '../../utils/validate'
 import QuestionRenderer from '../../components/application/QuestionRenderer.vue'
 import ApplicationProgress from '../../components/application/ApplicationProgress.vue'
 import NoApplicationCard from '../../components/application/NoApplicationCard.vue'
+import ApplicationReferences from '../../components/application/ApplicationReferences.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,6 +29,8 @@ const validationErrors = ref({})
 
 // Sections loaded alongside questions
 const sections = ref([])
+// Which references are needed depends on saved answers, so this refreshes after each save
+const referencesPanel = ref(null)
 
 onMounted(async () => {
   try {
@@ -95,6 +98,7 @@ async function saveDraft() {
   alert.value = null
   try {
     await appStore.saveDraft(appId)
+    referencesPanel.value?.refresh()
     alert.value = { type: 'success', message: 'Draft saved.' }
   } catch {
     alert.value = { type: 'error', message: 'Failed to save draft.' }
@@ -147,11 +151,12 @@ async function submit() {
   alert.value = null
   try {
     await appStore.saveDraft(appId)
+    referencesPanel.value?.refresh()
     await appStore.submitApplication(appId)
     alert.value = { type: 'success', message: 'Application submitted!' }
     setTimeout(() => router.push(`/application/${appId}/status`), 1500)
-  } catch {
-    alert.value = { type: 'error', message: 'Failed to submit application.' }
+  } catch (err) {
+    alert.value = { type: 'error', message: err.response?.data?.error || 'Failed to submit application.' }
   } finally {
     submitting.value = false
   }
@@ -224,6 +229,12 @@ async function submit() {
           />
         </div>
       </template>
+
+      <ApplicationReferences
+        v-if="appStore.currentApplication"
+        ref="referencesPanel"
+        :applicationId="appStore.currentApplication.id"
+      />
 
       <v-divider />
       <div class="flex items-center gap-3">

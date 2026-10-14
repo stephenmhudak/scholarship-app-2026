@@ -21,6 +21,7 @@ const ROLES = [
   { title: 'App Admin', value: 'app_admin' },
   { title: 'School Admin', value: 'school_admin' },
   { title: 'Counselor', value: 'counselor' },
+  { title: 'Referee', value: 'referee' },
 ]
 
 const userHeaders = [

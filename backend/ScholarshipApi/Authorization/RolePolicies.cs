@@ -11,5 +11,6 @@ public static class RolePolicies
         options.AddPolicy("SchoolAdmin",   p => p.RequireClaim("permission", "manage_school"));
         options.AddPolicy("Staff",         p => p.RequireClaim("permission", "view_school_data"));
         options.AddPolicy("Counselor",     p => p.RequireClaim("permission", "view_counselor_dashboard"));
+        options.AddPolicy("Referee",       p => p.RequireClaim("permission", "submit_references"));
     }
 }

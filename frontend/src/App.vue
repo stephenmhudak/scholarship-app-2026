@@ -6,7 +6,8 @@ import AuthLayout from './layouts/AuthLayout.vue'
 import ConfirmDialog from './components/common/ConfirmDialog.vue'
 
 const route = useRoute()
-const layout = computed(() => route.meta.layout === 'auth' ? AuthLayout : DefaultLayout)
+const layouts = { auth: AuthLayout }
+const layout = computed(() => layouts[route.meta.layout] ?? DefaultLayout)
 </script>
 
 <template>

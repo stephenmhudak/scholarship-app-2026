@@ -5,7 +5,9 @@ import { MAX_FILE_SIZE } from '../../utils/fileUpload'
 
 const props = defineProps({
   question: { type: Object, required: true },
-  applicationId: { type: String, required: true },
+  applicationId: { type: String, default: null },
+  // Where to send the file instead of /files/upload (reference links); the response is { fileId } either way
+  uploadUrl: { type: String, default: null },
   modelValue: { type: String, default: null },
   error: { type: String, default: null },
 })
@@ -27,6 +29,8 @@ watch(() => props.modelValue, async (fileId) => {
   }
   if (fileId === uploadedId.value) return
   uploadedId.value = fileId
+  // Reference uploads have no info endpoint; their answers are only ever set by an upload here
+  if (props.uploadUrl) return
   try {
     const { data } = await api.get(`/files/${fileId}/info`)
     if (uploadedId.value === fileId) uploadedName.value = data.fileName
@@ -48,9 +52,9 @@ async function onChange(value) {
   try {
     const formData = new FormData()
     formData.append('file', selected)
-    formData.append('applicationId', props.applicationId)
+    if (!props.uploadUrl) formData.append('applicationId', props.applicationId)
     formData.append('questionId', props.question.id)
-    const response = await api.post('/files/upload', formData, {
+    const response = await api.post(props.uploadUrl ?? '/files/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
     uploadedName.value = selected.name

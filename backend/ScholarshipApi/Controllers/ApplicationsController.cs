@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ScholarshipApi.DTOs.Application;
+using ScholarshipApi.DTOs.Reference;
 using ScholarshipApi.Services;
 
 namespace ScholarshipApi.Controllers;
@@ -74,19 +75,22 @@ public class ApplicationsController(IApplicationService applicationService, IRef
     public async Task<IActionResult> CopyAnswers(string id, [FromBody] CopyAnswersRequest request) =>
         Ok(await applicationService.CopyAnswersAsync(id, request.SourceApplicationId, UserId));
 
+    // Which references the application needs and the links made for them. Status only: answers go to scorers.
     [HttpGet("{id}/references")]
-    public async Task<IActionResult> GetReferences(string id)
-    {
-        var refs = await referenceService.ListForApplicationAsync(id, UserId, UserRole);
-        return Ok(refs);
-    }
+    public async Task<IActionResult> GetReferences(string id) =>
+        Ok(await referenceService.ListForApplicationAsync(id, UserId, UserRole));
 
     [HttpPost("{id}/references")]
     [Authorize(Policy = "Applicant")]
-    public async Task<IActionResult> CreateReference(string id, [FromBody] CreateReferenceRequest request)
+    public async Task<IActionResult> CreateReference(string id, [FromBody] CreateReferenceRequestBody request) =>
+        Ok(await referenceService.CreateRequestAsync(id, UserId, request));
+
+    [HttpDelete("{id}/references/{requestId}")]
+    [Authorize(Policy = "Applicant")]
+    public async Task<IActionResult> DeleteReference(string id, string requestId)
     {
-        var result = await referenceService.CreateAsync(id, UserId, request.Label);
-        return Ok(result);
+        await referenceService.DeleteRequestAsync(id, UserId, requestId);
+        return NoContent();
     }
 }
 
@@ -99,9 +103,4 @@ public class CreateApplicationRequest
 public class CopyAnswersRequest
 {
     public string SourceApplicationId { get; set; } = null!;
-}
-
-public class CreateReferenceRequest
-{
-    public string? Label { get; set; }
 }

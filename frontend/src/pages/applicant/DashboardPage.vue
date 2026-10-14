@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
+import ApplicationReferences from '../../components/application/ApplicationReferences.vue'
 import api from '../../services/api'
 
 const authStore = useAuthStore()
@@ -10,7 +11,6 @@ const route = useRoute()
 
 const openCycles = ref([])
 const applications = ref([])
-const references = ref([])
 const loading = ref(true)
 const error = ref(null)
 // NewApplicationPage redirects here with ?error= when an application can't be started.
@@ -39,13 +39,6 @@ onMounted(async () => {
     ])
     openCycles.value = cyclesRes.data
     applications.value = appsRes.data
-
-    const refLists = await Promise.all(
-      openApplications.value.map((a) =>
-        api.get(`/applications/${a.id}/references`).then((res) => res.data.map((r) => ({ ...r, cycleName: a.cycleName })))
-      )
-    )
-    references.value = refLists.flat()
   } catch {
     error.value = 'Failed to load dashboard data.'
   } finally {
@@ -147,33 +140,14 @@ onMounted(async () => {
         </v-card-text>
       </v-card>
 
-      <!-- References Card -->
-      <v-card title="Reference Letters">
-        <v-card-text class="pa-6">
-          <p v-if="references.length === 0" class="text-sm text-slate-400">
-            No reference requests yet. Reference requests will appear here after you start your application.
-          </p>
-          <v-list v-else lines="two" class="py-0">
-            <template v-for="(ref, i) in references" :key="ref.id">
-              <v-divider v-if="i > 0" />
-              <v-list-item class="px-0">
-                <v-list-item-title class="text-sm font-semibold text-navy">
-                  {{ ref.label || 'Reference #' + ref.id.slice(0, 8) }}
-                </v-list-item-title>
-                <v-list-item-subtitle>
-                  <template v-if="openApplications.length > 1">{{ ref.cycleName }} · </template>
-                  Expires {{ formatDate(ref.expiresAt) }}
-                </v-list-item-subtitle>
-                <template #append>
-                  <v-chip :color="ref.status === 'received' ? 'success' : 'warning'" class="font-semibold">
-                    {{ ref.status === 'received' ? 'Received' : 'Pending' }}
-                  </v-chip>
-                </template>
-              </v-list-item>
-            </template>
-          </v-list>
-        </v-card-text>
-      </v-card>
+      <!-- References: status for each open application -->
+      <ApplicationReferences
+        v-for="app in openApplications"
+        :key="app.id"
+        :applicationId="app.id"
+        :title="openApplications.length > 1 ? `References — ${app.cycleName}` : 'References'"
+        compact
+      />
     </template>
   </div>
 </template>

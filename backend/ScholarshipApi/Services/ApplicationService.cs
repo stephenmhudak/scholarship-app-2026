@@ -101,9 +101,10 @@ public class ApplicationService(QueryFactory db, ApplicationAccess access) : IAp
         if (app.Status != "draft") throw new ArgumentException("Only draft applications can be edited.");
         await EnsureCycleOpenAsync(app.CycleId);
 
-        var questions = (await db.Query("Questions").Where("CycleId", app.CycleId).GetAsync<Question>()).ToList();
+        var questions = (await db.Query("Questions").Where("CycleId", app.CycleId).WhereNull("ReferenceFormId")
+            .GetAsync<Question>()).ToList();
         var questionIds = questions.Select(q => q.Id).ToHashSet();
-        var richTextQuestionIds = questions.Where(IsRichText).Select(q => q.Id).ToHashSet();
+        var richTextQuestionIds = questions.Where(QuestionRules.IsRichText).Select(q => q.Id).ToHashSet();
         var fileQuestionIds = questions.Where(q => q.Type == "file_upload").Select(q => q.Id).ToHashSet();
 
         // A file answer grants access to the file (see ApplicationAccess), so it may only name the
@@ -149,6 +150,10 @@ public class ApplicationService(QueryFactory db, ApplicationAccess access) : IAp
         if (app.ApplicantId != applicantId) throw new UnauthorizedAccessException("Access denied.");
         if (app.Status != "draft") throw new ArgumentException("Only draft applications can be submitted.");
         await EnsureCycleOpenAsync(app.CycleId);
+
+        var missing = await ReferenceRequirements.MissingAsync(db, id, app.CycleId);
+        if (missing.Count > 0)
+            throw new ArgumentException($"Your references aren't all in yet: {string.Join(", ", missing)}.");
 
         await db.Query("Applications").Where("Id", id).UpdateAsync(new
         {
@@ -263,7 +268,7 @@ public class ApplicationService(QueryFactory db, ApplicationAccess access) : IAp
 
     private async Task<List<MatchableQuestion>> LoadQuestionsAsync(string cycleId)
     {
-        var questions = (await db.Query("Questions").Where("CycleId", cycleId).OrderBy("Order")
+        var questions = (await db.Query("Questions").Where("CycleId", cycleId).WhereNull("ReferenceFormId").OrderBy("Order")
             .GetAsync<Question>()).ToList();
         var options = questions.Count == 0
             ? Enumerable.Empty<QuestionOption>().ToLookup(o => o.QuestionId)
@@ -276,7 +281,7 @@ public class ApplicationService(QueryFactory db, ApplicationAccess access) : IAp
             // Same wording, type, rich text setting and set of options. Help text, required and
             // length/format rules may differ — the applicant can still edit the copied answer.
             var key = string.Join("\u001f",
-                Normalize(q.Text), q.Type, IsRichText(q),
+                Normalize(q.Text), q.Type, QuestionRules.IsRichText(q),
                 string.Join("\u001e", opts.Select(o => Normalize(o.Text)).Order(StringComparer.Ordinal)));
             return new MatchableQuestion(q, opts, key);
         }).ToList();
@@ -293,13 +298,6 @@ public class ApplicationService(QueryFactory db, ApplicationAccess access) : IAp
 
     private static bool HasValue(ApplicationAnswer a) =>
         !string.IsNullOrWhiteSpace(a.TextValue) || (a.SelectedOptions != null && a.SelectedOptions != "[]");
-
-    private static bool IsRichText(Question q)
-    {
-        if (q.Type != "long_answer" || string.IsNullOrEmpty(q.ValidationRules)) return false;
-        using var rules = JsonDocument.Parse(q.ValidationRules);
-        return rules.RootElement.TryGetProperty("richText", out var v) && v.ValueKind == JsonValueKind.True;
-    }
 
     private async Task EnsureCycleOpenAsync(string cycleId)
     {

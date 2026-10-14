@@ -143,6 +143,14 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         var firstName = InputValidation.Required(request.FirstName, "First name", 100);
         var lastName = InputValidation.Required(request.LastName, "Last name", 100);
 
+        // Self-registration only ever makes an applicant or a referee; other roles come from invites or admins
+        var selfRegisteredRole = request.AccountType switch
+        {
+            null or "" or "applicant" => "applicant",
+            "referee" => "referee",
+            _ => throw new ArgumentException("Choose a valid account type."),
+        };
+
         var exists = await db.Query("Users").Where("Email", emailAddress).ExistsAsync();
         if (exists) throw new ArgumentException("Email is already registered.");
 
@@ -152,7 +160,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         if (db.Connection.State != System.Data.ConnectionState.Open) db.Connection.Open();
         using (var transaction = db.Connection.BeginTransaction())
         {
-            string role = "applicant";
+            string role = selfRegisteredRole;
             string? schoolId = null;
 
             if (!string.IsNullOrEmpty(request.InviteToken))

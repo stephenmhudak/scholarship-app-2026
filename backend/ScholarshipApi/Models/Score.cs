@@ -6,6 +6,7 @@ public class Score
     public string ApplicationId { get; set; } = null!;
     public string ScoredById { get; set; } = null!;
     public string? SectionId { get; set; }
+    public string? ReferenceRequestId { get; set; }
     public decimal ScoreValue { get; set; }
     public string? Comments { get; set; }
     public DateTime ScoredAt { get; set; }
