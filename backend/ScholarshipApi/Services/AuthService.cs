@@ -15,6 +15,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
     private static readonly TimeSpan VerificationTokenLifetime = TimeSpan.FromHours(24);
     private static readonly TimeSpan ResendCooldown = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan ResetCodeLifetime = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan PasswordSetupLifetime = TimeSpan.FromDays(7);
     private const int MaxResetCodeAttempts = 5;
     private static readonly TimeSpan TwoFactorChallengeLifetime = TimeSpan.FromMinutes(5);
     private const int MaxChallengeAttempts = 5;
@@ -24,7 +25,8 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
     public async Task<LoginResult> LoginAsync(LoginRequest request)
     {
         var user = await db.Query("Users").Where("Email", request.Email).FirstOrDefaultAsync<User>();
-        if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        // An invited account has no password until its setup link is used (and BCrypt can't verify an empty hash)
+        if (user is null || !HasPassword(user) || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             throw new ArgumentException("Invalid email or password.");
 
         if (user.EmailVerifiedAt is null)
@@ -378,6 +380,8 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         // Receiving the code proves the user owns the address, so any outstanding verification links are no longer needed
         await db.Query("Users").Where("Id", user.Id).WhereNull("EmailVerifiedAt").UpdateAsync(new { EmailVerifiedAt = now });
         await db.Query("EmailVerificationTokens").Where("UserId", user.Id).WhereNull("UsedAt").UpdateAsync(new { UsedAt = now });
+        // A counselor who resets their password instead of using the setup link has set it up just the same
+        await db.Query("PasswordSetupTokens").Where("UserId", user.Id).WhereNull("UsedAt").UpdateAsync(new { UsedAt = now });
 
         await TrySendPasswordChangedEmailAsync(user);
 
@@ -423,6 +427,110 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         {
             logger.LogError(ex, "Failed to send password changed email to user {UserId}", user.Id);
         }
+    }
+
+    // ── Password setup (invited counselors) ──────────────────────────────────
+
+    public static bool HasPassword(User user) => !string.IsNullOrEmpty(user.PasswordHash);
+
+    // Emails a link to create a password. Earlier links stop working. Throws if the email couldn't be sent, so the
+    // person inviting knows to try again.
+    public async Task SendPasswordSetupEmailAsync(string userId)
+    {
+        var user = await GetCurrentUserAsync(userId);
+        if (HasPassword(user)) throw new ArgumentException("This person has already created their password.");
+
+        var recentlySent = await db.Query("PasswordSetupTokens").Where("UserId", user.Id)
+            .Where("CreatedAt", ">", DateTime.UtcNow - ResendCooldown).ExistsAsync();
+        if (recentlySent) throw new ArgumentException("An invitation was just sent. Please wait a minute before sending another.");
+
+        var now = DateTime.UtcNow;
+        await db.Query("PasswordSetupTokens").Where("UserId", user.Id).WhereNull("UsedAt").UpdateAsync(new { UsedAt = now });
+        var token = NewUrlToken();
+        await db.Query("PasswordSetupTokens").InsertAsync(new
+        {
+            Id = Guid.NewGuid().ToString(),
+            UserId = user.Id,
+            TokenHash = HashToken(token),
+            ExpiresAt = now + PasswordSetupLifetime,
+            CreatedAt = now
+        });
+
+        var schoolName = string.IsNullOrEmpty(user.SchoolId)
+            ? null
+            : await db.Query("Schools").Where("Id", user.SchoolId).Select("Name").FirstOrDefaultAsync<string>();
+        var role = user.Role == "counselor" ? "a counselor" : "a user";
+        var where = schoolName is null ? "" : $" for {schoolName}";
+        var baseUrl = (config["App:BaseUrl"] ?? "http://localhost:5173").TrimEnd('/');
+        var link = $"{baseUrl}/setup-password?token={token}";
+
+        var html = $"""
+            <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;color:#2B3674">
+              <h2 style="margin-bottom:8px">Set up your account</h2>
+              <p>Hi {WebUtility.HtmlEncode(user.FirstName)},</p>
+              <p>You've been added as {role}{WebUtility.HtmlEncode(where)} in the Scholarship Portal. Create your password to start using your account.</p>
+              <p style="margin:28px 0">
+                <a href="{link}" style="background:#4361EE;color:#fff;padding:12px 24px;border-radius:12px;text-decoration:none;font-weight:bold">Create your password</a>
+              </p>
+              <p style="font-size:13px;color:#A3AED0">This link expires in 7 days. If it does, ask whoever added you to send a new one.</p>
+            </div>
+            """;
+        var text = $"Hi {user.FirstName},\n\nYou've been added as {role}{where} in the Scholarship Portal. Create your password to start using your account:\n{link}\n\nThis link expires in 7 days. If it does, ask whoever added you to send a new one.";
+
+        try
+        {
+            await email.SendAsync(user.Email, "Set up your Scholarship Portal account", html, text);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to send password setup email to user {UserId}", user.Id);
+            throw new ArgumentException("We couldn't send the invitation email. Please try again shortly.");
+        }
+    }
+
+    public async Task<PasswordSetupInfoResponse> GetPasswordSetupAsync(string? token)
+    {
+        var (_, user) = await FindPasswordSetupAsync(token);
+        return new PasswordSetupInfoResponse { Email = user.Email, FirstName = user.FirstName };
+    }
+
+    public async Task<LoginResult> SetupPasswordAsync(PasswordSetupRequest request)
+    {
+        InputValidation.Password(request.NewPassword);
+        var (tokenId, user) = await FindPasswordSetupAsync(request.Token);
+
+        var claimed = await db.StatementAsync(
+            "UPDATE PasswordSetupTokens SET UsedAt = @Now WHERE Id = @Id AND UsedAt IS NULL",
+            new { Id = tokenId, Now = DateTime.UtcNow });
+        // Only an account with no password yet: the link can't replace a password someone already chose
+        var updated = claimed == 0 ? 0 : await db.StatementAsync(
+            """
+            UPDATE Users SET PasswordHash = @Hash, EmailVerifiedAt = COALESCE(EmailVerifiedAt, @Now)
+            WHERE Id = @Id AND PasswordHash = ''
+            """,
+            new { Id = user.Id, Hash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword), Now = DateTime.UtcNow });
+        if (updated == 0) throw new ArgumentException(PasswordSetupInvalid);
+
+        await db.Query("PasswordSetupTokens").Where("UserId", user.Id).WhereNull("UsedAt").UpdateAsync(new { UsedAt = DateTime.UtcNow });
+        // Receiving the link proves they own the address, so it counts as verifying it
+        return await SignInOrChallengeAsync(await GetCurrentUserAsync(user.Id));
+    }
+
+    private const string PasswordSetupInvalid =
+        "This link is invalid, has expired, or was already used. Ask whoever added you to send a new one, or sign in if you've already created your password.";
+
+    private async Task<(string TokenId, User User)> FindPasswordSetupAsync(string? token)
+    {
+        if (string.IsNullOrWhiteSpace(token)) throw new ArgumentException(PasswordSetupInvalid);
+        var row = await db.Query("PasswordSetupTokens")
+            .Where("TokenHash", HashToken(token))
+            .WhereNull("UsedAt")
+            .Where("ExpiresAt", ">", DateTime.UtcNow)
+            .FirstOrDefaultAsync<dynamic>()
+            ?? throw new ArgumentException(PasswordSetupInvalid);
+        var user = await GetCurrentUserAsync((string)row.UserId);
+        if (HasPassword(user)) throw new ArgumentException(PasswordSetupInvalid);
+        return ((string)row.Id, user);
     }
 
     // Salted with the user id so identical codes for different users don't share a hash

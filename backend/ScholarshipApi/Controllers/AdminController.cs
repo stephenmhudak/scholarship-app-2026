@@ -11,7 +11,7 @@ namespace ScholarshipApi.Controllers;
 [ApiController]
 [Route("api/admin")]
 [Authorize(Policy = "AppAdmin")]
-public class AdminController(IApplicationService applicationService, ITwoFactorService twoFactorService, QueryFactory db) : ControllerBase
+public class AdminController(IApplicationService applicationService, ITwoFactorService twoFactorService, IAuthService authService, QueryFactory db) : ControllerBase
 {
     private const int MaxPageSize = 100;
 
@@ -162,6 +162,7 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
             .Select("u.Id", "u.Email", "u.FirstName", "u.LastName", "u.Role", "u.SchoolId",
                     "s.Name as SchoolName", "u.CreatedAt")
             .SelectRaw("u.TwoFactorMethod IS NOT NULL AS TwoFactorEnabled")
+            .SelectRaw("u.PasswordHash = '' AS InvitePending")
             .OrderBy("u.LastName", "u.FirstName")
             .GetAsync<dynamic>();
         return Ok(users);
@@ -171,10 +172,12 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
     public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request)
     {
         var email = InputValidation.Email(request.Email);
-        InputValidation.Password(request.Password);
         var firstName = InputValidation.Required(request.FirstName, "First name", 100);
         var lastName = InputValidation.Required(request.LastName, "Last name", 100);
         var role = InputValidation.Role(request.Role);
+        // Counselors are invited by email to create their own password; everyone else gets one from the admin
+        var invite = role == "counselor";
+        if (!invite) InputValidation.Password(request.Password);
 
         // School staff belong to a school; nobody else does
         string? schoolId = null;
@@ -194,15 +197,29 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
         {
             Id = id,
             Email = email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            PasswordHash = invite ? "" : BCrypt.Net.BCrypt.HashPassword(request.Password),
             FirstName = firstName,
             LastName = lastName,
             Role = role,
             SchoolId = schoolId,
-            EmailVerifiedAt = DateTime.UtcNow,
+            // Invited users verify their email by using the setup link
+            EmailVerifiedAt = invite ? (DateTime?)null : DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
         });
-        return CreatedAtAction(nameof(ListUsers), new { }, new { id });
+        var emailSent = true;
+        if (invite)
+        {
+            try { await authService.SendPasswordSetupEmailAsync(id); }
+            catch (ArgumentException) { emailSent = false; }
+        }
+        return CreatedAtAction(nameof(ListUsers), new { }, new { id, emailSent });
+    }
+
+    [HttpPost("users/{id}/resend-invite")]
+    public async Task<IActionResult> ResendInvite(string id)
+    {
+        await authService.SendPasswordSetupEmailAsync(id);
+        return NoContent();
     }
 
     [HttpPost("users/{id}/reset-password")]
@@ -350,7 +367,8 @@ public class CreateUserRequest
     public string FirstName { get; set; } = null!;
     public string LastName { get; set; } = null!;
     public string Email { get; set; } = null!;
-    public string Password { get; set; } = null!;
+    /// <summary>Not used for counselors, who are emailed a link to create their own.</summary>
+    public string? Password { get; set; }
     public string Role { get; set; } = null!;
     public string? SchoolId { get; set; }
 }

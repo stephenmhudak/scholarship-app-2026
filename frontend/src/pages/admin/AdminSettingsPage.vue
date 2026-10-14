@@ -69,26 +69,38 @@ async function submitAddUser() {
   if (!f.firstName) addUserErrors.value.firstName = 'Required'
   if (!f.lastName) addUserErrors.value.lastName = 'Required'
   if (!f.email) addUserErrors.value.email = 'Required'
-  if (!f.password) addUserErrors.value.password = 'Required'
+  // Counselors get an email to create their own password instead
+  if (f.role !== 'counselor' && !f.password) addUserErrors.value.password = 'Required'
   if (Object.keys(addUserErrors.value).length) return
 
   addUserLoading.value = true
   try {
-    await api.post('/admin/users', {
+    const { data } = await api.post('/admin/users', {
       firstName: f.firstName,
       lastName: f.lastName,
       email: f.email,
-      password: f.password,
+      password: f.role === 'counselor' ? null : f.password,
       role: f.role,
       schoolId: f.schoolId || null,
     })
     showAddUser.value = false
-    showAlert('success', 'User created.')
+    if (f.role !== 'counselor') showAlert('success', 'User created.')
+    else if (data.emailSent) showAlert('success', `Counselor created. We emailed ${f.email} a link to create their password.`)
+    else showAlert('warning', 'Counselor created, but the invitation email couldn\'t be sent. Use Resend Invite to try again.')
     await loadUsers()
   } catch (err) {
     showAlert('error', err.response?.data?.error || 'Failed to create user.')
   } finally {
     addUserLoading.value = false
+  }
+}
+
+async function resendInvite(user) {
+  try {
+    await api.post(`/admin/users/${user.Id}/resend-invite`)
+    showAlert('success', `Invitation sent to ${user.Email}.`)
+  } catch (err) {
+    showAlert('error', err.response?.data?.error || 'Failed to resend the invitation.')
   }
 }
 
@@ -300,7 +312,11 @@ onMounted(() => { loadUsers(); loadSchools() })
             <span v-else class="text-slate-400">—</span>
           </template>
           <template #item.actions="{ item }">
-            <v-btn variant="text" color="primary" size="small" @click="openResetPassword(item)">Reset Password</v-btn>
+            <template v-if="item.InvitePending">
+              <v-chip color="warning" class="mr-2">Invite pending</v-chip>
+              <v-btn variant="text" color="primary" size="small" @click="resendInvite(item)">Resend Invite</v-btn>
+            </template>
+            <v-btn v-else variant="text" color="primary" size="small" @click="openResetPassword(item)">Reset Password</v-btn>
             <v-btn v-if="item.TwoFactorEnabled" variant="text" color="error" size="small" @click="resetTwoFactor(item)">Reset 2FA</v-btn>
           </template>
         </v-data-table>
@@ -410,9 +426,12 @@ onMounted(() => { loadUsers(); loadSchools() })
             <v-text-field v-model="addUserForm.lastName" label="Last Name" :error-messages="addUserErrors.lastName || []" hide-details="auto" />
           </div>
           <v-text-field v-model="addUserForm.email" type="email" label="Email" :error-messages="addUserErrors.email || []" hide-details="auto" />
-          <v-text-field v-model="addUserForm.password" type="password" label="Password" :error-messages="addUserErrors.password || []" hide-details="auto" />
+          <v-text-field v-if="addUserForm.role !== 'counselor'" v-model="addUserForm.password" type="password" label="Password" :error-messages="addUserErrors.password || []" hide-details="auto" />
 
           <v-select v-model="addUserForm.role" :items="ROLES" label="Role" hide-details />
+          <p v-if="addUserForm.role === 'counselor'" class="text-sm text-slate-400">
+            We'll email them a link to create their own password. They can't sign in until they do.
+          </p>
 
           <v-select
             v-if="addUserForm.role === 'school_admin' || addUserForm.role === 'counselor'"
