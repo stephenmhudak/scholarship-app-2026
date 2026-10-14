@@ -18,10 +18,22 @@ public class ReferenceFormStatusDto
     public string Title { get; set; } = null!;
     public string? Description { get; set; }
     public int RequiredCount { get; set; }
-    /// <summary>False for a form that's no longer required by the saved answers but already has links.</summary>
+    /// <summary>Whether the saved answers require it. The application form works this out live from
+    /// <see cref="Requirement"/> and <see cref="Conditions"/> as the applicant answers.</summary>
     public bool Required { get; set; }
+    /// <summary><c>always</c> or <c>conditional</c> (required when any of <see cref="Conditions"/> matches).</summary>
+    public string Requirement { get; set; } = null!;
+    public List<ReferenceConditionDto> Conditions { get; set; } = [];
     public int Received { get; set; }
     public List<ReferenceRequestDto> Requests { get; set; } = [];
+}
+
+public class ReferenceConditionDto
+{
+    public string QuestionId { get; set; } = null!;
+    public string? OptionId { get; set; }
+    public string? SchoolId { get; set; }
+    public string? TextContains { get; set; }
 }
 
 public class ReferenceRequestDto

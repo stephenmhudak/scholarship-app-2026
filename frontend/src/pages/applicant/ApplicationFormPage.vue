@@ -242,6 +242,9 @@ async function submit() {
         v-if="appStore.currentApplication"
         ref="referencesPanel"
         :applicationId="appStore.currentApplication.id"
+        :questions="appStore.questions"
+        :answers="appStore.answers"
+        :before-create="() => appStore.saveDraft(appStore.currentApplication.id)"
       />
 
       <v-divider />

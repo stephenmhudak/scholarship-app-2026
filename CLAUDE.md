@@ -153,7 +153,7 @@ backend/ScholarshipApi/
 | PATCH | `/api/admin/applications/{id}/status` | app_admin | `{ status }` |
 | POST | `/api/files/upload` | auth | Multipart `file`, `applicationId`, `questionId?` → `{ fileId }` |
 | GET/POST/PUT/DELETE | `/api/cycles/{id}/reference-forms` | app_admin | Reference forms: `{ title, description, requiredCount, requirement: always\|conditional, conditions: [{questionId, optionId?, textContains?}] }`; questions via `/api/cycles/{id}/questions?referenceFormId=` |
-| GET/POST/DELETE | `/api/applications/{id}/references` | applicant (own) / admin | Needed forms + links (status only). POST `{ formId, label? }` → link; DELETE `/{requestId}` (pending only) |
+| GET/POST/DELETE | `/api/applications/{id}/references` | applicant (own) / admin | Every form with its requirement/conditions + links (status only); the form page works out which are required live (`ApplicationReferences` + `answerMatches`), saving the draft before POST. POST `{ formId, label? }` → link; DELETE `/{requestId}` (pending only) |
 | GET | `/api/reference-links/{code}` | Referee policy | Referee's form: applicant name/school, questions, `status` open\|submitted\|closed |
 | POST | `/api/reference-links/{code}/files` · `/submit` | Referee policy | Multipart `file`, `questionId` → `{ fileId }`; submit `{ signerName, signature (JPEG data URL), answers }` |
 | GET | `/api/my-references` · `/{id}` · `/{id}/signature` · `/files/{fileId}` | Referee policy | References the caller submitted (answers, who for; never scores) |

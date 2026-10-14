@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import api from '../../services/api'
 import { useConfirm } from '../../composables/useConfirm'
+import { visibleQuestionIds, answerMatches } from '../../utils/questionVisibility'
 
 // The references an application needs and the links made for them. The applicant shares each link with the person
 // writing that reference; they only ever see its status, never what was written.
@@ -10,6 +11,12 @@ const props = defineProps({
   // Dashboard summary: status only, with a link to the application to manage links
   compact: { type: Boolean, default: false },
   title: { type: String, default: 'References' },
+  // On the application form: the questions and current (possibly unsaved) answers, so conditional references
+  // appear and disappear as the applicant answers. Without them, the saved answers decide (dashboard).
+  questions: { type: Array, default: null },
+  answers: { type: Object, default: null },
+  // Saves the draft before a link is made, since the API checks the reference against saved answers
+  beforeCreate: { type: Function, default: null },
 })
 
 const confirm = useConfirm()
@@ -19,7 +26,20 @@ const alert = ref(null)
 const labels = ref({})
 const creating = ref(null)
 
-const forms = computed(() => data.value?.forms ?? [])
+// Questions the applicant can currently see: answers to hidden ones don't count (the server drops them on save)
+const visibleIds = computed(() =>
+  props.questions && props.answers ? visibleQuestionIds(props.questions, (id) => props.answers[id]) : null)
+
+function isRequired(form) {
+  if (!visibleIds.value) return form.required
+  if (form.requirement !== 'conditional') return true
+  return (form.conditions ?? []).some((c) => visibleIds.value.has(c.questionId) && answerMatches(c, props.answers[c.questionId]))
+}
+
+// Required forms, plus any no longer required that already have links
+const forms = computed(() => (data.value?.forms ?? [])
+  .map((f) => ({ ...f, required: isRequired(f) }))
+  .filter((f) => f.required || f.requests.length > 0))
 const allReceived = computed(() => forms.value.every((f) => !f.required || f.received >= f.requiredCount))
 
 async function refresh() {
@@ -44,6 +64,7 @@ async function createLink(form) {
   creating.value = form.formId
   alert.value = null
   try {
+    if (props.beforeCreate) await props.beforeCreate()
     await api.post(`/applications/${props.applicationId}/references`, { formId: form.formId, label: labels.value[form.formId] || null })
     labels.value[form.formId] = ''
     await refresh()
