@@ -5,7 +5,8 @@ import { htmlToText } from './richText'
  * AnswerConditions on the server, which drop answers to hidden questions when a draft is saved.
  *
  * A question with visibility 'conditional' is shown when any (conditionMatch 'any') or all ('all') of its
- * conditions match; a condition only counts while its source question is itself shown. A condition matches when
+ * conditions match; a condition only counts while its source question is itself shown. A question in a conditional
+ * scholarship's section also has a `gate` (that scholarship's eligibility rule, same shape) that must match. A condition matches when
  * the source answer includes optionId (choice questions) or schoolId (School Select), or contains textContains,
  * ignoring case (text questions).
  *
@@ -36,21 +37,21 @@ export function visibleQuestionIds(questions, answerOf) {
     return isVisible(condition.sourceQuestionId) && answerMatches(condition, answerOf(condition.sourceQuestionId))
   }
 
+  // any/all of these conditions match; none at all never does
+  function allowed(conditions, match) {
+    return conditions.length > 0 && (match === 'all' ? conditions.every(matches) : conditions.some(matches))
+  }
+
   function isVisible(id) {
     if (memo.has(id)) return memo.get(id)
     const question = byId[id]
     if (!question) return false
-    if (question.visibility !== 'conditional') {
-      memo.set(id, true)
-      return true
-    }
     // Saving rejects cycles, but never loop on one
     if (visiting.has(id)) return false
     visiting.add(id)
-    const conditions = question.conditions ?? []
-    // A conditional question whose conditions were all removed stays hidden
-    const visible = conditions.length > 0 &&
-      (question.conditionMatch === 'all' ? conditions.every(matches) : conditions.some(matches))
+    let visible = question.visibility !== 'conditional' || allowed(question.conditions ?? [], question.conditionMatch)
+    // A scholarship's own questions only show while the applicant is eligible for it
+    if (visible && question.gate) visible = allowed(question.gate.conditions ?? [], question.gate.match)
     visiting.delete(id)
     memo.set(id, visible)
     return visible

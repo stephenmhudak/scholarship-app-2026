@@ -70,7 +70,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         var consumed = await db.Query("TwoFactorChallenges").Where("Id", challengeId).WhereNull("UsedAt").UpdateAsync(new { UsedAt = DateTime.UtcNow });
         if (consumed == 0) throw new ArgumentException(expired);
 
-        var permissions = await GetPermissionsForRoleAsync(user.Role);
+        var permissions = await GetPermissionsForUserAsync(user);
         return BuildAuthResponse(user, permissions);
     }
 
@@ -101,7 +101,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
     {
         if (user.TwoFactorMethod is null)
         {
-            var permissions = await GetPermissionsForRoleAsync(user.Role);
+            var permissions = await GetPermissionsForUserAsync(user);
             return new LoginResult { Auth = BuildAuthResponse(user, permissions) };
         }
 
@@ -565,6 +565,17 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         return user ?? throw new KeyNotFoundException("User not found.");
     }
 
+    // What a user's session carries: their role's permissions, plus award_scholarships when they're assigned to award
+    // a scholarship (only for showing the page; AwardsController checks the assignment itself on every request)
+    public async Task<IEnumerable<string>> GetPermissionsForUserAsync(User user)
+    {
+        var permissions = (await GetPermissionsForRoleAsync(user.Role)).ToList();
+        if (!permissions.Contains("award_scholarships")
+            && await db.Query("ScholarshipAwarders").Where("UserId", user.Id).ExistsAsync())
+            permissions.Add("award_scholarships");
+        return permissions;
+    }
+
     public async Task<IEnumerable<string>> GetPermissionsForRoleAsync(string roleName)
     {
         // Super admins hold every permission, including ones added after the role was set up
@@ -584,7 +595,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
     public async Task<string> IssueTokenAsync(string userId)
     {
         var user = await GetCurrentUserAsync(userId);
-        return GenerateToken(user, (await GetPermissionsForRoleAsync(user.Role)).ToList());
+        return GenerateToken(user, (await GetPermissionsForUserAsync(user)).ToList());
     }
 
     // ── Impersonation (super admins) ─────────────────────────────────────────
@@ -601,8 +612,8 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
 
         logger.LogWarning("Super admin {AdminId} ({AdminEmail}) started impersonating user {UserId} ({UserEmail})",
             admin.Id, admin.Email, target.Id, target.Email);
-        var response = BuildAuthResponse(target, await GetPermissionsForRoleAsync(target.Role), impersonator: admin);
-        response.ReturnSession = BuildAuthResponse(admin, await GetPermissionsForRoleAsync(admin.Role));
+        var response = BuildAuthResponse(target, await GetPermissionsForUserAsync(target), impersonator: admin);
+        response.ReturnSession = BuildAuthResponse(admin, await GetPermissionsForUserAsync(admin));
         return response;
     }
 
@@ -613,7 +624,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         if (admin.Role != AppRoles.SuperAdmin) throw new UnauthorizedAccessException("Your super admin access has been removed.");
         logger.LogWarning("Super admin {AdminId} ({AdminEmail}) stopped impersonating user {UserId}",
             admin.Id, admin.Email, impersonatedUserId);
-        return BuildAuthResponse(admin, await GetPermissionsForRoleAsync(admin.Role));
+        return BuildAuthResponse(admin, await GetPermissionsForUserAsync(admin));
     }
 
     private AuthResponse BuildAuthResponse(User user, IEnumerable<string> permissions, User? impersonator = null)

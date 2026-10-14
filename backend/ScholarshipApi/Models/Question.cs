@@ -13,6 +13,8 @@ public class Question
     public string? ValidationRules { get; set; }
     /// <summary>Set for questions on a reference form; null for application questions.</summary>
     public string? ReferenceFormId { get; set; }
+    /// <summary>Set on a scholarship's eligibility questions (which live in the eligibility section).</summary>
+    public string? ScholarshipId { get; set; }
     /// <summary><c>always</c>, or <c>conditional</c>: only shown when its <see cref="QuestionCondition"/>s match.</summary>
     public string Visibility { get; set; } = "always";
     /// <summary><c>any</c> or <c>all</c> of a conditional question's conditions must match.</summary>

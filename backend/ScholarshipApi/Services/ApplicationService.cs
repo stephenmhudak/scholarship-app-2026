@@ -111,8 +111,8 @@ public class ApplicationService(QueryFactory db, ApplicationAccess access) : IAp
         // other answers loses its answer, so it can't count toward anything (references, scoring) later.
         var answers = request.Answers.Where(a => questionIds.Contains(a.QuestionId))
             .GroupBy(a => a.QuestionId).Select(g => g.First()).ToList();
-        var conditions = await QuestionVisibility.LoadConditionsAsync(db, questionIds);
-        var visible = QuestionVisibility.VisibleIds(questions, conditions,
+        var rules = await QuestionVisibility.LoadRulesAsync(db, questions);
+        var visible = QuestionVisibility.VisibleIds(questions, rules,
             answers.ToDictionary(a => a.QuestionId, AnswerValue.From));
         answers = answers.Where(a => visible.Contains(a.QuestionId)).ToList();
 
@@ -313,9 +313,9 @@ public class ApplicationService(QueryFactory db, ApplicationAccess access) : IAp
     {
         var questions = (await db.Query("Questions").Where("CycleId", app.CycleId).WhereNull("ReferenceFormId")
             .OrderBy("Order").GetAsync<Question>()).ToList();
-        var conditions = await QuestionVisibility.LoadConditionsAsync(db, questions.Select(q => q.Id));
+        var rules = await QuestionVisibility.LoadRulesAsync(db, questions);
         var saved = (await db.Query("ApplicationAnswers").Where("ApplicationId", app.Id).GetAsync<ApplicationAnswer>()).ToList();
-        var visible = QuestionVisibility.VisibleIds(questions, conditions,
+        var visible = QuestionVisibility.VisibleIds(questions, rules,
             saved.GroupBy(a => a.QuestionId).ToDictionary(g => g.Key, g => AnswerValue.From(g.First())));
 
         var hidden = saved.Where(a => !visible.Contains(a.QuestionId)).Select(a => a.Id).ToList();

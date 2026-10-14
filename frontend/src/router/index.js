@@ -119,6 +119,26 @@ const routes = [
     meta: { permission: 'view_scoring_overview' },
   },
   {
+    // The question builder, for one scholarship's eligibility or own questions
+    path: '/admin/cycles/:cycleId/scholarships/:scholarshipId/:part(eligibility|details)',
+    name: 'ScholarshipQuestions',
+    component: () => import('../pages/admin/CycleQuestionsPage.vue'),
+    meta: { permission: 'admin_scholarship' },
+  },
+  {
+    path: '/admin/cycles/:cycleId/letters',
+    name: 'AwardLetters',
+    component: () => import('../pages/admin/AwardLettersPage.vue'),
+    meta: { permission: 'admin_scholarship' },
+  },
+  {
+    // Anyone assigned to award a scholarship (the permission is added at sign-in); super admins have it too
+    path: '/awards',
+    name: 'AwardScholarships',
+    component: () => import('../pages/admin/AwardScholarshipsPage.vue'),
+    meta: { permission: 'award_scholarships' },
+  },
+  {
     // The question builder, for one reference form's questions
     path: '/admin/cycles/:cycleId/references/:formId',
     name: 'ReferenceFormQuestions',

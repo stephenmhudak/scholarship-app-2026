@@ -6,7 +6,8 @@ namespace ScholarshipApi.Services;
 
 /// <summary>
 /// Copies a cycle's sections, questions and options into another cycle, along with which questions are shown
-/// conditionally and its reference forms (their questions, and the conditions that tie them to application answers).
+/// conditionally, its reference forms (their questions, and the conditions that tie them to application answers),
+/// and its scholarships (eligibility rules, award accounts, and their sections and questions; not awards).
 /// </summary>
 public static class CycleQuestionCopier
 {
@@ -15,6 +16,56 @@ public static class CycleQuestionCopier
         var sourceExists = await db.Query("ScholarshipCycles").Where("Id", sourceCycleId)
             .ExistsAsync(transaction);
         if (!sourceExists) throw new KeyNotFoundException("Cycle to copy from was not found.");
+
+        // Scholarships first: sections and questions point at them
+        var scholarships = await db.Query("Scholarships").Where("CycleId", sourceCycleId).GetAsync<Scholarship>(transaction);
+        var scholarshipIdMap = new Dictionary<string, string>();
+        foreach (var scholarship in scholarships)
+        {
+            var newId = Guid.NewGuid().ToString();
+            scholarshipIdMap[scholarship.Id] = newId;
+            await db.Query("Scholarships").InsertAsync(new
+            {
+                Id = newId,
+                CycleId = targetCycleId,
+                scholarship.Name,
+                scholarship.Description,
+                scholarship.Eligibility,
+                scholarship.EligibilityMatch,
+                scholarship.AwardAmount,
+                scholarship.Order,
+                CreatedAt = DateTime.UtcNow,
+            }, transaction);
+        }
+        if (scholarshipIdMap.Count > 0)
+        {
+            foreach (var awarder in await db.Query("ScholarshipAwarders").WhereIn("ScholarshipId", scholarshipIdMap.Keys)
+                         .GetAsync<dynamic>(transaction))
+                await db.Query("ScholarshipAwarders").InsertAsync(new
+                {
+                    ScholarshipId = scholarshipIdMap[(string)awarder.ScholarshipId],
+                    UserId = (string)awarder.UserId,
+                }, transaction);
+        }
+        string? MapScholarship(string? id) => id != null && scholarshipIdMap.TryGetValue(id, out var mapped) ? mapped : null;
+
+        // Award letters: the base letters, and each scholarship's own
+        foreach (var letter in await db.Query("LetterTemplates").Where("CycleId", sourceCycleId).GetAsync<LetterTemplate>(transaction))
+        {
+            if (letter.ScholarshipId is not null && MapScholarship(letter.ScholarshipId) is null) continue;
+            await db.Query("LetterTemplates").InsertAsync(new
+            {
+                Id = Guid.NewGuid().ToString(),
+                CycleId = targetCycleId,
+                ScholarshipId = MapScholarship(letter.ScholarshipId),
+                letter.Name,
+                letter.Body,
+                letter.IsDefault,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                letter.UpdatedById,
+            }, transaction);
+        }
 
         var sections = await db.Query("Sections").Where("CycleId", sourceCycleId)
             .GetAsync<Section>(transaction);
@@ -30,6 +81,8 @@ public static class CycleQuestionCopier
                 section.Title,
                 section.Description,
                 section.Order,
+                section.Kind,
+                ScholarshipId = MapScholarship(section.ScholarshipId),
             }, transaction);
         }
 
@@ -76,6 +129,7 @@ public static class CycleQuestionCopier
                 question.IsRequired,
                 SectionId = question.SectionId != null && sectionIdMap.TryGetValue(question.SectionId, out var s) ? s : null,
                 ReferenceFormId = question.ReferenceFormId != null && formIdMap.TryGetValue(question.ReferenceFormId, out var f) ? f : null,
+                ScholarshipId = MapScholarship(question.ScholarshipId),
                 question.Description,
                 question.ValidationRules,
                 question.Visibility,
@@ -131,6 +185,28 @@ public static class CycleQuestionCopier
                 SchoolId = filter.SchoolId,
                 filter.TextContains,
             }, transaction);
+        }
+
+        // Scholarship eligibility rules, onto the copied questions and options
+        if (scholarshipIdMap.Count > 0)
+        {
+            var scholarshipConditions = await db.Query("ScholarshipConditions").WhereIn("ScholarshipId", scholarshipIdMap.Keys)
+                .GetAsync<ScholarshipCondition>(transaction);
+            foreach (var condition in scholarshipConditions)
+            {
+                if (!questionIdMap.TryGetValue(condition.QuestionId, out var questionId)) continue;
+                string? optionId = null;
+                if (condition.OptionId != null && !optionIdMap.TryGetValue(condition.OptionId, out optionId)) continue;
+                await db.Query("ScholarshipConditions").InsertAsync(new
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    ScholarshipId = scholarshipIdMap[condition.ScholarshipId],
+                    QuestionId = questionId,
+                    OptionId = optionId,
+                    condition.SchoolId,
+                    condition.TextContains,
+                }, transaction);
+            }
         }
 
         if (formIdMap.Count == 0) return;

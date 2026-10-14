@@ -5,6 +5,7 @@ import api from '../../services/api'
 import { isRichText } from '../../utils/richText'
 import { useConfirm } from '../../composables/useConfirm'
 import ReferenceFormsCard from '../../components/admin/ReferenceFormsCard.vue'
+import ScholarshipsCard from '../../components/admin/ScholarshipsCard.vue'
 import { CONDITION_TYPES, conditionKind, conditionFields, describeCondition, useSchools } from '../../utils/conditionTargets'
 
 const route = useRoute()
@@ -12,7 +13,14 @@ const confirm = useConfirm()
 const cycleId = route.params.cycleId
 // Set when editing a reference form's questions (/admin/cycles/:cycleId/references/:formId): no sections there
 const formId = route.params.formId ?? null
-const questionParams = formId ? { referenceFormId: formId } : {}
+// Set when editing one scholarship's questions (/admin/cycles/:cycleId/scholarships/:scholarshipId/eligibility|details)
+const scholarshipId = route.params.scholarshipId ?? null
+const scholarshipPart = route.params.part ?? null
+// Only some of the cycle's questions are listed (a reference form or a scholarship): no sections or show-when editing
+const isSubset = !!(formId || scholarshipId)
+const questionParams = formId
+  ? { referenceFormId: formId }
+  : scholarshipId ? { scholarshipId, part: scholarshipPart } : {}
 
 const cycleName = ref('')
 const formTitle = ref('')
@@ -71,6 +79,8 @@ const showFormatRules = computed(() =>
 )
 
 const groupedQuestions = computed(() => {
+  // A reference form or one scholarship's questions: one list, whatever section they live in
+  if (isSubset) return [{ id: null, title: null, description: null, questions: questions.value }]
   const orderedSections = [...sections.value].sort((a, b) => a.order - b.order)
   const groups = orderedSections.map((s) => ({
     ...s,
@@ -86,8 +96,27 @@ const groupedQuestions = computed(() => {
 })
 
 onMounted(async () => {
-  await Promise.all([loadCycleName(), loadQuestions(), formId ? loadFormTitle() : loadSections()])
+  await Promise.all([
+    loadCycleName(),
+    loadQuestions(),
+    formId ? loadFormTitle() : scholarshipId ? loadScholarshipTitle() : loadSections(),
+  ])
 })
+
+async function loadScholarshipTitle() {
+  try {
+    const res = await api.get(`/cycles/${cycleId}/scholarships`)
+    const name = res.data.find((s) => s.id === scholarshipId)?.name ?? 'Scholarship'
+    formTitle.value = `${name}: ${scholarshipPart === 'eligibility' ? 'eligibility questions' : 'scholarship questions'}`
+  } catch {
+    formTitle.value = 'Scholarship questions'
+  }
+}
+
+// Sections scholarships manage (eligibility, or a scholarship's own): changed from the scholarship, not here
+function isManagedSection(section) {
+  return !!(section?.kind || section?.scholarshipId)
+}
 
 async function loadFormTitle() {
   try {
@@ -171,7 +200,7 @@ const earlierQuestions = computed(() => {
 // What a question can depend on: choice or text questions that come before it. Never a later one (the API refuses
 // those, and drops existing ones when questions are reordered).
 const conditionSources = computed(() => {
-  if (formId) return []
+  if (isSubset) return []
   const earlier = new Set(earlierQuestions.value.map((q) => q.id))
   return questions.value.filter((q) => earlier.has(q.id) && CONDITION_TYPES.includes(q.type))
 })
@@ -320,10 +349,13 @@ async function save() {
     validationRules,
     visibility: formId ? 'always' : editing.value.visibility,
     conditionMatch: editing.value.conditionMatch,
+    // Showing only a scholarship's questions, the source questions aren't loaded: send its conditions back as saved
     conditions: !formId && editing.value.visibility === 'conditional'
       ? editing.value.conditions.map((c) => ({
           sourceQuestionId: c.sourceQuestionId,
-          ...conditionFields(questionById.value[c.sourceQuestionId]?.type, c),
+          ...(questionById.value[c.sourceQuestionId]
+            ? conditionFields(questionById.value[c.sourceQuestionId].type, c)
+            : { optionId: c.optionId ?? null, schoolId: c.schoolId ?? null, textContains: c.textContains || null }),
         }))
       : [],
   }
@@ -611,15 +643,24 @@ function globalIndex(q) {
   <div class="space-y-6 max-w-3xl">
     <!-- Header -->
     <div>
-      <v-btn v-if="formId" variant="text" color="primary" size="small" prepend-icon="mdi-arrow-left" :to="`/admin/cycles/${cycleId}/questions`" class="-ml-3 mb-1">
+      <v-btn v-if="isSubset" variant="text" color="primary" size="small" prepend-icon="mdi-arrow-left" :to="`/admin/cycles/${cycleId}/questions`" class="-ml-3 mb-1">
         Application questions
       </v-btn>
       <v-btn v-else variant="text" color="primary" size="small" prepend-icon="mdi-arrow-left" to="/admin/settings" class="-ml-3 mb-1">
         Settings
       </v-btn>
-      <h1 class="page-title">{{ formId ? formTitle : 'Questions' }}</h1>
+      <h1 class="page-title">{{ isSubset ? formTitle : 'Questions' }}</h1>
       <p class="page-subtitle">{{ formId ? `Reference questions · ${cycleName}` : cycleName }}</p>
     </div>
+
+    <p v-if="scholarshipPart === 'eligibility'" class="text-sm text-slate-400">
+      Every applicant answers these in the "Scholarship Eligibility" section. Use them in the scholarship's
+      "Who's eligible" rule to decide who can see and complete its scholarship questions.
+    </p>
+    <p v-else-if="scholarshipPart === 'details'" class="text-sm text-slate-400">
+      Only applicants who are eligible for this scholarship see these, in a section named after it. Required ones only
+      apply to those applicants.
+    </p>
 
     <p v-if="formId" class="text-sm text-slate-400">
       The Reference Provider sees the applicant's name and school above these questions, and finishes by giving their name,
@@ -642,7 +683,7 @@ function globalIndex(q) {
       </span>
       <div class="flex-1" />
       <template v-if="selectedIds.length">
-        <v-menu v-if="!formId && sections.length">
+        <v-menu v-if="!isSubset && sections.length">
           <template #activator="{ props }">
             <v-btn v-bind="props" variant="outlined" prepend-icon="mdi-folder-move-outline" :loading="bulkWorking">
               Move to section
@@ -663,7 +704,7 @@ function globalIndex(q) {
       Loading questions…
     </div>
 
-    <v-card v-else-if="questions.length === 0 && sections.length === 0 && !editing && !formId">
+    <v-card v-else-if="questions.length === 0 && sections.length === 0 && !editing && !isSubset">
       <v-empty-state icon="mdi-comment-question-outline" text="No questions yet." />
     </v-card>
 
@@ -730,8 +771,13 @@ function globalIndex(q) {
             <p v-if="group.description" class="text-xs text-slate-400 truncate">{{ group.description }}</p>
           </div>
           <v-divider class="mx-1 flex-1" />
-          <v-btn icon="mdi-pencil" variant="text" size="small" title="Edit section" @click="startEditSection(group)" />
-          <v-btn icon="mdi-trash-can" variant="text" size="small" color="error" title="Delete section" @click="deleteSection(group)" />
+          <v-chip v-if="isManagedSection(group)" color="primary" prepend-icon="mdi-school-outline" title="Managed from the Scholarships card below">
+            Scholarship
+          </v-chip>
+          <template v-else>
+            <v-btn icon="mdi-pencil" variant="text" size="small" title="Edit section" @click="startEditSection(group)" />
+            <v-btn icon="mdi-trash-can" variant="text" size="small" color="error" title="Delete section" @click="deleteSection(group)" />
+          </template>
         </div>
       </template>
 
@@ -818,7 +864,7 @@ function globalIndex(q) {
               </div>
 
               <!-- When the question is shown (application questions only) -->
-              <template v-if="!formId">
+              <template v-if="!isSubset">
                 <v-divider />
                 <div class="space-y-3">
                   <p class="text-sm font-bold text-navy">Show this question</p>
@@ -1039,7 +1085,7 @@ function globalIndex(q) {
     </template>
 
     <!-- Add first section (when no sections exist) -->
-    <template v-if="sections.length === 0 && !editing && !formId">
+    <template v-if="sections.length === 0 && !editing && !isSubset">
       <v-sheet
         v-if="editingSection && !editingSection.id"
         rounded="lg"
@@ -1069,7 +1115,14 @@ function globalIndex(q) {
       </v-btn>
     </template>
 
-    <ReferenceFormsCard v-if="!formId && !loading" :cycleId="cycleId" :questions="questions" />
+    <ReferenceFormsCard v-if="!isSubset && !loading" :cycleId="cycleId" :questions="questions" />
+    <ScholarshipsCard
+      v-if="!isSubset && !loading"
+      :cycleId="cycleId"
+      :questions="questions"
+      :sections="sections"
+      @changed="loadSections(); loadQuestions()"
+    />
 
   </div>
 </template>

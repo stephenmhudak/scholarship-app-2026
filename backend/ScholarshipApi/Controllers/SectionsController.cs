@@ -45,8 +45,10 @@ public class SectionsController(QueryFactory db) : ControllerBase
     [Authorize(Policy = "AppAdmin")]
     public async Task<IActionResult> Update(string cycleId, string sectionId, [FromBody] SectionRequest request)
     {
-        if (!await db.Query("Sections").Where("Id", sectionId).Where("CycleId", cycleId).ExistsAsync())
-            throw new KeyNotFoundException("Section not found.");
+        var section = await db.Query("Sections").Where("Id", sectionId).Where("CycleId", cycleId).FirstOrDefaultAsync<Section>()
+            ?? throw new KeyNotFoundException("Section not found.");
+        if (ScholarshipSections.IsManaged(section))
+            throw new ArgumentException("This section belongs to scholarships. Change it from the scholarship instead.");
         var title = InputValidation.Required(request.Title, "Section title", 255);
         var description = InputValidation.Optional(request.Description, "Description", 5000);
         await db.Query("Sections")
@@ -64,6 +66,10 @@ public class SectionsController(QueryFactory db) : ControllerBase
     [Authorize(Policy = "AppAdmin")]
     public async Task<IActionResult> Delete(string cycleId, string sectionId)
     {
+        var section = await db.Query("Sections").Where("Id", sectionId).Where("CycleId", cycleId).FirstOrDefaultAsync<Section>()
+            ?? throw new KeyNotFoundException("Section not found.");
+        if (ScholarshipSections.IsManaged(section))
+            throw new ArgumentException("This section belongs to scholarships. Delete the scholarship instead.");
         // Unlink questions from this section before deleting; they move to the ungrouped questions at the end
         await db.Query("Questions").Where("SectionId", sectionId).UpdateAsync(new { SectionId = (string?)null });
         await db.Query("Sections").Where("Id", sectionId).Where("CycleId", cycleId).DeleteAsync();
