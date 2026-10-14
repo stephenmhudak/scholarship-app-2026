@@ -33,7 +33,7 @@ public class AwardsController(QueryFactory db) : ControllerBase
             .Join("ScholarshipCycles as c", "c.Id", "s.CycleId")
             .When(!IsSuperAdmin, q => q.WhereIn("s.Id", db.Query("ScholarshipAwarders").Where("UserId", UserId).Select("ScholarshipId")))
             .OrderByDesc("c.OpenDate").OrderBy("s.Order", "s.CreatedAt")
-            .Select("s.Id", "s.Name", "s.Description", "s.Eligibility", "s.CycleId", "c.Name as CycleName")
+            .Select("s.Id", "s.Name", "s.Description", "s.Eligibility", "s.AwardAmount", "s.CycleId", "c.Name as CycleName")
             .SelectRaw("(SELECT COUNT(*) FROM ScholarshipAwards w WHERE w.ScholarshipId = s.Id) AS AwardCount")
             .GetAsync<dynamic>();
         return Ok(scholarships);

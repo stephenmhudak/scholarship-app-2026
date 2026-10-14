@@ -126,6 +126,12 @@ const routes = [
     meta: { permission: 'admin_scholarship' },
   },
   {
+    path: '/admin/cycles/:cycleId/letters',
+    name: 'AwardLetters',
+    component: () => import('../pages/admin/AwardLettersPage.vue'),
+    meta: { permission: 'admin_scholarship' },
+  },
+  {
     // Anyone assigned to award a scholarship (the permission is added at sign-in); super admins have it too
     path: '/awards',
     name: 'AwardScholarships',

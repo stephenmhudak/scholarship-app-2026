@@ -43,6 +43,7 @@ public class ScholarshipsController(QueryFactory db) : ControllerBase
             s.Description,
             s.Eligibility,
             s.EligibilityMatch,
+            s.AwardAmount,
             Conditions = conditions[s.Id].Select(c => new { c.QuestionId, c.OptionId, c.SchoolId, c.TextContains }),
             Awarders = awarders[s.Id].Select(a => new { a.Id, Name = $"{a.FirstName} {a.LastName}".Trim(), a.Email }),
             EligibilityQuestionCount = eligibilityCounts.GetValueOrDefault(s.Id),
@@ -66,6 +67,7 @@ public class ScholarshipsController(QueryFactory db) : ControllerBase
             valid.Description,
             valid.Eligibility,
             EligibilityMatch = valid.Match,
+            valid.AwardAmount,
             Order = await db.Query("Scholarships").Where("CycleId", cycleId).CountAsync<int>(),
             CreatedAt = DateTime.UtcNow,
         });
@@ -85,6 +87,7 @@ public class ScholarshipsController(QueryFactory db) : ControllerBase
             valid.Description,
             valid.Eligibility,
             EligibilityMatch = valid.Match,
+            valid.AwardAmount,
         });
         await db.Query("ScholarshipConditions").Where("ScholarshipId", scholarshipId).DeleteAsync();
         await SaveConditionsAsync(scholarshipId, valid.Conditions);
@@ -156,12 +159,15 @@ public class ScholarshipsController(QueryFactory db) : ControllerBase
         return NoContent();
     }
 
-    private record ValidScholarship(string Name, string? Description, string Eligibility, string Match, List<ScholarshipConditionRequest> Conditions);
+    private record ValidScholarship(string Name, string? Description, decimal? AwardAmount, string Eligibility, string Match,
+        List<ScholarshipConditionRequest> Conditions);
 
     private async Task<ValidScholarship> ValidateAsync(string cycleId, ScholarshipRequest request)
     {
         var name = InputValidation.Required(request.Name, "Name", 255);
         var description = InputValidation.Optional(request.Description, "Description", 5000);
+        if (request.AwardAmount is < 0 or > 1_000_000_000m) throw new ArgumentException("Enter a valid award amount.");
+        var awardAmount = request.AwardAmount is { } amount ? Math.Round(amount, 2) : (decimal?)null;
         var eligibility = request.Eligibility ?? "open";
         var match = request.EligibilityMatch ?? "any";
         if (eligibility is not ("open" or "conditional")) throw new ArgumentException("Choose who's eligible.");
@@ -184,7 +190,7 @@ public class ScholarshipsController(QueryFactory db) : ControllerBase
                 await ConditionTarget.ValidateAsync(db, question, condition.OptionId, condition.SchoolId, condition.TextContains);
         }
 
-        return new ValidScholarship(name, description, eligibility, match, conditions);
+        return new ValidScholarship(name, description, awardAmount, eligibility, match, conditions);
     }
 
     private async Task SaveConditionsAsync(string scholarshipId, List<ScholarshipConditionRequest> conditions)
@@ -231,6 +237,8 @@ public class ScholarshipRequest
 {
     public string? Name { get; set; }
     public string? Description { get; set; }
+    /// <summary>What it's worth: pre-fills awards and fills {{award_amount}} in letters.</summary>
+    public decimal? AwardAmount { get; set; }
     /// <summary><c>open</c> (everyone) or <c>conditional</c> (any/all of <see cref="Conditions"/> match).</summary>
     public string? Eligibility { get; set; }
     public string? EligibilityMatch { get; set; }

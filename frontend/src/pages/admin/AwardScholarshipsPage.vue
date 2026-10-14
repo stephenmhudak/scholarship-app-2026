@@ -3,6 +3,8 @@ import { ref, computed, onMounted, watch } from 'vue'
 import api from '../../services/api'
 import { useConfirm } from '../../composables/useConfirm'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
+import LetterEditorDialog from '../../components/letters/LetterEditorDialog.vue'
+import { downloadPdf } from '../../utils/pdf'
 
 // Awarding the scholarships you're assigned to (super admins: all) to eligible, submitted applications
 const confirm = useConfirm()
@@ -41,7 +43,49 @@ onMounted(async () => {
   }
 })
 
-watch(selectedId, loadCandidates)
+watch(selectedId, () => { loadCandidates(); loadLetter() })
+
+// The scholarship's award letter: its own, else the cycle's default base letter
+const letterInfo = ref(null)
+const letterEditorOpen = ref(false)
+const downloading = ref(null)
+
+async function loadLetter() {
+  letterInfo.value = null
+  if (!selectedId.value) return
+  try {
+    letterInfo.value = (await api.get(`/scholarships/${selectedId.value}/letter`)).data
+  } catch {
+    letterInfo.value = null
+  }
+}
+
+const letterText = computed(() => {
+  if (!letterInfo.value) return ''
+  if (letterInfo.value.own) return 'This scholarship has its own award letter.'
+  if (letterInfo.value.default) return `Uses the cycle's default letter (${letterInfo.value.default.name}).`
+  return 'No award letter yet. Write one to generate letters.'
+})
+const hasLetter = computed(() => !!(letterInfo.value?.own || letterInfo.value?.default))
+
+async function saveLetter(form) {
+  await api.put(`/scholarships/${selectedId.value}/letter`, { name: selected.value.Name, body: form.body })
+  await loadLetter()
+  alert.value = { type: 'success', message: 'Award letter saved.' }
+}
+
+async function download(url, key) {
+  downloading.value = key
+  alert.value = null
+  try {
+    await downloadPdf(url)
+  } catch (err) {
+    const text = err.response?.data instanceof Blob ? await err.response.data.text() : null
+    alert.value = { type: 'error', message: (text && JSON.parse(text).error) || 'Failed to generate the letter.' }
+  } finally {
+    downloading.value = null
+  }
+}
 
 async function loadCandidates() {
   candidates.value = []
@@ -64,7 +108,8 @@ function formatAmount(amount) {
 function openAward(candidate) {
   awarding.value = {
     candidate,
-    amount: candidate.award?.amount ?? null,
+    // A new award starts at the scholarship's award amount
+    amount: candidate.award ? candidate.award.amount : (selected.value?.AwardAmount ?? null),
     note: candidate.award?.note ?? '',
   }
 }
@@ -148,7 +193,26 @@ async function removeAward(candidate) {
           <p v-if="selected?.Description" class="text-sm text-slate-400 whitespace-pre-line">{{ selected.Description }}</p>
           <p v-if="selected" class="text-xs text-slate-400">
             {{ selected.Eligibility === 'open' ? 'Open to every applicant.' : 'Only applicants whose answers meet its eligibility rule are listed.' }}
+            <template v-if="selected.AwardAmount != null"> Award amount: {{ formatAmount(selected.AwardAmount) }}.</template>
           </p>
+        </v-card-text>
+      </v-card>
+
+      <v-card v-if="selectedId && letterInfo" title="Award letter">
+        <v-card-text class="pa-6 flex flex-wrap items-center gap-3">
+          <p class="text-sm text-slate-400 flex-1 min-w-[16rem]">{{ letterText }}</p>
+          <v-btn variant="outlined" prepend-icon="mdi-pencil" @click="letterEditorOpen = true">
+            {{ letterInfo.own ? 'Edit letter' : 'Write its own letter' }}
+          </v-btn>
+          <v-btn
+            color="primary"
+            prepend-icon="mdi-file-pdf-box"
+            :disabled="!hasLetter || awardedCount === 0"
+            :loading="downloading === 'all'"
+            @click="download(`/scholarships/${selectedId}/letters`, 'all')"
+          >
+            All letters (PDF)
+          </v-btn>
         </v-card-text>
       </v-card>
 
@@ -175,6 +239,16 @@ async function removeAward(candidate) {
           </template>
           <template #item.actions="{ item }">
             <template v-if="item.award">
+              <v-btn
+                variant="text"
+                size="small"
+                prepend-icon="mdi-file-pdf-box"
+                :disabled="!hasLetter"
+                :loading="downloading === item.applicationId"
+                @click="download(`/scholarships/${selectedId}/letters/${item.applicationId}`, item.applicationId)"
+              >
+                Letter
+              </v-btn>
               <v-btn variant="text" color="primary" size="small" @click="openAward(item)">Edit</v-btn>
               <v-btn variant="text" color="error" size="small" @click="removeAward(item)">Remove</v-btn>
             </template>
@@ -201,4 +275,15 @@ async function removeAward(candidate) {
       </v-card-text>
     </v-card>
   </v-dialog>
+
+  <LetterEditorDialog
+    v-if="letterEditorOpen && letterInfo"
+    v-model="letterEditorOpen"
+    :title="`${selected?.Name}: award letter`"
+    :cycle-id="letterInfo.cycleId"
+    :letter="letterInfo.own"
+    :base-letters="letterInfo.baseLetters"
+    :preview-url="`/scholarships/${selectedId}/letter/preview`"
+    :save="saveLetter"
+  />
 </template>

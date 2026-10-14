@@ -62,7 +62,7 @@ function eligibilityText(s) {
 
 async function startAdd() {
   dialogError.value = null
-  editing.value = { name: '', description: '', eligibility: 'open', eligibilityMatch: 'any', conditions: [], awarderIds: [] }
+  editing.value = { name: '', description: '', awardAmount: null, eligibility: 'open', eligibilityMatch: 'any', conditions: [], awarderIds: [] }
   await loadStaff()
 }
 
@@ -72,6 +72,7 @@ async function startEdit(s) {
     id: s.id,
     name: s.name,
     description: s.description ?? '',
+    awardAmount: s.awardAmount,
     eligibility: s.eligibility,
     eligibilityMatch: s.eligibilityMatch,
     conditions: s.conditions.map((c) => ({ ...c, textContains: c.textContains ?? '' })),
@@ -95,6 +96,7 @@ async function save() {
   const payload = {
     name: e.name,
     description: e.description || null,
+    awardAmount: e.awardAmount === '' || e.awardAmount == null ? null : Number(e.awardAmount),
     eligibility: e.eligibility,
     eligibilityMatch: e.eligibilityMatch,
     conditions: e.eligibility === 'conditional'
@@ -150,6 +152,7 @@ async function remove(s) {
 <template>
   <v-card title="Scholarships">
     <template #append>
+      <v-btn variant="tonal" prepend-icon="mdi-email-newsletter" :to="`/admin/cycles/${cycleId}/letters`" class="mr-2">Award letters</v-btn>
       <v-btn variant="tonal" prepend-icon="mdi-plus" @click="startAdd">Add scholarship</v-btn>
     </template>
 
@@ -174,6 +177,9 @@ async function remove(s) {
           <div class="flex-1 min-w-0 space-y-1">
             <p class="text-sm font-semibold text-navy">{{ s.name }}</p>
             <p v-if="s.description" class="text-xs text-slate-400">{{ s.description }}</p>
+            <p v-if="s.awardAmount != null" class="text-xs text-navy">
+              Award amount: {{ Number(s.awardAmount).toLocaleString(undefined, { style: 'currency', currency: 'USD' }) }}
+            </p>
             <p class="text-xs" :class="s.eligibility === 'open' ? 'text-slate-400' : 'text-navy'">{{ eligibilityText(s) }}</p>
             <p class="text-xs text-slate-400">
               Awarded by: {{ s.awarders.length ? s.awarders.map((a) => a.name).join(', ') : 'super admins only' }}
@@ -206,6 +212,17 @@ async function remove(s) {
         <v-alert v-if="dialogError" type="error" :text="dialogError" />
         <v-text-field v-model="editing.name" label="Name *" hide-details="auto" />
         <v-textarea v-model="editing.description" label="Description" rows="3" hide-details="auto" />
+        <v-text-field
+          v-model="editing.awardAmount"
+          type="number"
+          min="0"
+          step="0.01"
+          prefix="$"
+          label="Award amount"
+          hint="Pre-fills each award, and fills {{award_amount}} in its letters."
+          persistent-hint
+          class="max-w-[18rem]"
+        />
 
         <div class="space-y-3">
           <p class="text-sm font-bold text-navy">Who's eligible</p>

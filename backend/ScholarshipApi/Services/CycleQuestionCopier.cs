@@ -32,6 +32,7 @@ public static class CycleQuestionCopier
                 scholarship.Description,
                 scholarship.Eligibility,
                 scholarship.EligibilityMatch,
+                scholarship.AwardAmount,
                 scholarship.Order,
                 CreatedAt = DateTime.UtcNow,
             }, transaction);
@@ -47,6 +48,24 @@ public static class CycleQuestionCopier
                 }, transaction);
         }
         string? MapScholarship(string? id) => id != null && scholarshipIdMap.TryGetValue(id, out var mapped) ? mapped : null;
+
+        // Award letters: the base letters, and each scholarship's own
+        foreach (var letter in await db.Query("LetterTemplates").Where("CycleId", sourceCycleId).GetAsync<LetterTemplate>(transaction))
+        {
+            if (letter.ScholarshipId is not null && MapScholarship(letter.ScholarshipId) is null) continue;
+            await db.Query("LetterTemplates").InsertAsync(new
+            {
+                Id = Guid.NewGuid().ToString(),
+                CycleId = targetCycleId,
+                ScholarshipId = MapScholarship(letter.ScholarshipId),
+                letter.Name,
+                letter.Body,
+                letter.IsDefault,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                letter.UpdatedById,
+            }, transaction);
+        }
 
         var sections = await db.Query("Sections").Where("CycleId", sourceCycleId)
             .GetAsync<Section>(transaction);
