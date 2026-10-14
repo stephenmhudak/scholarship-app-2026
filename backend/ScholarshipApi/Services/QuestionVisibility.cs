@@ -38,7 +38,7 @@ public static class QuestionVisibility
             var own = conditions[id].ToList();
             bool Matches(QuestionCondition c) =>
                 IsVisible(c.SourceQuestionId)
-                && AnswerConditions.Matches(c.OptionId, c.TextContains, answers.GetValueOrDefault(c.SourceQuestionId));
+                && AnswerConditions.Matches(c.OptionId ?? c.SchoolId, c.TextContains, answers.GetValueOrDefault(c.SourceQuestionId));
             // Normally impossible (QuestionOrder makes a conditional question with no conditions always-shown), but stay hidden
             var visible = own.Count > 0 && (question.ConditionMatch == "all" ? own.All(Matches) : own.Any(Matches));
 

@@ -109,6 +109,7 @@ public static class CycleQuestionCopier
                 QuestionId = questionIdMap[condition.QuestionId],
                 SourceQuestionId = sourceId,
                 OptionId = optionId,
+                SchoolId = condition.SchoolId,
                 condition.TextContains,
             }, transaction);
         }
@@ -127,6 +128,7 @@ public static class CycleQuestionCopier
                 filter.ScorerId,
                 QuestionId = questionIdMap[filter.QuestionId],
                 OptionId = optionId,
+                SchoolId = filter.SchoolId,
                 filter.TextContains,
             }, transaction);
         }
@@ -145,6 +147,7 @@ public static class CycleQuestionCopier
                 FormId = formIdMap[condition.FormId],
                 QuestionId = questionId,
                 OptionId = optionId,
+                SchoolId = condition.SchoolId,
                 condition.TextContains,
             }, transaction);
         }

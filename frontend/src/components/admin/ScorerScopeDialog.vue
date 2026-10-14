@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import api from '../../services/api'
+import { CONDITION_TYPES, conditionKind, conditionFields, useSchools } from '../../utils/conditionTargets'
 
 // Which applications a scorer can see and score: all of them, or only those whose answers match any of these
 // filters (e.g. "Intended major" contains "nursing"). Enforced by the API (ApplicationAccess.ScorerAllowedAsync).
@@ -10,8 +11,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue', 'saved'])
 
-const CHOICE_TYPES = ['single_choice', 'multiple_choice']
-const TEXT_TYPES = ['short_answer', 'long_answer']
+const { schools } = useSchools()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -42,6 +42,7 @@ watch(() => props.modelValue, async (isOpen) => {
       cycleId: f.CycleId,
       questionId: f.QuestionId,
       optionId: f.OptionId,
+      schoolId: f.SchoolId,
       textContains: f.TextContains ?? '',
     }))
     await Promise.all([...new Set(filters.value.map((f) => f.cycleId))].map(loadQuestions))
@@ -55,7 +56,7 @@ watch(() => props.modelValue, async (isOpen) => {
 async function loadQuestions(cycleId) {
   if (!cycleId || questionsByCycle.value[cycleId]) return
   const res = await api.get(`/cycles/${cycleId}/questions`)
-  questionsByCycle.value[cycleId] = res.data.filter((q) => [...CHOICE_TYPES, ...TEXT_TYPES].includes(q.type))
+  questionsByCycle.value[cycleId] = res.data.filter((q) => CONDITION_TYPES.includes(q.type))
 }
 
 function questionOf(filter) {
@@ -65,12 +66,13 @@ function questionOf(filter) {
 async function pickCycle(filter) {
   filter.questionId = null
   filter.optionId = null
+  filter.schoolId = null
   filter.textContains = ''
   await loadQuestions(filter.cycleId)
 }
 
 function addFilter() {
-  filters.value.push({ cycleId: cycles.value[0]?.id ?? null, questionId: null, optionId: null, textContains: '' })
+  filters.value.push({ cycleId: cycles.value[0]?.id ?? null, questionId: null, optionId: null, schoolId: null, textContains: '' })
   loadQuestions(cycles.value[0]?.id)
 }
 
@@ -82,8 +84,7 @@ async function save() {
       scope: scope.value,
       filters: scope.value === 'filtered'
         ? filters.value.map((f) => {
-            const isChoice = CHOICE_TYPES.includes(questionOf(f)?.type)
-            return { questionId: f.questionId, optionId: isChoice ? f.optionId : null, textContains: isChoice ? null : f.textContains }
+            return { questionId: f.questionId, ...conditionFields(questionOf(f)?.type, f) }
           })
         : [],
     })
@@ -139,15 +140,24 @@ async function save() {
                 item-value="id"
                 label="Question"
                 hide-details
-                @update:model-value="f.optionId = null; f.textContains = ''"
+                @update:model-value="f.optionId = null; f.schoolId = null; f.textContains = ''"
               />
               <v-select
-                v-if="f.questionId && CHOICE_TYPES.includes(questionOf(f)?.type)"
+                v-if="f.questionId && conditionKind(questionOf(f)?.type) === 'option'"
                 v-model="f.optionId"
                 :items="questionOf(f)?.options ?? []"
                 item-title="text"
                 item-value="id"
                 label="Answer is"
+                hide-details
+              />
+              <v-autocomplete
+                v-else-if="f.questionId && conditionKind(questionOf(f)?.type) === 'school'"
+                v-model="f.schoolId"
+                :items="schools"
+                item-title="name"
+                item-value="id"
+                label="School is"
                 hide-details
               />
               <v-text-field v-else-if="f.questionId" v-model="f.textContains" label="Answer contains" hide-details />

@@ -16,17 +16,18 @@ public record AnswerValue(string? Text, IReadOnlyCollection<string>? Selected)
 }
 
 /// <summary>
-/// The test behind conditional questions and conditional references (mirrored in frontend/src/utils/questionVisibility.js):
-/// a choice answer includes <c>optionId</c>, or a text answer contains <c>textContains</c>, ignoring case.
+/// The test behind conditional questions, conditional references and scorer filters (mirrored in
+/// frontend/src/utils/questionVisibility.js): the answer's selection includes <c>selectedId</c> (a choice option id, or
+/// a school id for School Select), or a text answer contains <c>textContains</c>, ignoring case.
 /// </summary>
 public static partial class AnswerConditions
 {
-    public static bool Matches(string? optionId, string? textContains, AnswerValue? answer)
+    public static bool Matches(string? selectedId, string? textContains, AnswerValue? answer)
     {
         if (answer is null) return false;
 
-        if (optionId is not null)
-            return answer.Text == optionId || (answer.Selected?.Contains(optionId) ?? false);
+        if (selectedId is not null)
+            return answer.Text == selectedId || (answer.Selected?.Contains(selectedId) ?? false);
 
         if (string.IsNullOrWhiteSpace(textContains) || string.IsNullOrEmpty(answer.Text)) return false;
         // Rich text answers are HTML; match the visible text

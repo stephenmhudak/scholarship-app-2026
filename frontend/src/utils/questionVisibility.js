@@ -6,7 +6,8 @@ import { htmlToText } from './richText'
  *
  * A question with visibility 'conditional' is shown when any (conditionMatch 'any') or all ('all') of its
  * conditions match; a condition only counts while its source question is itself shown. A condition matches when
- * the source answer includes optionId (choice questions) or contains textContains, ignoring case (text questions).
+ * the source answer includes optionId (choice questions) or schoolId (School Select), or contains textContains,
+ * ignoring case (text questions).
  *
  * @param {Array} questions - questions from GET /cycles/:id/questions (with visibility, conditionMatch, conditions)
  * @param {(questionId: string) => string|string[]|null|undefined} answerOf - the current answer: text (or a
@@ -21,7 +22,8 @@ export function visibleQuestionIds(questions, answerOf) {
   function matches(condition) {
     if (!isVisible(condition.sourceQuestionId)) return false
     const value = answerOf(condition.sourceQuestionId)
-    if (condition.optionId) return Array.isArray(value) ? value.includes(condition.optionId) : value === condition.optionId
+    const selected = condition.optionId ?? condition.schoolId
+    if (selected) return Array.isArray(value) ? value.includes(selected) : value === selected
     if (!condition.textContains || typeof value !== 'string' || !value) return false
     // Rich text answers are HTML; match the visible text
     const text = value.includes('<') ? htmlToText(value) : value

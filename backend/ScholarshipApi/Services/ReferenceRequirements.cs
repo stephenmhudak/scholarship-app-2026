@@ -43,5 +43,5 @@ public static class ReferenceRequirements
 
     private static bool Matches(ReferenceFormCondition condition, Dictionary<string, ApplicationAnswer> answers) =>
         answers.TryGetValue(condition.QuestionId, out var answer)
-        && AnswerConditions.Matches(condition.OptionId, condition.TextContains, AnswerValue.From(answer));
+        && AnswerConditions.Matches(condition.OptionId ?? condition.SchoolId, condition.TextContains, AnswerValue.From(answer));
 }

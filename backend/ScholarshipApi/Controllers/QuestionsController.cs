@@ -56,7 +56,7 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
             // The form shows a conditional question only while these match (frontend/src/utils/questionVisibility.js)
             q.Visibility,
             q.ConditionMatch,
-            Conditions = conditions[q.Id].Select(c => new { c.SourceQuestionId, c.OptionId, c.TextContains }),
+            Conditions = conditions[q.Id].Select(c => new { c.SourceQuestionId, c.OptionId, c.SchoolId, c.TextContains }),
         });
 
         return Ok(result);
@@ -238,8 +238,6 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
         if (rules.RichText && request.Type != "long_answer") throw new ArgumentException("Rich text is only available on long answer questions.");
     }
 
-    private static readonly HashSet<string> ConditionChoiceTypes = ["single_choice", "multiple_choice"];
-    private static readonly HashSet<string> ConditionTextTypes = ["short_answer", "long_answer"];
 
     // When the question is shown. Only application questions can be conditional, and only on other application
     // questions in the cycle, without any question ending up depending on itself.
@@ -267,21 +265,8 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
                 .WhereNull("ReferenceFormId").FirstOrDefaultAsync<Question>()
                 ?? throw new ArgumentException("A condition uses a question that isn't on this cycle's application.");
 
-            if (ConditionChoiceTypes.Contains(source.Type))
-            {
-                if (!await db.Query("QuestionOptions").Where("Id", condition.OptionId ?? "").Where("QuestionId", source.Id).ExistsAsync())
-                    throw new ArgumentException($"Choose an answer for \"{source.Text}\".");
-                condition.TextContains = null;
-            }
-            else if (ConditionTextTypes.Contains(source.Type))
-            {
-                condition.TextContains = InputValidation.Required(condition.TextContains, "Text to look for", 255);
-                condition.OptionId = null;
-            }
-            else
-            {
-                throw new ArgumentException("Conditions can only use choice or text questions.");
-            }
+            (condition.OptionId, condition.SchoolId, condition.TextContains) =
+                await ConditionTarget.ValidateAsync(db, source, condition.OptionId, condition.SchoolId, condition.TextContains);
         }
 
         // Only questions that come before this one on the form, where it will be after this save
@@ -332,6 +317,7 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
                 QuestionId = questionId,
                 c.SourceQuestionId,
                 c.OptionId,
+                c.SchoolId,
                 c.TextContains,
             });
         }
@@ -428,6 +414,8 @@ public class QuestionConditionRequest
     /// <summary>For choice questions: shown when this option is chosen.</summary>
     public string? OptionId { get; set; }
     /// <summary>For text questions: shown when the answer contains this text (ignoring case).</summary>
+    /// <summary>For School Select questions: the school chosen.</summary>
+    public string? SchoolId { get; set; }
     public string? TextContains { get; set; }
 }
 

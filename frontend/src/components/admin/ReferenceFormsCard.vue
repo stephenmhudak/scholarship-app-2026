@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import api from '../../services/api'
 import { useConfirm } from '../../composables/useConfirm'
+import { CONDITION_TYPES, conditionKind, conditionFields, describeCondition, useSchools } from '../../utils/conditionTargets'
 
 // A cycle's reference forms: how many of each an applicant needs, and whether that depends on their answers.
 // Each form's questions are edited in the question builder (/admin/cycles/:cycleId/references/:formId).
@@ -19,11 +20,10 @@ const editing = ref(null)
 const saving = ref(false)
 const dialogError = ref(null)
 
-const CHOICE_TYPES = ['single_choice', 'multiple_choice']
-const TEXT_TYPES = ['short_answer', 'long_answer']
+const { schools, schoolName } = useSchools()
 
 const conditionQuestions = computed(() =>
-  props.questions.filter((q) => CHOICE_TYPES.includes(q.type) || TEXT_TYPES.includes(q.type))
+  props.questions.filter((q) => CONDITION_TYPES.includes(q.type))
 )
 const questionById = computed(() => Object.fromEntries(props.questions.map((q) => [q.id, q])))
 
@@ -41,13 +41,7 @@ async function load() {
 onMounted(load)
 
 function conditionText(c) {
-  const q = questionById.value[c.questionId]
-  if (!q) return null
-  if (c.optionId) {
-    const option = q.options?.find((o) => o.id === c.optionId)
-    return `"${q.text}" is "${option?.text ?? '?'}"`
-  }
-  return `"${q.text}" contains "${c.textContains}"`
+  return describeCondition(questionById.value[c.questionId], c, schoolName)
 }
 
 function requirementText(form) {
@@ -74,11 +68,12 @@ function startEdit(form) {
 }
 
 function addCondition() {
-  editing.value.conditions.push({ questionId: null, optionId: null, textContains: '' })
+  editing.value.conditions.push({ questionId: null, optionId: null, schoolId: null, textContains: '' })
 }
 
-function isChoice(questionId) {
-  return CHOICE_TYPES.includes(questionById.value[questionId]?.type)
+// 'option', 'school' or 'text': what a condition on this question looks for
+function kindOf(questionId) {
+  return conditionKind(questionById.value[questionId]?.type)
 }
 
 async function save() {
@@ -92,8 +87,7 @@ async function save() {
     conditions: editing.value.requirement === 'conditional'
       ? editing.value.conditions.map((c) => ({
           questionId: c.questionId,
-          optionId: isChoice(c.questionId) ? c.optionId : null,
-          textContains: isChoice(c.questionId) ? null : c.textContains,
+          ...conditionFields(questionById.value[c.questionId]?.type, c),
         }))
       : [],
   }
@@ -203,15 +197,25 @@ async function remove(form) {
               label="Question"
               hide-details
               class="flex-1 min-w-0"
-              @update:model-value="c.optionId = null; c.textContains = ''"
+              @update:model-value="c.optionId = null; c.schoolId = null; c.textContains = ''"
             />
             <v-select
-              v-if="c.questionId && isChoice(c.questionId)"
+              v-if="c.questionId && kindOf(c.questionId) === 'option'"
               v-model="c.optionId"
               :items="questionById[c.questionId]?.options ?? []"
               item-title="text"
               item-value="id"
               label="Answer is"
+              hide-details
+              class="flex-1 min-w-0"
+            />
+            <v-autocomplete
+              v-else-if="c.questionId && kindOf(c.questionId) === 'school'"
+              v-model="c.schoolId"
+              :items="schools"
+              item-title="name"
+              item-value="id"
+              label="School is"
               hide-details
               class="flex-1 min-w-0"
             />
@@ -225,7 +229,7 @@ async function remove(form) {
             <v-btn icon="mdi-close" variant="text" size="small" class="mt-2" title="Remove" @click="editing.conditions.splice(i, 1)" />
           </div>
           <p v-if="conditionQuestions.length === 0" class="text-xs font-medium text-warning-dark">
-            Add a choice or text question to the application first.
+            Add a choice, school or text question to the application first.
           </p>
           <v-btn v-else variant="outlined" size="small" prepend-icon="mdi-plus" @click="addCondition">Add condition</v-btn>
         </div>

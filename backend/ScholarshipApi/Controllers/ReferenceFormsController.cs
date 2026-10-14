@@ -17,8 +17,6 @@ namespace ScholarshipApi.Controllers;
 public class ReferenceFormsController(QueryFactory db) : ControllerBase
 {
     private const int MaxRequiredCount = 10;
-    private static readonly HashSet<string> ChoiceTypes = ["single_choice", "multiple_choice"];
-    private static readonly HashSet<string> TextTypes = ["short_answer", "long_answer"];
 
     [HttpGet]
     public async Task<IActionResult> List(string cycleId)
@@ -44,7 +42,7 @@ public class ReferenceFormsController(QueryFactory db) : ControllerBase
             f.Requirement,
             f.Order,
             QuestionCount = questionCounts.GetValueOrDefault(f.Id),
-            Conditions = conditions[f.Id].Select(c => new { c.QuestionId, c.OptionId, c.TextContains }),
+            Conditions = conditions[f.Id].Select(c => new { c.QuestionId, c.OptionId, c.SchoolId, c.TextContains }),
         }));
     }
 
@@ -140,21 +138,8 @@ public class ReferenceFormsController(QueryFactory db) : ControllerBase
                 .WhereNull("ReferenceFormId").FirstOrDefaultAsync<Question>()
                 ?? throw new ArgumentException("A condition uses a question that isn't on this cycle's application.");
 
-            if (ChoiceTypes.Contains(question.Type))
-            {
-                if (!await db.Query("QuestionOptions").Where("Id", condition.OptionId ?? "").Where("QuestionId", question.Id).ExistsAsync())
-                    throw new ArgumentException($"Choose an answer for \"{question.Text}\".");
-                condition.TextContains = null;
-            }
-            else if (TextTypes.Contains(question.Type))
-            {
-                condition.TextContains = InputValidation.Required(condition.TextContains, "Text to look for", 255);
-                condition.OptionId = null;
-            }
-            else
-            {
-                throw new ArgumentException("Conditions can only use choice or text questions.");
-            }
+            (condition.OptionId, condition.SchoolId, condition.TextContains) =
+                await ConditionTarget.ValidateAsync(db, question, condition.OptionId, condition.SchoolId, condition.TextContains);
         }
 
         return new ValidForm(title, description, request.RequiredCount, request.Requirement, conditions);
@@ -170,6 +155,7 @@ public class ReferenceFormsController(QueryFactory db) : ControllerBase
                 FormId = formId,
                 c.QuestionId,
                 c.OptionId,
+                c.SchoolId,
                 c.TextContains,
             }, transaction);
         }
@@ -204,5 +190,7 @@ public class ReferenceConditionRequest
     /// <summary>For choice questions: required when this option is chosen.</summary>
     public string? OptionId { get; set; }
     /// <summary>For text questions: required when the answer contains this text (ignoring case).</summary>
+    /// <summary>For School Select questions: the school chosen.</summary>
+    public string? SchoolId { get; set; }
     public string? TextContains { get; set; }
 }
