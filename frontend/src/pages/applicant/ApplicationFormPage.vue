@@ -4,7 +4,7 @@ import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import api from '../../services/api'
 import { useApplicationStore } from '../../stores/application'
 import { useConfirm } from '../../composables/useConfirm'
-import { validateForm } from '../../utils/validate'
+import { validateForm, isAnswered } from '../../utils/validate'
 import { visibleQuestionIds } from '../../utils/questionVisibility'
 import QuestionRenderer from '../../components/application/QuestionRenderer.vue'
 import ApplicationProgress from '../../components/application/ApplicationProgress.vue'
@@ -89,12 +89,19 @@ const groupedSections = computed(() => {
   return groups
 })
 
-const answeredCount = computed(() =>
-  visibleQuestions.value.filter((q) => {
-    const v = appStore.answers[q.id]
-    return v != null && v !== '' && !(Array.isArray(v) && v.length === 0)
-  }).length
-)
+// Progress counts required questions (what blocks submitting); a form with none counts every question
+const requiredQuestions = computed(() => visibleQuestions.value.filter((q) => q.isRequired))
+const progressQuestions = computed(() => requiredQuestions.value.length ? requiredQuestions.value : visibleQuestions.value)
+const answeredCount = computed(() => progressQuestions.value.filter((q) => isAnswered(q, appStore.answers[q.id])).length)
+const missingRequired = computed(() => requiredQuestions.value.filter((q) => !isAnswered(q, appStore.answers[q.id])))
+
+// Scrolls to a question and puts the cursor in it
+function goToQuestion(id) {
+  const el = document.getElementById(`q-${id}`)
+  if (!el) return
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  el.querySelector('input, textarea, [contenteditable="true"]')?.focus({ preventScroll: true })
+}
 
 // ── Autosave ─────────────────────────────────────────────────────────────────
 // Answers save a couple of seconds after the applicant stops changing them. `edits` counts changes so an edit made
@@ -108,7 +115,7 @@ let autosaveTimer = null
 const hasUnsavedChanges = computed(() => edits.value !== savedEdits.value)
 const saveStatus = computed(() => {
   if (saving.value) return { icon: 'mdi-cloud-upload-outline', text: 'Saving…', class: 'text-slate-400' }
-  if (saveFailed.value) return { icon: 'mdi-cloud-alert-outline', text: "Couldn't save. Check your connection; we'll keep trying.", class: 'text-danger' }
+  if (saveFailed.value) return { icon: 'mdi-cloud-alert-outline', text: "Couldn't save. Check your connection; we'll keep trying.", class: 'text-danger-dark' }
   if (hasUnsavedChanges.value) return { icon: 'mdi-pencil-outline', text: 'Unsaved changes', class: 'text-slate-400' }
   return { icon: 'mdi-cloud-check-outline', text: 'All changes saved', class: 'text-slate-400' }
 })
@@ -218,8 +225,11 @@ async function submit() {
   const errors = validateForm(visibleQuestions.value, appStore.answers)
   validationErrors.value = errors
 
-  if (Object.keys(errors).length > 0) {
-    alert.value = { type: 'warning', message: 'Please fix the errors below before submitting.' }
+  const firstError = visibleQuestions.value.find((q) => errors[q.id])
+  if (firstError) {
+    const count = Object.keys(errors).length
+    alert.value = { type: 'warning', message: `${count} question${count === 1 ? ' needs' : 's need'} attention before you can submit. They're marked in red.` }
+    goToQuestion(firstError.id)
     return
   }
 
@@ -294,15 +304,15 @@ async function submit() {
         </div>
 
         <div class="space-y-4">
-          <QuestionRenderer
-            v-for="question in group.questions"
-            :key="question.id"
-            :question="question"
-            :applicationId="appStore.currentApplication?.id"
-            :modelValue="appStore.answers[question.id]"
-            :error="validationErrors[question.id] ?? null"
-            @answer="(val) => handleAnswer(question.id, val)"
-          />
+          <div v-for="question in group.questions" :id="`q-${question.id}`" :key="question.id" class="scroll-mt-20">
+            <QuestionRenderer
+              :question="question"
+              :applicationId="appStore.currentApplication?.id"
+              :modelValue="appStore.answers[question.id]"
+              :error="validationErrors[question.id] ?? null"
+              @answer="(val) => handleAnswer(question.id, val)"
+            />
+          </div>
         </div>
       </template>
 
@@ -319,10 +329,35 @@ async function submit() {
       <div class="form-action-bar">
         <v-card class="pa-4 flex flex-wrap items-center gap-x-6 gap-y-3">
           <div class="flex-1 min-w-[220px] space-y-1">
-            <ApplicationProgress :answered="answeredCount" :total="visibleQuestions.length" />
-            <p class="flex items-center gap-1.5 text-xs" :class="saveStatus.class" role="status" aria-live="polite">
-              <v-icon :icon="saveStatus.icon" size="16" /> {{ saveStatus.text }}
-            </p>
+            <ApplicationProgress :answered="answeredCount" :total="progressQuestions.length">
+              {{ answeredCount }} of {{ progressQuestions.length }} {{ requiredQuestions.length ? 'required ' : '' }}answered
+            </ApplicationProgress>
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <p class="flex items-center gap-1.5 text-xs" :class="saveStatus.class" role="status" aria-live="polite">
+                <v-icon :icon="saveStatus.icon" size="16" /> {{ saveStatus.text }}
+              </p>
+              <!-- Which required questions are still empty; picking one jumps to it -->
+              <v-menu v-if="missingRequired.length" location="top start">
+                <template #activator="{ props: menuProps }">
+                  <v-btn v-bind="menuProps" variant="text" size="x-small" color="warning" append-icon="mdi-chevron-up" class="-ml-2">
+                    {{ missingRequired.length }} required still empty
+                  </v-btn>
+                </template>
+                <v-list density="compact" max-height="320" max-width="420">
+                  <v-list-subheader>Required questions still empty</v-list-subheader>
+                  <v-list-item
+                    v-for="q in missingRequired"
+                    :key="q.id"
+                    :title="q.text"
+                    prepend-icon="mdi-alert-circle-outline"
+                    @click="goToQuestion(q.id)"
+                  />
+                </v-list>
+              </v-menu>
+              <p v-else-if="requiredQuestions.length" class="flex items-center gap-1.5 text-xs text-success-dark">
+                <v-icon icon="mdi-check-circle-outline" size="16" /> Every required question is answered
+              </p>
+            </div>
           </div>
           <div class="flex items-center gap-3">
             <v-btn variant="outlined" prepend-icon="mdi-content-save" :loading="saving" :disabled="!hasUnsavedChanges" @click="saveDraft">
