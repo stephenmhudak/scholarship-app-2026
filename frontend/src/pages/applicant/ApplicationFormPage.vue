@@ -95,6 +95,20 @@ const progressQuestions = computed(() => requiredQuestions.value.length ? requir
 const answeredCount = computed(() => progressQuestions.value.filter((q) => isAnswered(q, appStore.answers[q.id])).length)
 const missingRequired = computed(() => requiredQuestions.value.filter((q) => !isAnswered(q, appStore.answers[q.id])))
 
+// Jump list: each section, done once its required questions are answered (every question if it has none required)
+const sectionNav = computed(() => {
+  if (!groupedSections.value.some((g) => g.title)) return []
+  return groupedSections.value.map((g) => {
+    const counted = g.questions.some((q) => q.isRequired) ? g.questions.filter((q) => q.isRequired) : g.questions
+    const answered = counted.filter((q) => isAnswered(q, appStore.answers[q.id])).length
+    return { key: g.id ?? 'other', title: g.title || 'Other questions', answered, total: counted.length, done: answered === counted.length }
+  })
+})
+
+function goToSection(key) {
+  document.getElementById(`section-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 // Scrolls to a question and puts the cursor in it
 function goToQuestion(id) {
   const el = document.getElementById(`q-${id}`)
@@ -294,11 +308,27 @@ async function submit() {
         </v-card-text>
       </v-card>
 
+      <!-- Jump to a section; a check mark once its required questions are answered -->
+      <v-card v-if="sectionNav.length > 1" title="Sections">
+        <v-card-text class="pa-4 flex flex-wrap gap-2">
+          <v-chip
+            v-for="s in sectionNav"
+            :key="s.key"
+            :color="s.done ? 'success' : undefined"
+            :prepend-icon="s.done ? 'mdi-check-circle' : 'mdi-circle-outline'"
+            @click="goToSection(s.key)"
+          >
+            {{ s.title }}
+            <span v-if="!s.done" class="ml-1.5 text-xs opacity-70">{{ s.answered }}/{{ s.total }}</span>
+          </v-chip>
+        </v-card-text>
+      </v-card>
+
       <!-- Sections + questions -->
       <template v-for="group in groupedSections" :key="group.id ?? '__ungrouped'">
-        <!-- Section header (only when named sections exist) -->
-        <div v-if="group.title" class="pt-2">
-          <h2 class="text-base font-bold text-navy">{{ group.title }}</h2>
+        <!-- Section header (only when named sections exist; questions outside a section come last as "Other questions") -->
+        <div v-if="sectionNav.length" :id="`section-${group.id ?? 'other'}`" class="pt-2 scroll-mt-20">
+          <h2 class="text-base font-bold text-navy">{{ group.title || 'Other questions' }}</h2>
           <p v-if="group.description" class="text-sm text-slate-400 mt-0.5">{{ group.description }}</p>
           <v-divider class="mt-2" />
         </div>
