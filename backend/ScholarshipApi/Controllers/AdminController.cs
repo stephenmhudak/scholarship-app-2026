@@ -45,6 +45,26 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
         return NoContent();
     }
 
+    // Every score on an application, by scorer, for its detail page: what was scored (a section, the application as a
+    // whole, or a reference), the score and comments
+    [HttpGet("applications/{id}/scores")]
+    public async Task<IActionResult> ApplicationScores(string id)
+    {
+        if (!await db.Query("Applications").Where("Id", id).ExistsAsync()) throw new KeyNotFoundException("Application not found.");
+        var scores = await db.Query("Scores as s")
+            .Join("Users as u", "u.Id", "s.ScoredById")
+            .LeftJoin("Sections as sec", "sec.Id", "s.SectionId")
+            .LeftJoin("ReferenceRequests as rr", "rr.Id", "s.ReferenceRequestId")
+            .LeftJoin("ReferenceForms as rf", "rf.Id", "rr.FormId")
+            .Where("s.ApplicationId", id)
+            .OrderBy("u.LastName", "u.FirstName").OrderBy("sec.Order").OrderBy("rf.Order")
+            .Select("s.Id", "s.ScoredById", "u.FirstName as ScorerFirstName", "u.LastName as ScorerLastName",
+                    "s.SectionId", "sec.Title as SectionTitle", "s.ReferenceRequestId", "rf.Title as ReferenceTitle",
+                    "rr.Label as ReferenceLabel", "s.Score", "s.Comments", "s.ScoredAt")
+            .GetAsync<dynamic>();
+        return Ok(scores);
+    }
+
     // ── Scoring Overview ──────────────────────────────────────────────────────
 
     [HttpGet("scoring/overview")]
