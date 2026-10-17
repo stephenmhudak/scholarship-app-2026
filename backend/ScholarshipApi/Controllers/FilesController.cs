@@ -34,9 +34,9 @@ public class FilesController(IFileStorageService fileStorage, ApplicationAccess 
             throw new UnauthorizedAccessException("You do not have permission to upload files to this application.");
         var cycle = await db.Query("ScholarshipCycles").Where("Id", application.CycleId).FirstOrDefaultAsync<ScholarshipCycle>();
         if (cycle is null || !CycleWindow.IsOpen(cycle, DateTime.UtcNow))
-            throw new ArgumentException("This scholarship cycle has closed.");
+            throw new ArgumentException("This application period has closed.");
         if (questionId is not null && !await db.Query("Questions").Where("Id", questionId).Where("CycleId", application.CycleId).WhereNull("ReferenceFormId").ExistsAsync())
-            throw new ArgumentException("Question not found in this application's cycle.");
+            throw new ArgumentException("That question isn't on this application.");
 
         var storagePath = await fileStorage.StoreAsync(file, "application-files");
 

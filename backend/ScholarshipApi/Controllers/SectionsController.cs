@@ -25,7 +25,7 @@ public class SectionsController(QueryFactory db) : ControllerBase
     [Authorize(Policy = "AppAdmin")]
     public async Task<IActionResult> Create(string cycleId, [FromBody] SectionRequest request)
     {
-        if (!await db.Query("ScholarshipCycles").Where("Id", cycleId).ExistsAsync()) throw new KeyNotFoundException("Cycle not found.");
+        if (!await db.Query("ScholarshipCycles").Where("Id", cycleId).ExistsAsync()) throw new KeyNotFoundException("Application period not found.");
         var title = InputValidation.Required(request.Title, "Section title", 255);
         var description = InputValidation.Optional(request.Description, "Description", 5000);
         var id = Guid.NewGuid().ToString();

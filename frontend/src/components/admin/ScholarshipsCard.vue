@@ -170,7 +170,7 @@ async function remove(s) {
         Loading scholarships…
       </div>
 
-      <p v-else-if="scholarships.length === 0" class="text-sm text-slate-400">No scholarships in this cycle yet.</p>
+      <p v-else-if="scholarships.length === 0" class="text-sm text-slate-400">No scholarships in this application period yet.</p>
 
       <div v-for="s in scholarships" :key="s.id" class="rounded-lg border border-[#E9EDF7] pa-4 space-y-2">
         <div class="flex items-start gap-3">

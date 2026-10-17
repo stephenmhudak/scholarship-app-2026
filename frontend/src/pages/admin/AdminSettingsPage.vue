@@ -308,7 +308,7 @@ onMounted(() => { loadUsers(); loadSchools() })
 <template>
   <div class="space-y-6">
     <div>
-      <h1 class="page-title">Settings</h1>
+      <h1 class="page-title">Users &amp; Schools</h1>
       <p class="page-subtitle">Manage users, schools, and registration links</p>
     </div>
 

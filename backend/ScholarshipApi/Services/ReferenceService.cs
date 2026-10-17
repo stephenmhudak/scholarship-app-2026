@@ -453,7 +453,7 @@ public class ReferenceService(
         if (app.ApplicantId != applicantId) throw new UnauthorizedAccessException("Access denied.");
         if (app.Status != "draft") throw new ArgumentException("References can't be changed after the application is submitted.");
         if (!CycleWindow.IsOpen(await GetCycleAsync(app.CycleId), DateTime.UtcNow))
-            throw new ArgumentException("This scholarship cycle has closed.");
+            throw new ArgumentException("This application period has closed.");
         return app;
     }
 

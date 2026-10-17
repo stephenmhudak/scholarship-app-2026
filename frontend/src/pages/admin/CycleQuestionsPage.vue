@@ -647,7 +647,7 @@ function globalIndex(q) {
         Application questions
       </v-btn>
       <v-btn v-else variant="text" color="primary" size="small" prepend-icon="mdi-arrow-left" to="/admin/scholarship-settings" class="-ml-3 mb-1">
-        Scholarship Settings
+        Application Periods
       </v-btn>
       <h1 class="page-title">{{ isSubset ? formTitle : 'Questions' }}</h1>
       <p class="page-subtitle">{{ formId ? `Reference questions · ${cycleName}` : cycleName }}</p>

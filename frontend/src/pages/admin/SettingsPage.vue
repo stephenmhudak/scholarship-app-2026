@@ -19,8 +19,8 @@ const blank = () => ({
 })
 
 const copyFromItems = computed(() => [
-  { title: 'Default application questions', value: '' },
-  ...cycles.value.map((c) => ({ title: `Copy from ${c.name}`, value: c.id })),
+  { title: 'The default application questions', value: '' },
+  ...cycles.value.map((c) => ({ title: c.name, value: c.id })),
 ])
 
 onMounted(async () => {
@@ -77,10 +77,10 @@ async function save() {
 
     if (creating.value) {
       await api.post('/admin/cycles', { ...payload, copyFromCycleId: editing.value.copyFromCycleId || null })
-      alert.value = { type: 'success', message: 'Cycle created.' }
+      alert.value = { type: 'success', message: 'Application period created.' }
     } else {
       await api.put(`/admin/cycles/${editing.value.id}`, payload)
-      alert.value = { type: 'success', message: 'Cycle updated.' }
+      alert.value = { type: 'success', message: 'Application period updated.' }
     }
 
     editing.value = null
@@ -98,23 +98,23 @@ async function save() {
   <div class="space-y-6 max-w-2xl">
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="page-title">Scholarship Settings</h1>
-        <p class="page-subtitle">Manage scholarship cycles and application windows.</p>
+        <h1 class="page-title">Application Periods</h1>
+        <p class="page-subtitle">Each application period has its own dates, application form, scholarships and references.</p>
       </div>
       <v-btn v-if="!editing" color="primary" prepend-icon="mdi-plus" @click="startCreate()">
-        New Cycle
+        New Application Period
       </v-btn>
     </div>
 
     <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
     <!-- Edit / Create Form -->
-    <v-card v-if="editing" :title="creating ? 'Create Cycle' : 'Edit Cycle'">
+    <v-card v-if="editing" :title="creating ? 'New Application Period' : 'Edit Application Period'">
       <v-card-text class="pa-6 space-y-5">
         <v-text-field
           v-model="editing.name"
-          label="Cycle Name"
-          placeholder="e.g. 2026 Spring Scholarship"
+          label="Name"
+          placeholder="e.g. 2026–27 Scholarship Application"
           hide-details="auto"
         />
 
@@ -127,12 +127,17 @@ async function save() {
           v-if="creating"
           v-model="editing.copyFromCycleId"
           :items="copyFromItems"
-          label="Questions"
-          hint="Sections and questions are copied; applications and scores are not."
+          label="Start with questions from"
+          hint="Copies its sections, questions, scholarships, references and letters. Applications, scores and awards aren't copied."
           persistent-hint
         />
 
-        <v-switch v-model="editing.isActive" label="Active (applications open)" />
+        <v-switch
+          v-model="editing.isActive"
+          label="Accepting applications"
+          hint="Applicants can apply between the open and close dates while this is on."
+          persistent-hint
+        />
 
         <div class="flex gap-3 pt-2">
           <v-btn color="primary" prepend-icon="mdi-content-save" :loading="saving" @click="save">
@@ -153,7 +158,7 @@ async function save() {
     <v-card v-else-if="cycles.length === 0 && !editing">
       <v-empty-state
         icon="mdi-calendar-blank-outline"
-        text="No scholarship cycles yet. Create one to get started."
+        text="No application periods yet. Create one to get started."
       />
     </v-card>
 

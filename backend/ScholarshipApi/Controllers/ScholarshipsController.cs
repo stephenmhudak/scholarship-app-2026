@@ -55,7 +55,7 @@ public class ScholarshipsController(QueryFactory db) : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(string cycleId, [FromBody] ScholarshipRequest request)
     {
-        if (!await db.Query("ScholarshipCycles").Where("Id", cycleId).ExistsAsync()) throw new KeyNotFoundException("Cycle not found.");
+        if (!await db.Query("ScholarshipCycles").Where("Id", cycleId).ExistsAsync()) throw new KeyNotFoundException("Application period not found.");
         var valid = await ValidateAsync(cycleId, request);
 
         var id = Guid.NewGuid().ToString();
@@ -181,7 +181,7 @@ public class ScholarshipsController(QueryFactory db) : ControllerBase
         {
             var question = await db.Query("Questions").Where("Id", condition.QuestionId ?? "").Where("CycleId", cycleId)
                 .WhereNull("ReferenceFormId").FirstOrDefaultAsync<Question>()
-                ?? throw new ArgumentException("A condition uses a question that isn't on this cycle's application.");
+                ?? throw new ArgumentException("A condition uses a question that isn't on this application period's form.");
             // A scholarship's own questions only show once someone is eligible, so they can't decide eligibility
             if (question.SectionId is not null
                 && await db.Query("Sections").Where("Id", question.SectionId).WhereNotNull("ScholarshipId").ExistsAsync())

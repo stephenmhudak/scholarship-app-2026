@@ -88,7 +88,7 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
     public async Task<IActionResult> Create(string cycleId, [FromBody] QuestionRequest request, [FromQuery] string? referenceFormId,
         [FromQuery] string? scholarshipId, [FromQuery] string? part)
     {
-        if (!await db.Query("ScholarshipCycles").Where("Id", cycleId).ExistsAsync()) throw new KeyNotFoundException("Cycle not found.");
+        if (!await db.Query("ScholarshipCycles").Where("Id", cycleId).ExistsAsync()) throw new KeyNotFoundException("Application period not found.");
 
         // A scholarship's questions go in its sections: eligibility ones in the shared eligibility section (tagged
         // with the scholarship), its own in its section (shown only to eligible applicants)
@@ -194,11 +194,11 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
         if (ids.Count == 0) throw new ArgumentException("Choose at least one question.");
         var questions = (await db.Query("Questions").WhereIn("Id", ids).Where("CycleId", cycleId).WhereNull("ReferenceFormId")
             .OrderBy("Order").GetAsync<Question>()).ToList();
-        if (questions.Count != ids.Count) throw new ArgumentException("Only this cycle's application questions can be moved between sections.");
+        if (questions.Count != ids.Count) throw new ArgumentException("Only this application period's questions can be moved between sections.");
 
         var sectionId = string.IsNullOrEmpty(request.SectionId) ? null : request.SectionId;
         if (sectionId is not null && !await db.Query("Sections").Where("Id", sectionId).Where("CycleId", cycleId).ExistsAsync())
-            throw new ArgumentException("That section isn't part of this cycle.");
+            throw new ArgumentException("That section isn't part of this application period.");
 
         // Order is cycle-wide (sections group by it), so putting them after the last question lands them at the end of the section
         var nextOrder = (await db.Query("Questions").Where("CycleId", cycleId).WhereNull("ReferenceFormId").MaxAsync<int?>("Order") ?? -1) + 1;
@@ -261,7 +261,7 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
 
         if (!string.IsNullOrEmpty(request.SectionId)
             && !await db.Query("Sections").Where("Id", request.SectionId).Where("CycleId", cycleId).ExistsAsync())
-            throw new ArgumentException("That section isn't part of this cycle.");
+            throw new ArgumentException("That section isn't part of this application period.");
         if (string.IsNullOrEmpty(request.SectionId)) request.SectionId = null;
 
         var isChoice = request.Type is "multiple_choice" or "single_choice";
@@ -305,7 +305,7 @@ public class QuestionsController(QueryFactory db, IAuthorizationService authoriz
             if (condition.SourceQuestionId == questionId) throw new ArgumentException("A question can't depend on its own answer.");
             var source = await db.Query("Questions").Where("Id", condition.SourceQuestionId ?? "").Where("CycleId", cycleId)
                 .WhereNull("ReferenceFormId").FirstOrDefaultAsync<Question>()
-                ?? throw new ArgumentException("A condition uses a question that isn't on this cycle's application.");
+                ?? throw new ArgumentException("A condition uses a question that isn't on this application period's form.");
 
             (condition.OptionId, condition.SchoolId, condition.TextContains) =
                 await ConditionTarget.ValidateAsync(db, source, condition.OptionId, condition.SchoolId, condition.TextContains);

@@ -129,7 +129,7 @@ async function save() {
                 :items="cycles"
                 item-title="name"
                 item-value="id"
-                label="Cycle"
+                label="Application period"
                 hide-details
                 @update:model-value="pickCycle(f)"
               />

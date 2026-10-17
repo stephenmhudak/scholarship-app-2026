@@ -66,15 +66,15 @@ onMounted(async () => {
         <div class="flex items-center justify-between">
           <div>
             <p class="eyebrow mb-2">Current Status</p>
-            <StatusBadge :status="application.status" />
+            <StatusBadge :status="application.status" plain />
           </div>
           <div class="text-right text-sm text-slate-400 space-y-0.5">
             <p>Submitted: {{ application.submittedAt ? new Date(application.submittedAt).toLocaleDateString() : '—' }}</p>
-            <p>Created: {{ new Date(application.createdAt).toLocaleDateString() }}</p>
+            <p>Started: {{ new Date(application.createdAt).toLocaleDateString() }}</p>
           </div>
         </div>
         <p v-if="application.status === 'archived'" class="text-sm text-slate-400 mt-4">
-          This application wasn't submitted before the scholarship closed. You can still copy its answers into an application for another scholarship.
+          This application wasn't submitted before the application period closed. You can still copy its answers into a later application.
         </p>
         <div v-else-if="application.status === 'draft' && application.isCycleOpen" class="mt-4">
           <v-btn color="primary" prepend-icon="mdi-file-document-edit-outline" :to="`/application/${application.id}`">

@@ -63,7 +63,7 @@ async function sendNudge(studentId) {
           <p class="text-xs text-slate-400">{{ item.email }}</p>
         </template>
         <template #item.applicationStatus="{ item }">
-          <StatusBadge v-if="item.applicationStatus" :status="item.applicationStatus" />
+          <StatusBadge v-if="item.applicationStatus" :status="item.applicationStatus" plain />
           <v-chip v-else>Not started</v-chip>
         </template>
         <template #item.lastActivity="{ item }">

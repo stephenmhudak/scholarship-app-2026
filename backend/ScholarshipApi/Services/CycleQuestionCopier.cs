@@ -15,7 +15,7 @@ public static class CycleQuestionCopier
     {
         var sourceExists = await db.Query("ScholarshipCycles").Where("Id", sourceCycleId)
             .ExistsAsync(transaction);
-        if (!sourceExists) throw new KeyNotFoundException("Cycle to copy from was not found.");
+        if (!sourceExists) throw new KeyNotFoundException("The application period to copy from wasn't found.");
 
         // Scholarships first: sections and questions point at them
         var scholarships = await db.Query("Scholarships").Where("CycleId", sourceCycleId).GetAsync<Scholarship>(transaction);

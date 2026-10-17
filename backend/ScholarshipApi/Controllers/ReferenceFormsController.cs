@@ -49,7 +49,7 @@ public class ReferenceFormsController(QueryFactory db) : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(string cycleId, [FromBody] ReferenceFormRequest request)
     {
-        if (!await db.Query("ScholarshipCycles").Where("Id", cycleId).ExistsAsync()) throw new KeyNotFoundException("Cycle not found.");
+        if (!await db.Query("ScholarshipCycles").Where("Id", cycleId).ExistsAsync()) throw new KeyNotFoundException("Application period not found.");
         var form = await ValidateAsync(cycleId, request);
 
         var id = Guid.NewGuid().ToString();
@@ -136,7 +136,7 @@ public class ReferenceFormsController(QueryFactory db) : ControllerBase
         {
             var question = await db.Query("Questions").Where("Id", condition.QuestionId ?? "").Where("CycleId", cycleId)
                 .WhereNull("ReferenceFormId").FirstOrDefaultAsync<Question>()
-                ?? throw new ArgumentException("A condition uses a question that isn't on this cycle's application.");
+                ?? throw new ArgumentException("A condition uses a question that isn't on this application period's form.");
 
             (condition.OptionId, condition.SchoolId, condition.TextContains) =
                 await ConditionTarget.ValidateAsync(db, question, condition.OptionId, condition.SchoolId, condition.TextContains);
