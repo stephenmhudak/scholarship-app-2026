@@ -6,6 +6,7 @@ import StatusBadge from '../../components/admin/StatusBadge.vue'
 import AnswerDisplay from '../../components/application/AnswerDisplay.vue'
 import NoApplicationCard from '../../components/application/NoApplicationCard.vue'
 import { visibleQuestionIds, answerValue } from '../../utils/questionVisibility'
+import { downloadPdf } from '../../utils/pdf'
 
 const route = useRoute()
 const appId = route.params.id
@@ -16,6 +17,24 @@ const loading = ref(true)
 const error = ref(null)
 // /application/current/status 404s when the applicant hasn't started one — not an error.
 const noApplication = ref(false)
+// Scholarships this application won
+const awards = ref([])
+const downloading = ref(null)
+const letterError = ref(null)
+
+const money = (n) => n == null ? null : Number(n).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+
+async function downloadLetter(award) {
+  downloading.value = award.scholarshipId
+  letterError.value = null
+  try {
+    await downloadPdf(`/applications/${application.value.id}/awards/${award.scholarshipId}/letter`, `${award.name} - award letter.pdf`)
+  } catch {
+    letterError.value = "Your award letter couldn't be downloaded. Please try again later."
+  } finally {
+    downloading.value = null
+  }
+}
 
 const answersMap = computed(() =>
   Object.fromEntries((application.value?.answers ?? []).map((a) => [a.questionId, a]))
@@ -31,10 +50,12 @@ onMounted(async () => {
   try {
     const response = await api.get(`/applications/${appId}`)
     application.value = response.data
-    if (response.data.cycleId) {
-      const qRes = await api.get(`/cycles/${response.data.cycleId}/questions`)
-      questions.value = qRes.data
-    }
+    const [qRes, awardsRes] = await Promise.all([
+      response.data.cycleId ? api.get(`/cycles/${response.data.cycleId}/questions`) : null,
+      api.get(`/applications/${response.data.id}/awards`).catch(() => null),
+    ])
+    questions.value = qRes?.data ?? []
+    awards.value = awardsRes?.data ?? []
   } catch (err) {
     if (appId === 'current' && err.response?.status === 404) noApplication.value = true
     else error.value = 'Failed to load application status.'
@@ -81,6 +102,35 @@ onMounted(async () => {
             Continue Application
           </v-btn>
         </div>
+      </v-card>
+
+      <!-- Scholarships won -->
+      <v-card v-if="awards.length" title="Scholarships awarded" class="card-header-success">
+        <v-card-text class="pa-6 space-y-4">
+          <p class="text-sm text-navy">
+            Congratulations! You've been awarded {{ awards.length === 1 ? 'this scholarship' : 'these scholarships' }}.
+          </p>
+          <v-alert v-if="letterError" type="error" :text="letterError" closable @click:close="letterError = null" />
+          <div v-for="a in awards" :key="a.scholarshipId" class="rounded-lg border border-[#E9EDF7] pa-4 flex flex-wrap items-center gap-3">
+            <v-icon icon="mdi-trophy-outline" color="success" />
+            <div class="flex-1 min-w-[200px]">
+              <p class="text-sm font-semibold text-navy">{{ a.name }}</p>
+              <p v-if="a.description" class="text-xs text-slate-400">{{ a.description }}</p>
+              <p class="text-xs text-slate-400">Awarded {{ new Date(a.awardedAt).toLocaleDateString() }}</p>
+            </div>
+            <span v-if="a.amount != null" class="text-base font-bold text-navy">{{ money(a.amount) }}</span>
+            <v-btn
+              v-if="a.hasLetter"
+              variant="outlined"
+              size="small"
+              prepend-icon="mdi-file-pdf-box"
+              :loading="downloading === a.scholarshipId"
+              @click="downloadLetter(a)"
+            >
+              Award letter
+            </v-btn>
+          </div>
+        </v-card-text>
       </v-card>
 
       <!-- Submitted Answers -->
