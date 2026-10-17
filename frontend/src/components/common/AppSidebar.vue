@@ -1,13 +1,15 @@
 <script setup>
 import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { useNavDrawer } from '../../composables/useNavDrawer'
 
 const authStore = useAuthStore()
+const route = useRoute()
 const { drawer, isOverlay } = useNavDrawer()
 const schoolId = computed(() => authStore.user?.schoolId)
 
-// Grouped by what people come to do. Headings only show when someone has more than one group.
+// Grouped by what people come to do. `also`: a path prefix that highlights the link too (pages it leads to). Headings only show when someone has more than one group.
 const groups = computed(() => {
   const all = [
     { heading: 'Apply', links: [
@@ -20,7 +22,7 @@ const groups = computed(() => {
     { heading: 'Manage', links: [
       { label: 'Applications',       icon: 'mdi-folder-multiple-outline', to: '/admin/applications',         permission: 'admin_applications' },
       { label: 'Scoring Progress',   icon: 'mdi-chart-bar',               to: '/admin/scoring',              permission: 'view_scoring_overview' },
-      { label: 'Application Periods', icon: 'mdi-calendar-range',         to: '/admin/scholarship-settings', permission: 'admin_scholarship' },
+      { label: 'Application Periods', icon: 'mdi-calendar-range',         to: '/admin/scholarship-settings', permission: 'admin_scholarship', also: '/admin/cycles/' },
       { label: 'Users & Schools',    icon: 'mdi-account-cog-outline',     to: '/admin/settings',             permission: 'admin_settings' },
     ] },
     { heading: 'School', links: [
@@ -49,6 +51,7 @@ const groups = computed(() => {
           v-for="link in group.links"
           :key="link.to"
           :to="link.to"
+          :active="link.also && route.path.startsWith(link.also) ? true : undefined"
           :prepend-icon="link.icon"
           :title="link.label"
           slim

@@ -6,13 +6,12 @@ import { useConfirm } from '../../composables/useConfirm'
 import LetterEditorDialog from '../../components/letters/LetterEditorDialog.vue'
 import { downloadPdf } from '../../utils/pdf'
 
-// A cycle's award letters: base letters (one is the default every scholarship uses unless it has its own) and
+// A cycle's award letters (a tab of CyclePage): base letters (one is the default every scholarship uses unless it has its own) and
 // each scholarship's own letter. Awarders generate the PDFs from the Award Scholarships page.
 const route = useRoute()
 const confirm = useConfirm()
 const cycleId = route.params.cycleId
 
-const cycleName = ref('')
 const baseLetters = ref([])
 const scholarships = ref([])
 const loading = ref(true)
@@ -23,10 +22,9 @@ const editorOpen = computed({ get: () => !!editing.value, set: (v) => { if (!v) 
 
 async function load() {
   try {
-    const [lettersRes, cyclesRes] = await Promise.all([api.get(`/cycles/${cycleId}/letters`), api.get('/admin/cycles')])
-    baseLetters.value = lettersRes.data.baseLetters
-    scholarships.value = lettersRes.data.scholarships
-    cycleName.value = cyclesRes.data.find((c) => c.id === cycleId)?.name ?? ''
+    const { data } = await api.get(`/cycles/${cycleId}/letters`)
+    baseLetters.value = data.baseLetters
+    scholarships.value = data.scholarships
   } catch {
     alert.value = { type: 'error', message: 'Failed to load award letters.' }
   } finally {
@@ -110,14 +108,6 @@ async function resetScholarship(s) {
 
 <template>
   <div class="space-y-6 max-w-4xl">
-    <div>
-      <v-btn variant="text" color="primary" size="small" prepend-icon="mdi-arrow-left" :to="`/admin/cycles/${cycleId}/questions`" class="-ml-3 mb-1">
-        Questions &amp; scholarships
-      </v-btn>
-      <h1 class="page-title">Award Letters</h1>
-      <p class="page-subtitle">{{ cycleName }}</p>
-    </div>
-
     <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
     <div v-if="loading" class="flex items-center gap-3 text-slate-400 py-4">

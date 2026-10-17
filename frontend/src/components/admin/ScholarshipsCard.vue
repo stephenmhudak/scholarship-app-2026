@@ -152,7 +152,6 @@ async function remove(s) {
 <template>
   <v-card title="Scholarships">
     <template #append>
-      <v-btn variant="tonal" prepend-icon="mdi-email-newsletter" :to="`/admin/cycles/${cycleId}/letters`" class="mr-2">Award letters</v-btn>
       <v-btn variant="tonal" prepend-icon="mdi-plus" @click="startAdd">Add scholarship</v-btn>
     </template>
 
