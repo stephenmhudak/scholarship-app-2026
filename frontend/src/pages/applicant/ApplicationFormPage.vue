@@ -259,8 +259,6 @@ async function submit() {
     <NoApplicationCard v-else-if="noApplication" />
 
     <template v-else>
-      <ApplicationProgress :answered="answeredCount" :total="visibleQuestions.length" />
-
       <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
       <!-- Reuse answers from another cycle's application -->
@@ -317,18 +315,37 @@ async function submit() {
         :before-create="saveBeforeReference"
       />
 
-      <v-divider />
-      <div class="flex flex-wrap items-center gap-3">
-        <p class="flex items-center gap-1.5 text-sm mr-auto" :class="saveStatus.class" role="status" aria-live="polite">
-          <v-icon :icon="saveStatus.icon" size="18" /> {{ saveStatus.text }}
-        </p>
-        <v-btn variant="outlined" prepend-icon="mdi-content-save" :loading="saving" :disabled="!hasUnsavedChanges" @click="saveDraft">
-          Save now
-        </v-btn>
-        <v-btn color="primary" prepend-icon="mdi-send" :loading="submitting" @click="submit">
-          Submit Application
-        </v-btn>
+      <!-- Stays at the bottom of the screen while scrolling the form -->
+      <div class="form-action-bar">
+        <v-card class="pa-4 flex flex-wrap items-center gap-x-6 gap-y-3">
+          <div class="flex-1 min-w-[220px] space-y-1">
+            <ApplicationProgress :answered="answeredCount" :total="visibleQuestions.length" />
+            <p class="flex items-center gap-1.5 text-xs" :class="saveStatus.class" role="status" aria-live="polite">
+              <v-icon :icon="saveStatus.icon" size="16" /> {{ saveStatus.text }}
+            </p>
+          </div>
+          <div class="flex items-center gap-3">
+            <v-btn variant="outlined" prepend-icon="mdi-content-save" :loading="saving" :disabled="!hasUnsavedChanges" @click="saveDraft">
+              Save now
+            </v-btn>
+            <v-btn color="primary" prepend-icon="mdi-send" :loading="submitting" @click="submit">
+              Submit Application
+            </v-btn>
+          </div>
+        </v-card>
       </div>
     </template>
   </div>
 </template>
+
+<style scoped>
+.form-action-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding-bottom: 16px;
+}
+.form-action-bar :deep(.v-card) {
+  box-shadow: 0 -4px 24px rgba(43, 54, 116, 0.12);
+}
+</style>
