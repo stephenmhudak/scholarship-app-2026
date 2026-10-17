@@ -14,7 +14,7 @@ const navLinks = computed(() => {
     { label: 'Settings',              icon: 'mdi-account-cog-outline',         to: '/admin/settings',             permission: 'admin_settings' },
     { label: 'Scholarship Settings',  icon: 'mdi-cog-outline',                 to: '/admin/scholarship-settings', permission: 'admin_scholarship' },
     { label: 'My School',             icon: 'mdi-domain',                      to: schoolId.value ? `/schools/${schoolId.value}` : '/schools', permission: 'manage_school' },
-    { label: 'Dashboard',             icon: 'mdi-view-dashboard-outline',      to: '/counselor',                  permission: 'view_counselor_dashboard' },
+    { label: 'Students',              icon: 'mdi-account-school-outline',      to: '/counselor',                  permission: 'view_counselor_dashboard' },
     { label: 'Award Scholarships',    icon: 'mdi-trophy-outline',              to: '/awards',                     permission: 'award_scholarships' },
     { label: 'My References',         icon: 'mdi-account-voice',               to: '/references',                 permission: 'submit_references' },
   ]

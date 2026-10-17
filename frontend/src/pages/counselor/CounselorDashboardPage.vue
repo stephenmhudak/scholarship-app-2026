@@ -43,7 +43,7 @@ async function sendNudge(studentId) {
 <template>
   <div class="space-y-6">
     <div>
-      <h1 class="page-title">Counselor Dashboard</h1>
+      <h1 class="page-title">Students</h1>
       <p class="page-subtitle">Track your students' scholarship application progress.</p>
     </div>
 

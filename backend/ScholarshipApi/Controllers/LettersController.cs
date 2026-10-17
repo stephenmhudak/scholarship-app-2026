@@ -29,6 +29,11 @@ public class LettersController(QueryFactory db) : ControllerBase
     {
         var letters = (await db.Query("LetterTemplates").Where("CycleId", cycleId).OrderBy("Name").GetAsync<LetterTemplate>()).ToList();
         var scholarships = await db.Query("Scholarships").Where("CycleId", cycleId).OrderBy("Order", "CreatedAt").GetAsync<Scholarship>();
+        // How many awards each has, so admins can download their letters from here
+        var awardCounts = (await db.Query("ScholarshipAwards as w").Join("Scholarships as s", "s.Id", "w.ScholarshipId")
+                .Where("s.CycleId", cycleId).GroupBy("w.ScholarshipId")
+                .SelectRaw("w.ScholarshipId AS ScholarshipId, COUNT(*) AS Total").GetAsync<AwardCountRow>())
+            .ToDictionary(r => r.ScholarshipId, r => r.Total);
         return Ok(new
         {
             BaseLetters = letters.Where(l => l.ScholarshipId is null).OrderByDescending(l => l.IsDefault).Select(ToDto),
@@ -36,6 +41,7 @@ public class LettersController(QueryFactory db) : ControllerBase
             {
                 s.Id,
                 s.Name,
+                AwardCount = awardCounts.GetValueOrDefault(s.Id),
                 Letter = letters.Where(l => l.ScholarshipId == s.Id).Select(ToDto).FirstOrDefault(),
             }),
         });
@@ -237,6 +243,12 @@ public class LettersController(QueryFactory db) : ControllerBase
 
     private FileContentResult Pdf(byte[] bytes, string fileName, bool inline = false) =>
         inline ? File(bytes, "application/pdf") : File(bytes, "application/pdf", fileName);
+
+    private class AwardCountRow
+    {
+        public string ScholarshipId { get; set; } = null!;
+        public int Total { get; set; }
+    }
 
     private static string FileSafe(string text) =>
         string.Concat(text.Split(Path.GetInvalidFileNameChars())).Trim() is { Length: > 0 } safe ? safe : "letter";

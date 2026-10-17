@@ -4,8 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import api from '../../services/api'
 import { useAdminStore } from '../../stores/admin'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
-import RichTextAnswer from '../../components/application/RichTextAnswer.vue'
-import { isRichText } from '../../utils/richText'
+import AnswerDisplay from '../../components/application/AnswerDisplay.vue'
 import { visibleQuestionIds, answerValue } from '../../utils/questionVisibility'
 
 const route = useRoute()
@@ -143,12 +142,7 @@ async function updateStatus() {
               <v-divider v-if="i > 0" />
               <div>
                 <p class="eyebrow mb-1.5">{{ q.text }}</p>
-                <RichTextAnswer v-if="isRichText(q)" :html="answersMap[q.id]?.textValue" />
-                <p v-else class="text-sm text-navy whitespace-pre-wrap">
-                  {{ answersMap[q.id]?.selectedOptions?.length
-                      ? answersMap[q.id].selectedOptions.join(', ')
-                      : (answersMap[q.id]?.textValue || '—') }}
-                </p>
+                <AnswerDisplay :question="q" :answer="answersMap[q.id]" />
               </div>
             </template>
           </div>

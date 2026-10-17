@@ -2,9 +2,8 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useScoringStore } from '../../stores/scoring'
-import RichTextAnswer from '../../components/application/RichTextAnswer.vue'
+import AnswerDisplay from '../../components/application/AnswerDisplay.vue'
 import ReferenceResponse from '../../components/scoring/ReferenceResponse.vue'
-import { isRichText } from '../../utils/richText'
 
 const route = useRoute()
 const scoringStore = useScoringStore()
@@ -49,14 +48,6 @@ const scholarshipAnswerGroups = computed(() => {
 // Section labels are only worth showing when there's more than one thing to score
 const showLabels = computed(() => formSections.value.length > 1)
 
-// Choice answers hold option ids; show the option text
-function displayValue(answer, question) {
-  const optionText = (id) => question.options?.find((o) => o.id === id)?.text ?? id
-  if (answer.selectedOptions?.length) return answer.selectedOptions.map(optionText).join(', ')
-  if (question.type === 'single_choice' && answer.textValue) return optionText(answer.textValue)
-  return answer.textValue || '—'
-}
-
 const answersGroupedBySections = computed(() => {
   const app = scoringStore.currentApplication
   if (!app?.answers?.length) return []
@@ -74,7 +65,7 @@ const answersGroupedBySections = computed(() => {
       const section = sectionId ? sectionMap[sectionId] : null
       groups[key] = { sectionId, title: section?.title ?? null, order: section?.order ?? 9999, answers: [] }
     }
-    groups[key].answers.push({ ...answer, questionText: q.text, richText: isRichText(q), display: displayValue(answer, q) })
+    groups[key].answers.push({ ...answer, questionText: q.text })
   }
 
   return Object.values(groups).sort((a, b) => a.order - b.order)
@@ -166,8 +157,7 @@ async function handleSave() {
           <v-card class="pa-5 space-y-4">
             <div v-for="answer in group.answers" :key="answer.questionId">
               <p class="eyebrow mb-1.5">{{ answer.questionText }}</p>
-              <RichTextAnswer v-if="answer.richText" :html="answer.textValue" />
-              <p v-else class="text-sm text-navy whitespace-pre-wrap">{{ answer.display }}</p>
+              <AnswerDisplay :question="scoringStore.questionMap[answer.questionId]" :answer="answer" />
             </div>
           </v-card>
         </div>
@@ -189,8 +179,7 @@ async function handleSave() {
                   <p class="eyebrow mb-1.5">
                     {{ answer.questionText || answer.questionId }}
                   </p>
-                  <RichTextAnswer v-if="answer.richText" :html="answer.textValue" />
-                  <p v-else class="text-sm text-navy whitespace-pre-wrap">{{ answer.display }}</p>
+                  <AnswerDisplay :question="scoringStore.questionMap[answer.questionId]" :answer="answer" />
                 </div>
               </template>
               <p v-else class="text-sm text-slate-400">No answers for this section.</p>
