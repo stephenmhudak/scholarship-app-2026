@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import api from '../../services/api'
 import { useConfirm } from '../../composables/useConfirm'
 import LetterEditorDialog from '../../components/letters/LetterEditorDialog.vue'
+import { downloadPdf } from '../../utils/pdf'
 
 // A cycle's award letters: base letters (one is the default every scholarship uses unless it has its own) and
 // each scholarship's own letter. Awarders generate the PDFs from the Award Scholarships page.
@@ -36,6 +37,24 @@ async function load() {
 onMounted(load)
 
 const defaultLetter = computed(() => baseLetters.value.find((l) => l.isDefault))
+const downloading = ref(null)
+
+// Every awardee's letter for a scholarship, in one PDF
+async function downloadLetters(s) {
+  downloading.value = s.id
+  alert.value = null
+  try {
+    await downloadPdf(`/scholarships/${s.id}/letters`, `${s.name} - award letters.pdf`)
+  } catch (err) {
+    // Errors come back as a blob; show the API's message
+    const text = err.response?.data instanceof Blob ? await err.response.data.text() : null
+    let message = 'Failed to generate the letters.'
+    try { message = JSON.parse(text).error || message } catch { /* not JSON */ }
+    alert.value = { type: 'error', message }
+  } finally {
+    downloading.value = null
+  }
+}
 
 function editBase(letter = null) {
   editing.value = {
@@ -139,8 +158,20 @@ async function resetScholarship(s) {
                 <template v-if="s.letter">Its own letter · updated {{ new Date(s.letter.updatedAt).toLocaleDateString() }}</template>
                 <template v-else-if="defaultLetter">Uses the default letter ({{ defaultLetter.name }})</template>
                 <template v-else>No letter yet</template>
+                · {{ s.awardCount }} awarded
               </p>
             </div>
+            <v-btn
+              color="primary"
+              size="small"
+              prepend-icon="mdi-file-pdf-box"
+              :disabled="!s.awardCount || !(s.letter || defaultLetter)"
+              :title="!s.awardCount ? 'Not awarded to anyone yet' : !(s.letter || defaultLetter) ? 'Write a letter first' : 'Every awardee\'s letter in one PDF'"
+              :loading="downloading === s.id"
+              @click="downloadLetters(s)"
+            >
+              All letters (PDF)
+            </v-btn>
             <v-btn variant="outlined" size="small" @click="editScholarship(s)">{{ s.letter ? 'Edit its letter' : 'Write its own letter' }}</v-btn>
             <v-btn v-if="s.letter" variant="text" size="small" color="error" @click="resetScholarship(s)">Use default</v-btn>
           </div>
