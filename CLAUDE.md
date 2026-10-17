@@ -154,7 +154,7 @@ backend/ScholarshipApi/
 | PUT | `/api/cycles/{id}/questions/reorder` | app_admin | `[{id, order}]` |
 | POST | `/api/cycles/{id}/questions/bulk-delete` | app_admin | `{ questionIds }` (`?force=true` after a 409 listing answers/conditions that go too) |
 | PUT | `/api/cycles/{id}/questions/move` | app_admin | `{ questionIds, sectionId }` (null = ungrouped); appended to the end of the section |
-| GET | `/api/admin/applications` | app_admin | `?status=&page=&pageSize=` → `{data, total, page, pageSize}` |
+| GET | `/api/admin/applications` · `/export` | app_admin | `?status=&search=&cycleId=&schoolId=&page=&pageSize=` → `{data, total, page, pageSize}`; rows carry `cycleName`, `schoolName`, `scholarshipsWon`. Filters in `ApplicationService.AdminFiltered` (shared with the CSV export) |
 | PATCH | `/api/admin/applications/{id}/status` | app_admin | `{ status }` |
 | POST | `/api/files/upload` | auth | Multipart `file`, `applicationId`, `questionId?` → `{ fileId }` |
 | GET/POST/PUT/DELETE | `/api/cycles/{id}/scholarships` | app_admin | `{ name, description, eligibility: open\|conditional, eligibilityMatch: any\|all, conditions }`; `PUT /{sid}/awarders { userIds }`; DELETE `?force` after a 409. Questions via `/api/cycles/{id}/questions?scholarshipId=&part=eligibility\|details` |

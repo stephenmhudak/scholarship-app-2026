@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Security.Cryptography;
 using System.Text;
 using SqlKata.Execution;
+using ScholarshipApi.DTOs.Application;
 using ScholarshipApi.Models;
 using ScholarshipApi.Services;
 
@@ -23,14 +24,17 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
     public async Task<IActionResult> ListApplications(
         [FromQuery] string? status,
         [FromQuery] string? search,
+        [FromQuery] string? cycleId,
+        [FromQuery] string? schoolId,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
         if (!string.IsNullOrEmpty(status)) InputValidation.ApplicationStatus(status);
+        var filter = new AdminApplicationFilter(status, search, cycleId, schoolId);
         page = Math.Max(page, 1);
         pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
-        var items = await applicationService.AdminListAsync(status, search, page, pageSize);
-        var total = await applicationService.AdminCountAsync(status, search);
+        var items = await applicationService.AdminListAsync(filter, page, pageSize);
+        var total = await applicationService.AdminCountAsync(filter);
         return Ok(new { data = items, total, page, pageSize });
     }
 
@@ -109,13 +113,13 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
     // ── Export ────────────────────────────────────────────────────────────────
 
     [HttpGet("applications/export")]
-    public async Task<IActionResult> Export([FromQuery] string? status)
+    public async Task<IActionResult> Export([FromQuery] string? status, [FromQuery] string? search,
+        [FromQuery] string? cycleId, [FromQuery] string? schoolId)
     {
         if (!string.IsNullOrEmpty(status)) InputValidation.ApplicationStatus(status);
-        var query = db.Query("Applications as a")
-            .Join("Users as u", "u.Id", "a.ApplicantId")
-            .Select("a.Id", "a.Status", "u.FirstName", "u.LastName", "u.Email", "a.SubmittedAt", "a.CreatedAt")
-            .When(!string.IsNullOrEmpty(status), q => q.Where("a.Status", status));
+        // The same applications the list shows with these filters
+        var query = ApplicationService.AdminFiltered(db, new AdminApplicationFilter(status, search, cycleId, schoolId))
+            .Select("a.Id", "a.Status", "u.FirstName", "u.LastName", "u.Email", "a.SubmittedAt", "a.CreatedAt");
 
         var rows = await query.GetAsync<dynamic>();
 

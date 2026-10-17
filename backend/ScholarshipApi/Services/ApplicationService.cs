@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SqlKata;
 using SqlKata.Execution;
 using ScholarshipApi.DTOs.Application;
 using ScholarshipApi.Models;
@@ -173,34 +174,83 @@ public class ApplicationService(QueryFactory db, ApplicationAccess access) : IAp
         });
     }
 
-    public async Task<IEnumerable<ApplicationListDto>> AdminListAsync(string? status, string? search, int page, int pageSize)
+    /// <summary>
+    /// Applications matching the admin list's filters, joined to their applicant as <c>u</c>. Search matches every word
+    /// against name or email. An application's school is one picked in a School Select answer, or the applicant's own.
+    /// </summary>
+    public static Query AdminFiltered(QueryFactory db, AdminApplicationFilter f)
     {
+        var terms = (f.Search ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var query = db.Query("Applications as a")
             .Join("Users as u", "u.Id", "a.ApplicantId")
-            .Select("a.Id", "a.Status", "u.FirstName", "u.LastName", "a.SubmittedAt", "a.CreatedAt")
-            .When(!string.IsNullOrEmpty(status), q => q.Where("a.Status", status))
-            .When(!string.IsNullOrEmpty(search), q =>
-                q.Where(inner => inner
-                    .WhereLike("u.FirstName", $"%{search}%")
-                    .OrWhereLike("u.LastName", $"%{search}%")
-                    .OrWhereLike("u.Email", $"%{search}%")))
-            .ForPage(page, pageSize);
-
-        return await query.GetAsync<ApplicationListDto>();
+            .When(!string.IsNullOrEmpty(f.Status), q => q.Where("a.Status", f.Status))
+            .When(!string.IsNullOrEmpty(f.CycleId), q => q.Where("a.CycleId", f.CycleId))
+            .When(!string.IsNullOrEmpty(f.SchoolId), q => q.Where(inner => inner
+                .Where("u.SchoolId", f.SchoolId)
+                .OrWhereExists(new Query("ApplicationAnswers as sa")
+                    .Join("Questions as sq", "sq.Id", "sa.QuestionId")
+                    .WhereColumns("sa.ApplicationId", "=", "a.Id")
+                    .Where("sq.Type", "school_select")
+                    .Where("sa.TextValue", f.SchoolId))));
+        foreach (var term in terms)
+            query.Where(inner => inner
+                .WhereLike("u.FirstName", $"%{term}%")
+                .OrWhereLike("u.LastName", $"%{term}%")
+                .OrWhereLike("u.Email", $"%{term}%"));
+        return query;
     }
 
-    public async Task<int> AdminCountAsync(string? status, string? search)
+    public async Task<IEnumerable<ApplicationListDto>> AdminListAsync(AdminApplicationFilter filter, int page, int pageSize)
     {
-        var query = db.Query("Applications as a")
-            .Join("Users as u", "u.Id", "a.ApplicantId")
-            .When(!string.IsNullOrEmpty(status), q => q.Where("a.Status", status))
-            .When(!string.IsNullOrEmpty(search), q =>
-                q.Where(inner => inner
-                    .WhereLike("u.FirstName", $"%{search}%")
-                    .OrWhereLike("u.LastName", $"%{search}%")
-                    .OrWhereLike("u.Email", $"%{search}%")));
+        var rows = (await AdminFiltered(db, filter)
+            .Join("ScholarshipCycles as c", "c.Id", "a.CycleId")
+            .LeftJoin("Schools as us", "us.Id", "u.SchoolId")
+            .Select("a.Id", "a.Status", "a.CycleId", "c.Name as CycleName", "u.FirstName", "u.LastName", "us.Name as SchoolName",
+                    "a.SubmittedAt", "a.CreatedAt")
+            // Newest submissions first, then drafts newest first
+            .OrderByRaw("a.SubmittedAt IS NULL, a.SubmittedAt DESC, a.CreatedAt DESC")
+            .ForPage(page, pageSize)
+            .GetAsync<ApplicationListDto>()).ToList();
+        if (rows.Count == 0) return rows;
+        var ids = rows.Select(r => r.Id).ToList();
 
-        return await query.CountAsync<int>();
+        // A school picked on the application wins over the one on the applicant's account
+        var schoolAnswers = (await db.Query("ApplicationAnswers as aa")
+            .Join("Questions as q", "q.Id", "aa.QuestionId")
+            .WhereIn("aa.ApplicationId", ids)
+            .Where("q.Type", "school_select")
+            .WhereNotNull("aa.TextValue")
+            .OrderBy("q.Order")
+            .Select("aa.ApplicationId", "aa.TextValue as Name")
+            .GetAsync<AppNameRow>()).ToList();
+        var schoolNames = schoolAnswers.Count == 0 ? [] : (await db.Query("Schools")
+            .WhereIn("Id", schoolAnswers.Select(r => r.Name).Distinct())
+            .GetAsync<School>()).ToDictionary(s => s.Id, s => s.Name);
+        var answeredSchools = schoolAnswers.Where(r => schoolNames.ContainsKey(r.Name))
+            .GroupBy(r => r.ApplicationId).ToDictionary(g => g.Key, g => schoolNames[g.First().Name]);
+
+        var awards = (await db.Query("ScholarshipAwards as aw")
+            .Join("Scholarships as s", "s.Id", "aw.ScholarshipId")
+            .WhereIn("aw.ApplicationId", ids)
+            .OrderBy("s.Name")
+            .Select("aw.ApplicationId", "s.Name")
+            .GetAsync<AppNameRow>())
+            .GroupBy(r => r.ApplicationId).ToDictionary(g => g.Key, g => g.Select(r => r.Name).ToList());
+
+        foreach (var row in rows)
+        {
+            if (answeredSchools.TryGetValue(row.Id, out var school)) row.SchoolName = school;
+            row.ScholarshipsWon = awards.GetValueOrDefault(row.Id, []);
+        }
+        return rows;
+    }
+
+    public Task<int> AdminCountAsync(AdminApplicationFilter filter) => AdminFiltered(db, filter).CountAsync<int>();
+
+    private class AppNameRow
+    {
+        public string ApplicationId { get; set; } = null!;
+        public string Name { get; set; } = null!;
     }
 
     public async Task UpdateStatusAsync(string id, string status)
