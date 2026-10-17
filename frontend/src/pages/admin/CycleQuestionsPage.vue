@@ -646,8 +646,8 @@ function globalIndex(q) {
       <v-btn v-if="isSubset" variant="text" color="primary" size="small" prepend-icon="mdi-arrow-left" :to="`/admin/cycles/${cycleId}/questions`" class="-ml-3 mb-1">
         Application questions
       </v-btn>
-      <v-btn v-else variant="text" color="primary" size="small" prepend-icon="mdi-arrow-left" to="/admin/settings" class="-ml-3 mb-1">
-        Settings
+      <v-btn v-else variant="text" color="primary" size="small" prepend-icon="mdi-arrow-left" to="/admin/scholarship-settings" class="-ml-3 mb-1">
+        Scholarship Settings
       </v-btn>
       <h1 class="page-title">{{ isSubset ? formTitle : 'Questions' }}</h1>
       <p class="page-subtitle">{{ formId ? `Reference questions · ${cycleName}` : cycleName }}</p>
