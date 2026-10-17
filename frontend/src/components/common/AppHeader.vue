@@ -3,10 +3,12 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { roleHome } from '../../utils/roleHome'
+import { useNavDrawer } from '../../composables/useNavDrawer'
 import { roleLabel } from '../../utils/roleLabels'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { isOverlay, toggle } = useNavDrawer()
 const ending = ref(false)
 
 const displayName = computed(() =>
@@ -31,20 +33,21 @@ async function endImpersonation() {
 </script>
 
 <template>
-  <v-app-bar flat border="b" height="64" class="px-4">
+  <v-app-bar flat border="b" height="64" class="px-2 sm:px-4">
+    <v-app-bar-nav-icon v-if="isOverlay" aria-label="Open menu" @click="toggle" />
     <!-- Logo -->
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-3 min-w-0">
       <v-avatar color="primary" size="36" rounded="lg">
         <v-icon icon="mdi-school" size="20" />
       </v-avatar>
-      <span class="text-base font-bold text-navy tracking-tight">Scholarship Portal</span>
+      <span class="text-base font-bold text-navy tracking-tight truncate">Scholarship Portal</span>
     </div>
 
     <v-spacer />
 
     <!-- User info -->
-    <div class="flex items-center gap-3">
-      <div class="flex items-center gap-2.5">
+    <div class="flex items-center gap-1 sm:gap-3">
+      <div class="hidden sm:flex items-center gap-2.5">
         <v-avatar color="primary" variant="tonal" size="32">
           <v-icon icon="mdi-account" size="18" />
         </v-avatar>

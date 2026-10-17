@@ -7,7 +7,7 @@ import AppSidebar from '../components/common/AppSidebar.vue'
   <AppHeader />
   <AppSidebar />
   <v-main>
-    <div class="p-6 lg:p-8">
+    <div class="p-4 sm:p-6 lg:p-8">
       <!-- Keyed by path so a page reused across routes or ids (e.g. CycleQuestionsPage for application and reference
            questions, which reads its params once in setup) gets a fresh instance instead of keeping the old one -->
       <RouterView v-slot="{ Component, route }">
