@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import api from '../../services/api'
 import { useConfirm } from '../../composables/useConfirm'
 import { visibleQuestionIds, answerMatches } from '../../utils/questionVisibility'
@@ -18,6 +18,9 @@ const props = defineProps({
   // Saves the draft before a link is made, since the API checks the reference against saved answers
   beforeCreate: { type: Function, default: null },
 })
+
+// How many required references haven't arrived yet (submitting waits for them)
+const emit = defineEmits(['missing'])
 
 const confirm = useConfirm()
 const loading = ref(true)
@@ -41,6 +44,8 @@ const forms = computed(() => (data.value?.forms ?? [])
   .map((f) => ({ ...f, required: isRequired(f) }))
   .filter((f) => f.required || f.requests.length > 0))
 const allReceived = computed(() => forms.value.every((f) => !f.required || f.received >= f.requiredCount))
+const missing = computed(() => forms.value.reduce((n, f) => n + (f.required ? Math.max(0, f.requiredCount - f.received) : 0), 0))
+watch([missing, loading], () => { if (!loading.value) emit('missing', missing.value) }, { immediate: true })
 
 async function refresh() {
   try {

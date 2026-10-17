@@ -35,6 +35,7 @@ const validationErrors = ref({})
 const sections = ref([])
 // Which references are needed depends on saved answers, so this refreshes after each save
 const referencesPanel = ref(null)
+const referencesMissing = ref(0)
 
 onMounted(async () => {
   try {
@@ -107,6 +108,10 @@ const sectionNav = computed(() => {
 
 function goToSection(key) {
   document.getElementById(`section-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function goToReferences() {
+  document.getElementById('references')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 // Scrolls to a question and puts the cursor in it
@@ -348,7 +353,10 @@ async function submit() {
 
       <ApplicationReferences
         v-if="appStore.currentApplication"
+        id="references"
         ref="referencesPanel"
+        class="scroll-mt-20"
+        @missing="(n) => referencesMissing = n"
         :applicationId="appStore.currentApplication.id"
         :questions="appStore.questions"
         :answers="appStore.answers"
@@ -389,13 +397,20 @@ async function submit() {
               </p>
             </div>
           </div>
-          <div class="flex items-center gap-3">
-            <v-btn variant="outlined" prepend-icon="mdi-content-save" :loading="saving" :disabled="!hasUnsavedChanges" @click="saveDraft">
-              Save now
-            </v-btn>
-            <v-btn color="primary" prepend-icon="mdi-send" :loading="submitting" @click="submit">
-              Submit Application
-            </v-btn>
+          <div class="flex flex-col items-end gap-1">
+            <div class="flex items-center gap-3">
+              <v-btn variant="outlined" prepend-icon="mdi-content-save" :loading="saving" :disabled="!hasUnsavedChanges" @click="saveDraft">
+                Save now
+              </v-btn>
+              <v-btn color="primary" prepend-icon="mdi-send" :loading="submitting" :disabled="referencesMissing > 0" @click="submit">
+                Submit Application
+              </v-btn>
+            </div>
+            <!-- Why Submit is disabled -->
+            <button v-if="referencesMissing" type="button" class="flex items-center gap-1 text-xs text-[#8C6500] bg-transparent border-0 p-0 cursor-pointer hover:underline" @click="goToReferences">
+              <v-icon icon="mdi-clock-outline" size="14" />
+              Waiting on {{ referencesMissing }} reference{{ referencesMissing === 1 ? '' : 's' }} before you can submit
+            </button>
           </div>
         </v-card>
       </div>
