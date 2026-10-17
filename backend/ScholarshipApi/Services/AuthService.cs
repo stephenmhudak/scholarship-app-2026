@@ -33,6 +33,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         if (user.EmailVerifiedAt is null)
             throw new EmailNotVerifiedException(user.Email);
 
+        EnsureActive(user);
         return await SignInOrChallengeAsync(user);
     }
 
@@ -97,8 +98,17 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         await twoFactor.IssueEmailLoginCodeAsync(user, challengeId);
     }
 
+    public const string DeactivatedMessage = "This account has been deactivated. Contact the scholarship office if you need access.";
+
+    // Deactivated accounts get no session by any route (sign-in, 2FA, links, impersonation)
+    public static void EnsureActive(User user)
+    {
+        if (user.DeactivatedAt is not null) throw new UnauthorizedAccessException(DeactivatedMessage);
+    }
+
     private async Task<LoginResult> SignInOrChallengeAsync(User user)
     {
+        EnsureActive(user);
         if (user.TwoFactorMethod is null)
         {
             var permissions = await GetPermissionsForUserAsync(user);
@@ -303,7 +313,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         if (string.IsNullOrWhiteSpace(emailAddress)) return;
 
         var user = await db.Query("Users").Where("Email", emailAddress.Trim()).FirstOrDefaultAsync<User>();
-        if (user is null) return;
+        if (user is null || user.DeactivatedAt is not null) return;
 
         var recentlySent = await db.Query("PasswordResetCodes")
             .Where("UserId", user.Id)
@@ -355,6 +365,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
 
         var user = await db.Query("Users").Where("Email", request.Email?.Trim() ?? "").FirstOrDefaultAsync<User>()
             ?? throw new ArgumentException(invalidCode);
+        if (user.DeactivatedAt is not null) throw new ArgumentException(invalidCode);
 
         var row = await db.Query("PasswordResetCodes")
             .Where("UserId", user.Id)
@@ -440,6 +451,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
     {
         var user = await GetCurrentUserAsync(userId);
         if (HasPassword(user)) throw new ArgumentException("This person has already created their password.");
+        if (user.DeactivatedAt is not null) throw new ArgumentException("This account is deactivated. Reactivate it first.");
 
         var recentlySent = await db.Query("PasswordSetupTokens").Where("UserId", user.Id)
             .Where("CreatedAt", ">", DateTime.UtcNow - ResendCooldown).ExistsAsync();
@@ -530,7 +542,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
             .FirstOrDefaultAsync<dynamic>()
             ?? throw new ArgumentException(PasswordSetupInvalid);
         var user = await GetCurrentUserAsync((string)row.UserId);
-        if (HasPassword(user)) throw new ArgumentException(PasswordSetupInvalid);
+        if (HasPassword(user) || user.DeactivatedAt is not null) throw new ArgumentException(PasswordSetupInvalid);
         return ((string)row.Id, user);
     }
 
@@ -629,6 +641,7 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
 
     private AuthResponse BuildAuthResponse(User user, IEnumerable<string> permissions, User? impersonator = null)
     {
+        EnsureActive(user);
         var permList = permissions.ToList();
         var token = GenerateToken(user, permList, impersonator);
         return new AuthResponse

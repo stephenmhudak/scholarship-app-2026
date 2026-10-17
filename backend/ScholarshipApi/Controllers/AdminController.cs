@@ -165,7 +165,7 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
                     "s.Name as SchoolName", "u.CreatedAt")
             .SelectRaw("u.TwoFactorMethod IS NOT NULL AS TwoFactorEnabled")
             .SelectRaw("u.PasswordHash = '' AS InvitePending")
-            .Select("u.ScoringScope")
+            .Select("u.ScoringScope", "u.DeactivatedAt")
             .OrderBy("u.LastName", "u.FirstName")
             .GetAsync<dynamic>();
         return Ok(users);
@@ -218,6 +218,68 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
             catch (ArgumentException) { emailSent = false; }
         }
         return CreatedAtAction(nameof(ListUsers), new { }, new { id, emailSent });
+    }
+
+    // Name, email, role and school. A role change ends the user's sessions so their permissions update.
+    [HttpPut("users/{id}")]
+    public async Task<IActionResult> UpdateUser(string id, [FromBody] UpdateUserRequest request)
+    {
+        await EnsureCanManageAsync(id);
+        var user = await db.Query("Users").Where("Id", id).FirstAsync<User>();
+        var email = InputValidation.Email(request.Email);
+        var firstName = InputValidation.Required(request.FirstName, "First name", 100);
+        var lastName = InputValidation.Required(request.LastName, "Last name", 100);
+        var role = InputValidation.Role(request.Role);
+        if (role != user.Role)
+        {
+            if (id == CurrentUserId) throw new ArgumentException("You can't change your own role.");
+            if (role == AppRoles.SuperAdmin && !IsSuperAdmin)
+                throw new UnauthorizedAccessException("Only super admins can make someone a super admin.");
+        }
+
+        string? schoolId = null;
+        if (role is "school_admin" or "counselor")
+        {
+            if (string.IsNullOrEmpty(request.SchoolId)) throw new ArgumentException("Choose a school for this user.");
+            if (!await db.Query("Schools").Where("Id", request.SchoolId).ExistsAsync())
+                throw new ArgumentException("That school doesn't exist.");
+            schoolId = request.SchoolId;
+        }
+
+        if (!string.Equals(email, user.Email, StringComparison.OrdinalIgnoreCase)
+            && await db.Query("Users").Where("Email", email).WhereNot("Id", id).ExistsAsync())
+            throw new ArgumentException("Email is already registered.");
+
+        await db.Query("Users").Where("Id", id).UpdateAsync(new
+        {
+            Email = email,
+            FirstName = firstName,
+            LastName = lastName,
+            Role = role,
+            SchoolId = schoolId,
+        });
+        // Role and school are in the session token
+        if (role != user.Role || schoolId != user.SchoolId) await SessionVersion.BumpAsync(db, id);
+        return NoContent();
+    }
+
+    // Deactivated users can't sign in and are signed out now; everything they did stays
+    [HttpPost("users/{id}/deactivate")]
+    public async Task<IActionResult> DeactivateUser(string id)
+    {
+        await EnsureCanManageAsync(id);
+        if (id == CurrentUserId) throw new ArgumentException("You can't deactivate your own account.");
+        await db.Query("Users").Where("Id", id).WhereNull("DeactivatedAt").UpdateAsync(new { DeactivatedAt = DateTime.UtcNow });
+        await SessionVersion.BumpAsync(db, id);
+        return NoContent();
+    }
+
+    [HttpPost("users/{id}/reactivate")]
+    public async Task<IActionResult> ReactivateUser(string id)
+    {
+        await EnsureCanManageAsync(id);
+        await db.Query("Users").Where("Id", id).UpdateAsync(new { DeactivatedAt = (DateTime?)null });
+        return NoContent();
     }
 
     // ── Scorer scope: which applications a scorer can see and score ──────────
@@ -452,6 +514,15 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
 // ── Request / Row types ───────────────────────────────────────────────────────
 
 public class UpdateStatusRequest { public string Status { get; set; } = null!; }
+
+public class UpdateUserRequest
+{
+    public string FirstName { get; set; } = null!;
+    public string LastName { get; set; } = null!;
+    public string Email { get; set; } = null!;
+    public string Role { get; set; } = null!;
+    public string? SchoolId { get; set; }
+}
 
 public class CreateUserRequest
 {

@@ -18,6 +18,8 @@ public class User
     public string? EmailOtpSetupHash { get; set; }
     public DateTime? EmailOtpSetupExpiresAt { get; set; }
     public int SessionVersion { get; set; }
+    /// <summary>Set when an admin deactivates the account: no sign-in, no sessions (<see cref="Services.AuthService.EnsureActive"/>).</summary>
+    public DateTime? DeactivatedAt { get; set; }
     /// <summary>Scorers: <c>all</c>, or <c>filtered</c> to applications matching their <see cref="ScorerFilter"/>s.</summary>
     public string ScoringScope { get; set; } = "all";
     public DateTime CreatedAt { get; set; }

@@ -40,10 +40,98 @@ const userHeaders = [
   { title: 'Role', key: 'Role' },
   { title: 'School', key: 'SchoolName' },
   { title: '2FA', key: 'TwoFactorEnabled', value: (u) => !!u.TwoFactorEnabled },
-  { title: '', key: 'actions', sortable: false, align: 'end' },
+  { title: 'Status', key: 'status', sortable: false },
+  { title: '', key: 'actions', sortable: false, align: 'end', width: 56 },
 ]
 
 const users = ref([])
+const userSearch = ref('')
+const roleFilter = ref(null)
+const showDeactivated = ref(false)
+const roleFilterItems = [{ title: 'All roles', value: null }, ...ALL_ROLES]
+const deactivatedCount = computed(() => users.value.filter((u) => u.DeactivatedAt).length)
+const filteredUsers = computed(() => {
+  const terms = userSearch.value.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  return users.value.filter((u) => {
+    if (!showDeactivated.value && u.DeactivatedAt) return false
+    if (roleFilter.value && u.Role !== roleFilter.value) return false
+    const text = `${u.FirstName} ${u.LastName} ${u.Email} ${u.SchoolName ?? ''}`.toLowerCase()
+    return terms.every((t) => text.includes(t))
+  })
+})
+
+// App admins can't manage super admins (the API enforces it too)
+const canManage = (u) => u.Role !== 'super_admin' || isSuperAdmin.value
+const isMe = (u) => u.Id === authStore.user?.id
+
+// What the ⋯ menu offers for a user
+function userActions(u) {
+  if (!canManage(u)) return []
+  const active = !u.DeactivatedAt
+  return [
+    { title: 'Edit details', icon: 'mdi-pencil', run: () => openEditUser(u) },
+    u.Role === 'scorer' && { title: 'Scoring access', icon: 'mdi-filter-outline', run: () => openScope(u) },
+    active && u.InvitePending && { title: 'Resend invite', icon: 'mdi-email-fast-outline', run: () => resendInvite(u) },
+    active && !u.InvitePending && { title: 'Reset password', icon: 'mdi-lock-reset', run: () => openResetPassword(u) },
+    u.TwoFactorEnabled && { title: 'Reset 2FA', icon: 'mdi-shield-off-outline', run: () => resetTwoFactor(u) },
+    active && isSuperAdmin.value && u.Role !== 'super_admin' && !isMe(u) && { title: 'Impersonate', icon: 'mdi-incognito', run: () => impersonate(u) },
+    !isMe(u) && (active
+      ? { title: 'Deactivate', icon: 'mdi-account-off-outline', color: 'error', run: () => deactivate(u) }
+      : { title: 'Reactivate', icon: 'mdi-account-check-outline', run: () => reactivate(u) }),
+  ].filter(Boolean)
+}
+
+// ── Edit user ──
+const showEditUser = ref(false)
+const editUserForm = ref(null)
+const editUserLoading = ref(false)
+function openEditUser(u) {
+  editUserForm.value = { id: u.Id, firstName: u.FirstName, lastName: u.LastName, email: u.Email, role: u.Role, schoolId: u.SchoolId ?? '', originalRole: u.Role, self: isMe(u) }
+  showEditUser.value = true
+}
+async function submitEditUser() {
+  const f = editUserForm.value
+  editUserLoading.value = true
+  try {
+    await api.put(`/admin/users/${f.id}`, {
+      firstName: f.firstName, lastName: f.lastName, email: f.email, role: f.role,
+      schoolId: f.role === 'school_admin' || f.role === 'counselor' ? f.schoolId || null : null,
+    })
+    showEditUser.value = false
+    showAlert('success', f.role !== f.originalRole ? 'User saved. They\'ll need to sign in again to get their new role.' : 'User saved.')
+    await loadUsers()
+  } catch (err) {
+    showAlert('error', err.response?.data?.error || 'Failed to save the user.')
+  } finally {
+    editUserLoading.value = false
+  }
+}
+
+// ── Deactivate / reactivate ──
+async function deactivate(u) {
+  if (!await confirm({
+    title: 'Deactivate user?',
+    text: `${u.FirstName} ${u.LastName} will be signed out and won't be able to sign in. Their applications, scores and references stay. You can reactivate them later.`,
+    confirmText: 'Deactivate',
+    color: 'error',
+  })) return
+  try {
+    await api.post(`/admin/users/${u.Id}/deactivate`)
+    u.DeactivatedAt = new Date().toISOString()
+    showAlert('success', `${u.FirstName} ${u.LastName} has been deactivated.`)
+  } catch (err) {
+    showAlert('error', err.response?.data?.error || 'Failed to deactivate the user.')
+  }
+}
+async function reactivate(u) {
+  try {
+    await api.post(`/admin/users/${u.Id}/reactivate`)
+    u.DeactivatedAt = null
+    showAlert('success', `${u.FirstName} ${u.LastName} can sign in again.`)
+  } catch (err) {
+    showAlert('error', err.response?.data?.error || 'Failed to reactivate the user.')
+  }
+}
 const usersLoading = ref(false)
 const showAddUser = ref(false)
 const addUserLoading = ref(false)
@@ -323,20 +411,35 @@ onMounted(() => { loadUsers(); loadSchools() })
 
     <!-- ── Users Tab ─────────────────────────────────────────────────────── -->
     <div v-if="activeTab === 'users'" class="space-y-4">
-      <div class="flex justify-between items-center">
-        <p class="text-sm text-slate-400">{{ users.length }} user{{ users.length !== 1 ? 's' : '' }}</p>
-        <v-btn color="primary" size="small" prepend-icon="mdi-plus" @click="openAddUser">Add User</v-btn>
+      <div class="flex flex-wrap items-center gap-3">
+        <v-text-field
+          v-model="userSearch"
+          prepend-inner-icon="mdi-magnify"
+          placeholder="Search name, email or school"
+          density="compact"
+          hide-details
+          clearable
+          class="flex-1 min-w-[220px]"
+        />
+        <v-select v-model="roleFilter" :items="roleFilterItems" density="compact" hide-details class="max-w-[200px]" aria-label="Role" />
+        <v-checkbox v-if="deactivatedCount" v-model="showDeactivated" :label="`Show deactivated (${deactivatedCount})`" density="compact" hide-details class="flex-none" />
+        <v-btn color="primary" prepend-icon="mdi-plus" @click="openAddUser">Add User</v-btn>
       </div>
+      <p class="text-sm text-slate-400">
+        {{ filteredUsers.length === users.length ? '' : `${filteredUsers.length} of ` }}{{ users.length }} user{{ users.length !== 1 ? 's' : '' }}
+      </p>
 
       <v-card class="overflow-hidden">
         <v-data-table
           :headers="userHeaders"
-          :items="users"
+          :items="filteredUsers"
           :loading="usersLoading"
-          no-data-text="No users found."
+          :row-props="({ item }) => ({ class: item.DeactivatedAt ? 'opacity-60' : '' })"
+          no-data-text="No users match."
         >
-          <template #item.name="{ value }">
+          <template #item.name="{ value, item }">
             <span class="font-medium text-navy">{{ value }}</span>
+            <span v-if="isMe(item)" class="text-xs text-slate-400"> (you)</span>
           </template>
           <template #item.Email="{ value }">
             <span class="text-slate-400">{{ value }}</span>
@@ -351,28 +454,36 @@ onMounted(() => { loadUsers(); loadSchools() })
             <v-chip v-if="value" color="success">On</v-chip>
             <span v-else class="text-slate-400">—</span>
           </template>
+          <template #item.status="{ item }">
+            <div class="flex flex-wrap gap-1">
+              <v-chip v-if="item.DeactivatedAt" color="error">Deactivated</v-chip>
+              <v-chip v-else-if="item.InvitePending" color="warning">Invite pending</v-chip>
+              <v-chip v-if="item.Role === 'scorer' && item.ScoringScope === 'filtered'" color="primary">Limited scoring</v-chip>
+            </div>
+          </template>
           <template #item.actions="{ item }">
-            <v-btn
-              v-if="isSuperAdmin && item.Role !== 'super_admin' && item.Id !== authStore.user?.id"
-              variant="text"
-              color="warning"
-              size="small"
-              prepend-icon="mdi-incognito"
-              :loading="impersonating === item.Id"
-              @click="impersonate(item)"
-            >
-              Impersonate
-            </v-btn>
-            <template v-if="item.Role === 'scorer'">
-              <v-chip v-if="item.ScoringScope === 'filtered'" color="primary" class="mr-1">Limited</v-chip>
-              <v-btn variant="text" color="primary" size="small" @click="openScope(item)">Scoring Access</v-btn>
-            </template>
-            <template v-if="item.InvitePending">
-              <v-chip color="warning" class="mr-2">Invite pending</v-chip>
-              <v-btn variant="text" color="primary" size="small" @click="resendInvite(item)">Resend Invite</v-btn>
-            </template>
-            <v-btn v-else variant="text" color="primary" size="small" @click="openResetPassword(item)">Reset Password</v-btn>
-            <v-btn v-if="item.TwoFactorEnabled" variant="text" color="error" size="small" @click="resetTwoFactor(item)">Reset 2FA</v-btn>
+            <v-menu v-if="userActions(item).length" location="bottom end">
+              <template #activator="{ props: menuProps }">
+                <v-btn
+                  v-bind="menuProps"
+                  icon="mdi-dots-horizontal"
+                  variant="text"
+                  size="small"
+                  :loading="impersonating === item.Id"
+                  :aria-label="`Actions for ${item.FirstName} ${item.LastName}`"
+                />
+              </template>
+              <v-list density="compact" min-width="200">
+                <v-list-item
+                  v-for="a in userActions(item)"
+                  :key="a.title"
+                  :title="a.title"
+                  :prepend-icon="a.icon"
+                  :base-color="a.color"
+                  @click="a.run()"
+                />
+              </v-list>
+            </v-menu>
           </template>
         </v-data-table>
       </v-card>
@@ -501,6 +612,43 @@ onMounted(() => { loadUsers(); loadSchools() })
           <div class="flex justify-end gap-2 pt-2">
             <v-btn variant="text" @click="showAddUser = false">Cancel</v-btn>
             <v-btn type="submit" color="primary" :loading="addUserLoading">Create User</v-btn>
+          </div>
+        </v-form>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
+
+  <!-- ── Edit User Dialog ────────────────────────────────────────────────── -->
+  <v-dialog v-model="showEditUser">
+    <v-card v-if="editUserForm" title="Edit User">
+      <template #append>
+        <v-btn icon="mdi-close" variant="text" size="small" @click="showEditUser = false" />
+      </template>
+      <v-card-text>
+        <v-form class="space-y-4" @submit.prevent="submitEditUser">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <v-text-field v-model="editUserForm.firstName" label="First Name" hide-details="auto" />
+            <v-text-field v-model="editUserForm.lastName" label="Last Name" hide-details="auto" />
+          </div>
+          <v-text-field v-model="editUserForm.email" type="email" label="Email" hint="They sign in with this address." persistent-hint />
+          <v-select
+            v-model="editUserForm.role"
+            :items="ROLES"
+            label="Role"
+            :disabled="editUserForm.self"
+            :hint="editUserForm.self ? 'You can\'t change your own role.' : editUserForm.role !== editUserForm.originalRole ? 'They\'ll be signed out and get the new role when they sign in again.' : ''"
+            persistent-hint
+          />
+          <v-select
+            v-if="editUserForm.role === 'school_admin' || editUserForm.role === 'counselor'"
+            v-model="editUserForm.schoolId"
+            :items="schoolItems"
+            label="School"
+            hide-details
+          />
+          <div class="flex justify-end gap-2 pt-2">
+            <v-btn variant="text" @click="showEditUser = false">Cancel</v-btn>
+            <v-btn type="submit" color="primary" :loading="editUserLoading">Save</v-btn>
           </div>
         </v-form>
       </v-card-text>
