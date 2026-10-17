@@ -64,15 +64,15 @@ public class ApplicationService(QueryFactory db, ApplicationAccess access) : IAp
         {
             // No cycle chosen: fine when there's only one to choose from.
             var open = (await ListOpenCyclesAsync()).ToList();
-            if (open.Count == 0) throw new ArgumentException("No scholarship cycle is currently open.");
+            if (open.Count == 0) throw new ArgumentException("No application period is open right now.");
             if (open.Count > 1) throw new ArgumentException("Choose which scholarship to apply for.");
             cycleId = open[0].Id;
         }
 
         cycle = await db.Query("ScholarshipCycles").Where("Id", cycleId).FirstOrDefaultAsync<ScholarshipCycle>()
-            ?? throw new KeyNotFoundException("Scholarship cycle not found.");
+            ?? throw new KeyNotFoundException("Application period not found.");
         if (!CycleWindow.IsOpen(cycle, DateTime.UtcNow))
-            throw new ArgumentException("This scholarship cycle is not open for applications.");
+            throw new ArgumentException("This application period isn't open for applications.");
 
         // One application per cycle — starting again just returns the existing one.
         var existingId = await db.Query("Applications")
@@ -220,7 +220,7 @@ public class ApplicationService(QueryFactory db, ApplicationAccess access) : IAp
             throw new UnauthorizedAccessException("Access denied.");
         if (target.Status != "draft") throw new ArgumentException("Only draft applications can be edited.");
         if (source.CycleId == target.CycleId)
-            throw new ArgumentException("Choose an application from a different scholarship cycle.");
+            throw new ArgumentException("Choose an application from a different application period.");
         await EnsureCycleOpenAsync(target.CycleId);
 
         var sourceQuestions = await LoadQuestionsAsync(source.CycleId);
@@ -336,7 +336,7 @@ public class ApplicationService(QueryFactory db, ApplicationAccess access) : IAp
     {
         var cycle = await db.Query("ScholarshipCycles").Where("Id", cycleId).FirstOrDefaultAsync<ScholarshipCycle>();
         if (cycle == null || !CycleWindow.IsOpen(cycle, DateTime.UtcNow))
-            throw new ArgumentException("This scholarship cycle has closed.");
+            throw new ArgumentException("This application period has closed.");
     }
 
     private async Task FillCycleInfoAsync(IReadOnlyCollection<ApplicationDto> apps)

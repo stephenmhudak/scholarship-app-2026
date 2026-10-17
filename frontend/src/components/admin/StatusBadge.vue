@@ -1,8 +1,13 @@
 <script setup>
-defineProps({
+const props = defineProps({
   status: {
     type: String,
     required: true,
+  },
+  // Applicants, counselors and school staff: "Not submitted" instead of the admin term "Archived"
+  plain: {
+    type: Boolean,
+    default: false,
   },
 })
 
@@ -23,10 +28,14 @@ const labels = {
   rejected:     'Rejected',
   archived:     'Archived',
 }
+
+const plainLabels = {
+  archived: 'Not submitted',
+}
 </script>
 
 <template>
   <v-chip :color="colors[status] || 'secondary'" class="font-semibold">
-    {{ labels[status] || status }}
+    {{ (props.plain && plainLabels[status]) || labels[status] || status }}
   </v-chip>
 </template>

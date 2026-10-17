@@ -400,7 +400,7 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
         var name = ValidateCycle(request);
         if (!string.IsNullOrEmpty(request.CopyFromCycleId)
             && !await db.Query("ScholarshipCycles").Where("Id", request.CopyFromCycleId).ExistsAsync())
-            throw new ArgumentException("The cycle to copy questions from doesn't exist.");
+            throw new ArgumentException("The application period to copy questions from doesn't exist.");
 
         var id = Guid.NewGuid().ToString();
         if (db.Connection.State != System.Data.ConnectionState.Open) db.Connection.Open();
@@ -429,7 +429,7 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
     public async Task<IActionResult> UpdateCycle(string id, [FromBody] CycleRequest request)
     {
         var name = ValidateCycle(request);
-        if (!await db.Query("ScholarshipCycles").Where("Id", id).ExistsAsync()) throw new KeyNotFoundException("Cycle not found.");
+        if (!await db.Query("ScholarshipCycles").Where("Id", id).ExistsAsync()) throw new KeyNotFoundException("Application period not found.");
         await db.Query("ScholarshipCycles").Where("Id", id).UpdateAsync(new
         {
             Name = name,

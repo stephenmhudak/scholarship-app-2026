@@ -85,7 +85,7 @@ public class ScoringService(QueryFactory db, IApplicationService applicationServ
         var app = await db.Query("Applications").Where("Id", applicationId).FirstOrDefaultAsync<Application>()
             ?? throw new KeyNotFoundException("Application not found.");
         if (!await access.IsScoreableAsync(app.Status, app.CycleId))
-            throw new ArgumentException("This application can't be scored until it's submitted or its cycle has ended.");
+            throw new ArgumentException("This application can't be scored until it's submitted or its application period has ended.");
         if (!isAdmin && !await access.ScorerMaySeeAsync(scorerId, applicationId))
             throw new UnauthorizedAccessException("You're not assigned to score this application.");
 

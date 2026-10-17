@@ -9,6 +9,7 @@ import QuestionRenderer from '../../components/application/QuestionRenderer.vue'
 import ApplicationProgress from '../../components/application/ApplicationProgress.vue'
 import NoApplicationCard from '../../components/application/NoApplicationCard.vue'
 import ApplicationReferences from '../../components/application/ApplicationReferences.vue'
+import { formatDeadline } from '../../utils/deadline'
 
 const route = useRoute()
 const router = useRouter()
@@ -176,8 +177,8 @@ async function submit() {
     <div>
       <h1 class="page-title">{{ appStore.currentApplication?.cycleName || 'Scholarship Application' }}</h1>
       <p class="page-subtitle">
-        Complete all sections and submit before the deadline<template v-if="appStore.currentApplication?.cycleCloseDate">
-          ({{ new Date(appStore.currentApplication.cycleCloseDate).toLocaleDateString() }})</template>.
+        Complete every section and submit<template v-if="appStore.currentApplication?.cycleCloseDate">
+          by {{ formatDeadline(appStore.currentApplication.cycleCloseDate) }}</template>.
       </p>
     </div>
 

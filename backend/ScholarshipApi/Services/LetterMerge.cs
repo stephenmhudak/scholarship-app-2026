@@ -27,7 +27,7 @@ public static partial class LetterMerge
         new("scholarship_description", "Scholarship description"),
         new("award_amount", "Award amount"),
         new("award_note", "Award note"),
-        new("cycle_name", "Cycle name"),
+        new("cycle_name", "Application period name"),
         new("date", "Today's date"),
     ];
 

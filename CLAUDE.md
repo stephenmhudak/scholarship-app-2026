@@ -55,6 +55,8 @@ backend/ScholarshipApi/
 
 **Tailwind is for layout and text only** (`flex`, `grid`, `gap-*`, `space-y-*`, `p-*`, `text-sm`, `text-navy`). Tailwind's preflight is off — Vuetify 4 ships native CSS layers, and unlayered preflight would override them. `layers.css` declares `dialect-base` below Vuetify; Tailwind utilities are unlayered, so they win over Vuetify.
 
+**Wording:** a cycle (`ScholarshipCycles`) is an **Application Period** in anything users see (pages, buttons, API error messages); never say "cycle" in UI text. Navigation is grouped Apply / Review / Manage / School / References (`AppSidebar`); page titles match their nav labels (Application Periods, Users & Schools, Scoring Progress, Students). Deadlines use `formatDeadline()` (`utils/deadline.js`): a period closes at midnight UTC after its close date, shown in the viewer's time zone. `StatusBadge plain` shows applicant-facing wording ("Not submitted" for archived) on applicant, counselor and school pages.
+
 **Never use** `text-gray-*`, `bg-gray-*`, `border-gray-*`, `text-blue-*`. Use Dialect tokens / theme colors.
 
 ### Theme colors (`plugins/vuetify.js`)

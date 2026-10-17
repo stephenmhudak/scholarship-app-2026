@@ -253,7 +253,7 @@ async function submitResetPassword() {
                 <span class="text-slate-400">{{ value }}</span>
               </template>
               <template #item.Status="{ value }">
-                <StatusBadge :status="value || 'draft'" />
+                <StatusBadge :status="value || 'draft'" plain />
               </template>
             </v-data-table>
           </v-card>

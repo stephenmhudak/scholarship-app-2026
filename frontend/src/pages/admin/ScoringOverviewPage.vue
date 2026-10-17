@@ -39,7 +39,7 @@ function scoringProgress(app) {
 <template>
   <div class="space-y-6">
     <div>
-      <h1 class="page-title">Scoring Overview</h1>
+      <h1 class="page-title">Scoring Progress</h1>
       <p class="page-subtitle">Track scoring progress and averages across all submitted applications.</p>
     </div>
 

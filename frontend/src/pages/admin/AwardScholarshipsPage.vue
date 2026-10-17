@@ -63,7 +63,7 @@ async function loadLetter() {
 const letterText = computed(() => {
   if (!letterInfo.value) return ''
   if (letterInfo.value.own) return 'This scholarship has its own award letter.'
-  if (letterInfo.value.default) return `Uses the cycle's default letter (${letterInfo.value.default.name}).`
+  if (letterInfo.value.default) return `Uses the default letter (${letterInfo.value.default.name}).`
   return 'No award letter yet. Write one to generate letters.'
 })
 const hasLetter = computed(() => !!(letterInfo.value?.own || letterInfo.value?.default))

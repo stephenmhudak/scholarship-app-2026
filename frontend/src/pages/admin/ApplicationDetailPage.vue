@@ -101,7 +101,7 @@ async function updateStatus() {
             </p>
           </div>
           <div>
-            <p class="eyebrow mb-1">Created</p>
+            <p class="eyebrow mb-1">Started</p>
             <p class="font-semibold text-navy">{{ new Date(application.createdAt).toLocaleDateString() }}</p>
           </div>
         </div>

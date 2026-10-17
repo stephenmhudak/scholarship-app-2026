@@ -51,7 +51,7 @@ public class LettersController(QueryFactory db) : ControllerBase
     [Authorize(Policy = "AppAdmin")]
     public async Task<IActionResult> Create(string cycleId, [FromBody] LetterRequest request)
     {
-        if (!await db.Query("ScholarshipCycles").Where("Id", cycleId).ExistsAsync()) throw new KeyNotFoundException("Cycle not found.");
+        if (!await db.Query("ScholarshipCycles").Where("Id", cycleId).ExistsAsync()) throw new KeyNotFoundException("Application period not found.");
         var (name, body) = Validate(request);
         var id = Guid.NewGuid().ToString();
         // The cycle's first base letter is its default
@@ -99,7 +99,7 @@ public class LettersController(QueryFactory db) : ControllerBase
     [Authorize(Policy = "AppAdmin")]
     public async Task<IActionResult> PreviewBase(string cycleId, [FromBody] LetterRequest request)
     {
-        if (!await db.Query("ScholarshipCycles").Where("Id", cycleId).ExistsAsync()) throw new KeyNotFoundException("Cycle not found.");
+        if (!await db.Query("ScholarshipCycles").Where("Id", cycleId).ExistsAsync()) throw new KeyNotFoundException("Application period not found.");
         var body = RichTextSanitizer.Sanitize(request.Body) ?? "";
         var values = await LetterMerge.SampleAsync(db, cycleId, null);
         return Pdf(LetterPdf.Render([LetterMerge.Apply(body, values)]), "letter-preview.pdf", inline: true);
@@ -217,7 +217,7 @@ public class LettersController(QueryFactory db) : ControllerBase
     {
         var letters = (await db.Query("LetterTemplates").Where("CycleId", scholarship.CycleId).GetAsync<LetterTemplate>()).ToList();
         var letter = letters.FirstOrDefault(l => l.ScholarshipId == scholarship.Id) ?? letters.FirstOrDefault(l => l.ScholarshipId is null && l.IsDefault)
-            ?? throw new ArgumentException("There's no award letter yet. Write one for this scholarship, or ask an admin to add a default letter for the cycle.");
+            ?? throw new ArgumentException("There's no award letter yet. Write one for this scholarship, or ask an admin to add a default letter for the application period.");
         return letter.Body;
     }
 

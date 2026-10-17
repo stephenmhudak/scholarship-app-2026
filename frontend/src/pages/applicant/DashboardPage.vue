@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
+import { formatDeadline } from '../../utils/deadline'
 import ApplicationReferences from '../../components/application/ApplicationReferences.vue'
 import api from '../../services/api'
 
@@ -64,20 +65,20 @@ onMounted(async () => {
     <v-alert v-else-if="error" type="error" :text="error" />
 
     <template v-else>
-      <!-- Open Scholarships -->
-      <v-card title="Open Scholarships">
+      <!-- Open Applications -->
+      <v-card title="Open Applications">
         <v-card-text class="pa-6">
           <p v-if="openCycles.length === 0" class="text-sm text-slate-400">
-            No scholarships are accepting applications right now.
+            Nothing is open for applications right now. Check back later.
           </p>
           <v-list v-else lines="two" class="py-0">
             <template v-for="(cycle, i) in openCycles" :key="cycle.id">
               <v-divider v-if="i > 0" />
-              <v-list-item class="px-0 py-3" :subtitle="`Closes ${formatDate(cycle.closeDate)}`">
+              <v-list-item class="px-0 py-3" :subtitle="`Closes ${formatDeadline(cycle.closeDate)}`">
                 <template #title>
                   <div class="flex items-center gap-2">
                     <span class="text-sm font-semibold text-navy">{{ cycle.name }}</span>
-                    <StatusBadge v-if="appByCycle[cycle.id]" :status="appByCycle[cycle.id].status" />
+                    <StatusBadge v-if="appByCycle[cycle.id]" :status="appByCycle[cycle.id].status" plain />
                   </div>
                 </template>
                 <template #append>
@@ -128,7 +129,7 @@ onMounted(async () => {
                 <template #title>
                   <div class="flex items-center gap-2">
                     <span class="text-sm font-semibold text-navy">{{ app.cycleName || 'Scholarship' }}</span>
-                    <StatusBadge :status="app.status" />
+                    <StatusBadge :status="app.status" plain />
                   </div>
                 </template>
                 <template #append>
