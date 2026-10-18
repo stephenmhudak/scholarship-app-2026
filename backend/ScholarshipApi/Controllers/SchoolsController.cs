@@ -64,29 +64,6 @@ public class SchoolsController(QueryFactory db, ITwoFactorService twoFactorServi
         return NoContent();
     }
 
-    [HttpGet("{id}/applicants")]
-    [Authorize(Policy = "Staff")]
-    public async Task<IActionResult> GetApplicants(string id, [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
-    {
-        var guard = EnforceSchoolOwnership(id);
-        if (guard != null) return guard;
-
-        var query = db.Query("Users as u")
-            .LeftJoin("Applications as a", j => j.On("a.ApplicantId", "u.Id"))
-            .Select("u.Id", "u.FirstName", "u.LastName", "u.Email", "a.Status", "a.SubmittedAt")
-            .Where("u.SchoolId", id)
-            .Where("u.Role", "applicant")
-            .When(!string.IsNullOrEmpty(search), q =>
-                q.Where(inner => inner
-                    .WhereLike("u.FirstName", $"%{search}%")
-                    .OrWhereLike("u.LastName", $"%{search}%")
-                    .OrWhereLike("u.Email", $"%{search}%")))
-            .ForPage(page, pageSize);
-
-        var applicants = await query.GetAsync<dynamic>();
-        return Ok(applicants);
-    }
-
     // ── Counselors ────────────────────────────────────────────────────────────
 
     [HttpGet("{id}/counselors")]

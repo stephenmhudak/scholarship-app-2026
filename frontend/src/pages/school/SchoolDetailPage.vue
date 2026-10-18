@@ -3,7 +3,6 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import api from '../../services/api'
-import StatusBadge from '../../components/admin/StatusBadge.vue'
 import { useConfirm } from '../../composables/useConfirm'
 
 const route = useRoute()
@@ -11,10 +10,13 @@ const confirm = useConfirm()
 const authStore = useAuthStore()
 const schoolId = route.params.id
 const canManageStaff = authStore.hasPermission('manage_school_staff')
+// Students are listed on one page (Students, for school staff); admins find them on Applications
+const studentsLink = authStore.hasPermission('view_counselor_dashboard')
+  ? { to: '/counselor', label: 'Go to Students' }
+  : authStore.hasPermission('admin_applications') ? { to: '/admin/applications', label: 'Go to Applications' } : null
 
 const school = ref(null)
 const counselors = ref([])
-const applicants = ref([])
 const loading = ref(true)
 const saving = ref(false)
 const alert = ref(null)
@@ -24,24 +26,15 @@ function showAlert(type, message) {
   setTimeout(() => (alert.value = null), 4000)
 }
 
-// ── Applicants table ──────────────────────────────────────────────────────────
-const applicantHeaders = [
-  { title: 'Name', key: 'name', value: (a) => `${a.LastName ?? ''} ${a.FirstName ?? ''}` },
-  { title: 'Email', key: 'Email' },
-  { title: 'Status', key: 'Status' },
-]
-
 // ── Load ──────────────────────────────────────────────────────────────────────
 onMounted(async () => {
   try {
-    const [schoolRes, counselorRes, applicantRes] = await Promise.all([
+    const [schoolRes, counselorRes] = await Promise.all([
       api.get(`/schools/${schoolId}`),
       api.get(`/schools/${schoolId}/counselors`),
-      api.get(`/schools/${schoolId}/applicants`),
     ])
     school.value = { ...schoolRes.data }
     counselors.value = counselorRes.data
-    applicants.value = applicantRes.data
   } catch {
     alert.value = { type: 'error', message: 'Failed to load school details.' }
   } finally {
@@ -237,27 +230,11 @@ async function submitResetPassword() {
         </v-card-text>
       </v-card>
 
-      <!-- Applicants -->
-      <v-card title="Applicants">
-        <v-card-text class="pa-6 space-y-4">
-          <v-card v-if="applicants.length" class="overflow-hidden">
-            <v-data-table
-              :headers="applicantHeaders"
-              :items="applicants"
-              :sort-by="[{ key: 'name', order: 'asc' }]"
-            >
-              <template #item.name="{ item }">
-                <span class="font-semibold text-navy">{{ item.FirstName }} {{ item.LastName }}</span>
-              </template>
-              <template #item.Email="{ value }">
-                <span class="text-slate-400">{{ value }}</span>
-              </template>
-              <template #item.Status="{ value }">
-                <StatusBadge :status="value || 'draft'" plain />
-              </template>
-            </v-data-table>
-          </v-card>
-          <p v-else class="text-sm text-slate-400">No applicants from this school yet.</p>
+      <!-- Students live on one page -->
+      <v-card v-if="studentsLink" title="Students">
+        <v-card-text class="pa-6 flex flex-wrap items-center justify-between gap-3">
+          <p class="text-sm text-slate-400">See this school's students and how their applications are going, and send them reminders.</p>
+          <v-btn color="primary" variant="outlined" append-icon="mdi-arrow-right" :to="studentsLink.to">{{ studentsLink.label }}</v-btn>
         </v-card-text>
       </v-card>
     </template>
