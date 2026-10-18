@@ -187,7 +187,7 @@ async function removeAward(candidate) {
             hide-details
           >
             <template #item="{ props: itemProps, item }">
-              <v-list-item v-bind="itemProps" :subtitle="item.raw.subtitle" />
+              <v-list-item v-bind="itemProps" :subtitle="item.subtitle" />
             </template>
           </v-select>
           <p v-if="selected?.Description" class="text-sm text-slate-400 whitespace-pre-line">{{ selected.Description }}</p>
