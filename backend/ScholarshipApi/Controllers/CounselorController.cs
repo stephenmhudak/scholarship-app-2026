@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SqlKata;
 using SqlKata.Execution;
 using System.Net;
 using ScholarshipApi.Models;
@@ -16,6 +17,21 @@ public class CounselorController(QueryFactory db, IEmailService email, IConfigur
     private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)
         ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)!;
 
+    // A school's students: applicants with the school on their account, or who picked it in a School Select answer on
+    // any of their applications (self-registered applicants have no school on their account). Same rule as the admin
+    // Applications list's school filter.
+    private static Query StudentsAt(QueryFactory db, string schoolId) =>
+        db.Query("Users as u")
+            .Where("u.Role", "applicant")
+            .Where(q => q
+                .Where("u.SchoolId", schoolId)
+                .OrWhereExists(new Query("Applications as sa")
+                    .Join("ApplicationAnswers as saa", "saa.ApplicationId", "sa.Id")
+                    .Join("Questions as sq", "sq.Id", "saa.QuestionId")
+                    .WhereColumns("sa.ApplicantId", "=", "u.Id")
+                    .Where("sq.Type", "school_select")
+                    .Where("saa.TextValue", schoolId)));
+
     // Every applicant at the counselor's school, with their most recent application. An empty list is normal
     // (a new school, or no school on the account), not an error.
     [HttpGet("applicants")]
@@ -24,15 +40,14 @@ public class CounselorController(QueryFactory db, IEmailService email, IConfigur
         var counselor = await GetCounselorAsync();
         if (counselor.SchoolId is null) return Ok(Array.Empty<CounselorApplicantDto>());
 
-        var applicants = (await db.Query("Users")
-            .Where("SchoolId", counselor.SchoolId)
-            .Where("Role", "applicant")
+        var applicants = (await StudentsAt(db, counselor.SchoolId)
             .When(!string.IsNullOrWhiteSpace(search), q =>
                 q.Where(inner => inner
-                    .WhereLike("FirstName", $"%{search}%")
-                    .OrWhereLike("LastName", $"%{search}%")
-                    .OrWhereLike("Email", $"%{search}%")))
-            .OrderBy("LastName", "FirstName")
+                    .WhereLike("u.FirstName", $"%{search}%")
+                    .OrWhereLike("u.LastName", $"%{search}%")
+                    .OrWhereLike("u.Email", $"%{search}%")))
+            .OrderBy("u.LastName", "u.FirstName")
+            .Select("u.*")
             .GetAsync<User>()).ToList();
         if (applicants.Count == 0) return Ok(Array.Empty<CounselorApplicantDto>());
 
@@ -59,10 +74,9 @@ public class CounselorController(QueryFactory db, IEmailService email, IConfigur
     public async Task<IActionResult> Nudge(string applicantId)
     {
         var counselor = await GetCounselorAsync();
-        var applicant = counselor.SchoolId is null ? null : await db.Query("Users")
-            .Where("Id", applicantId)
-            .Where("SchoolId", counselor.SchoolId)
-            .Where("Role", "applicant")
+        var applicant = counselor.SchoolId is null ? null : await StudentsAt(db, counselor.SchoolId)
+            .Where("u.Id", applicantId)
+            .Select("u.*")
             .FirstOrDefaultAsync<User>();
         if (applicant is null) throw new KeyNotFoundException("Applicant not found at your school.");
 
