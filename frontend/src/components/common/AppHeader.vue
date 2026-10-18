@@ -49,17 +49,6 @@ async function endImpersonation() {
 
     <!-- User info -->
     <div class="flex items-center gap-1 sm:gap-3">
-      <div class="hidden sm:flex items-center gap-2.5">
-        <v-avatar color="primary" variant="tonal" size="32">
-          <v-icon icon="mdi-account" size="18" />
-        </v-avatar>
-        <div class="text-sm leading-tight hidden sm:block">
-          <p class="font-semibold text-navy">{{ displayName }}</p>
-          <p v-if="authStore.role" class="text-slate-400 text-xs">
-            {{ roleLabel(authStore.role) }}
-          </p>
-        </div>
-      </div>
       <!-- Replays this page's guided tour (PageTour) -->
       <v-btn
         v-if="tours.currentTour"
@@ -71,6 +60,17 @@ async function endImpersonation() {
         data-tour="tour-button"
         @click="tours.replay()"
       />
+      <div class="hidden sm:flex items-center gap-2.5">
+        <v-avatar color="primary" variant="tonal" size="32">
+          <v-icon icon="mdi-account" size="18" />
+        </v-avatar>
+        <div class="text-sm leading-tight hidden sm:block">
+          <p class="font-semibold text-navy">{{ displayName }}</p>
+          <p v-if="authStore.role" class="text-slate-400 text-xs">
+            {{ roleLabel(authStore.role) }}
+          </p>
+        </div>
+      </div>
       <v-btn variant="text" prepend-icon="mdi-account-cog-outline" to="/account" data-tour="account-link">
         <span class="hidden sm:inline">Account</span>
       </v-btn>
