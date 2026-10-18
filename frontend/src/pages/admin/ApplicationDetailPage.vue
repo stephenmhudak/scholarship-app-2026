@@ -138,7 +138,7 @@ async function updateStatus() {
 
     <template v-if="!loading && application">
       <!-- Applicant header card -->
-      <v-card class="pa-6">
+      <v-card class="pa-6" data-tour="applicant-header">
         <div class="flex items-start justify-between">
           <div>
             <h1 class="text-2xl font-bold text-navy">{{ applicantName }}</h1>
@@ -163,7 +163,7 @@ async function updateStatus() {
         <!-- Actions -->
         <v-divider class="mt-6 mb-5" />
         <div class="flex flex-wrap items-center gap-3">
-          <div class="flex items-start gap-2">
+          <div class="flex items-start gap-2" data-tour="status">
             <v-select
               v-model="newStatus"
               :items="statusItems"
@@ -190,7 +190,7 @@ async function updateStatus() {
       </v-card>
 
       <!-- Scholarships won -->
-      <v-card v-if="awards.length" title="Scholarships awarded" class="card-header-success">
+      <v-card v-if="awards.length" title="Scholarships awarded" class="card-header-success" data-tour="awards">
         <v-card-text class="pa-6 space-y-3">
           <div v-for="a in awards" :key="a.scholarshipId" class="flex flex-wrap items-center gap-3">
             <v-icon icon="mdi-trophy-outline" color="success" />
@@ -204,7 +204,7 @@ async function updateStatus() {
       </v-card>
 
       <!-- Scores -->
-      <v-card title="Scores">
+      <v-card title="Scores" data-tour="scores">
         <template v-if="averageScore != null" #append>
           <v-chip variant="flat" color="white" class="font-semibold">Average {{ averageScore.toFixed(1) }}</v-chip>
         </template>
@@ -230,7 +230,7 @@ async function updateStatus() {
       </v-card>
 
       <!-- References -->
-      <v-card v-if="referenceForms.length" title="References">
+      <v-card v-if="referenceForms.length" title="References" data-tour="references">
         <v-card-text class="pa-6 space-y-4">
           <div v-for="f in referenceForms" :key="f.formId" class="space-y-1.5">
             <div class="flex items-center justify-between gap-3">
@@ -254,7 +254,7 @@ async function updateStatus() {
       </v-card>
 
       <!-- Answers card -->
-      <v-card title="Application Answers">
+      <v-card title="Application Answers" data-tour="answers">
         <v-card-text class="pa-6">
           <div v-if="shownQuestions.length" class="space-y-5">
             <template v-for="(q, i) in shownQuestions" :key="q.id">

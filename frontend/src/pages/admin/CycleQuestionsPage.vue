@@ -642,7 +642,7 @@ function globalIndex(q) {
     <!-- Header: a reference form's or scholarship's questions have their own page; the application questions are a
          tab of the application period's page (CyclePage), which has the header -->
     <div v-if="isSubset">
-      <v-btn variant="text" color="primary" size="small" prepend-icon="mdi-arrow-left" :to="`/admin/cycles/${cycleId}/${formId ? 'references' : 'scholarships'}`" class="-ml-3 mb-1">
+      <v-btn variant="text" color="primary" size="small" prepend-icon="mdi-arrow-left" :to="`/admin/cycles/${cycleId}/${formId ? 'references' : 'scholarships'}`" class="-ml-3 mb-1" data-tour="back">
         {{ formId ? 'References' : 'Scholarships' }}
       </v-btn>
       <h1 class="page-title">{{ formTitle }}</h1>
@@ -666,7 +666,7 @@ function globalIndex(q) {
     <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
     <!-- Selection toolbar -->
-    <v-card v-if="!loading && questions.length && !editing" class="px-4 py-2 flex items-center gap-3 flex-wrap">
+    <v-card v-if="!loading && questions.length && !editing" class="px-4 py-2 flex items-center gap-3 flex-wrap" data-tour="select-questions">
       <v-checkbox-btn
         :model-value="allSelected"
         :indeterminate="selectedIds.length > 0 && !allSelected"
@@ -971,7 +971,7 @@ function globalIndex(q) {
             </v-card-text>
           </v-card>
 
-          <v-card v-else class="pa-4 flex items-start gap-3" :class="{ 'border-primary': selectedSet.has(q.id) }">
+          <v-card v-else class="pa-4 flex items-start gap-3" :class="{ 'border-primary': selectedSet.has(q.id) }" data-tour="question">
             <v-checkbox-btn
               :model-value="selectedSet.has(q.id)"
               :disabled="!!editing"
@@ -1039,6 +1039,7 @@ function globalIndex(q) {
           size="small"
           prepend-icon="mdi-plus"
           class="border-dashed text-slate-400"
+          data-tour="add-question"
           @click="startAdd(group.id ?? '')"
         >
           Add question{{ group.title ? ` to ${group.title}` : '' }}

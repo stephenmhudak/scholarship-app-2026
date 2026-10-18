@@ -18,6 +18,7 @@
     "pinia": "^2.1.0",
     "qrcode": "^1.5.4",
     "vue": "^3.5.0",
+    "vue-onboarding-tour": "0.0.9-beta.7",
     "vue-router": "^4.3.0",
     "vuetify": "^4.2.4"
   },

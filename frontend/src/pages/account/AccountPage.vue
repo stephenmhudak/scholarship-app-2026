@@ -121,7 +121,7 @@ async function changePassword() {
 
     <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
-    <v-card title="Profile">
+    <v-card title="Profile" data-tour="profile">
       <v-card-text class="pa-6 space-y-5">
         <v-form v-if="editingName" class="space-y-4" @submit.prevent="saveName">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -156,7 +156,7 @@ async function changePassword() {
       </v-card-text>
     </v-card>
 
-    <v-card title="Change Password">
+    <v-card title="Change Password" data-tour="password">
       <v-card-text class="pa-6">
         <v-form ref="formRef" class="space-y-4 max-w-md" @submit.prevent="changePassword">
           <v-text-field
@@ -189,7 +189,7 @@ async function changePassword() {
       </v-card-text>
     </v-card>
 
-    <v-card title="Two-Factor Authentication">
+    <v-card title="Two-Factor Authentication" data-tour="two-factor">
       <v-card-text class="pa-6">
         <div v-if="!twoFactor" class="flex items-center gap-3 text-sm text-slate-400">
           <v-progress-circular indeterminate color="primary" size="20" width="2" />

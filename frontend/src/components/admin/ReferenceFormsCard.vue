@@ -127,9 +127,9 @@ async function remove(form) {
 </script>
 
 <template>
-  <v-card title="References">
+  <v-card title="References" data-tour="reference-forms">
     <template #append>
-      <v-btn variant="tonal" prepend-icon="mdi-plus" @click="startAdd">Add reference</v-btn>
+      <v-btn variant="tonal" prepend-icon="mdi-plus" data-tour="add-reference" @click="startAdd">Add reference</v-btn>
     </template>
 
     <v-card-text class="pa-6 space-y-4">
@@ -147,9 +147,9 @@ async function remove(form) {
         Loading references…
       </div>
 
-      <p v-else-if="forms.length === 0" class="text-sm text-slate-400">No references are required for this cycle.</p>
+      <p v-else-if="forms.length === 0" class="text-sm text-slate-400">No references are required for this application period.</p>
 
-      <div v-for="form in forms" :key="form.id" class="rounded-lg border border-[#E9EDF7] pa-4 flex items-start gap-3">
+      <div v-for="form in forms" :key="form.id" class="rounded-lg border border-[#E9EDF7] pa-4 flex items-start gap-3" data-tour="reference-form">
         <div class="flex-1 min-w-0 space-y-1.5">
           <p class="text-sm font-semibold text-navy">{{ form.title }}</p>
           <p v-if="form.description" class="text-xs text-slate-400">{{ form.description }}</p>

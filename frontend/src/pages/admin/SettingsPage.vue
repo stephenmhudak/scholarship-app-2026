@@ -75,7 +75,7 @@ async function save() {
         <h1 class="page-title">Application Periods</h1>
         <p class="page-subtitle">Each application period has its own dates, application form, scholarships and references.</p>
       </div>
-      <v-btn v-if="!editing" color="primary" prepend-icon="mdi-plus" @click="startCreate()">
+      <v-btn v-if="!editing" color="primary" prepend-icon="mdi-plus" data-tour="new-period" @click="startCreate()">
         New Application Period
       </v-btn>
     </div>
@@ -141,6 +141,7 @@ async function save() {
         v-for="cycle in cycles"
         :key="cycle.id"
         class="pa-4 flex flex-wrap items-center justify-between gap-3"
+        data-tour="period"
       >
         <div>
           <div class="flex items-center gap-2">
@@ -153,10 +154,10 @@ async function save() {
           </p>
         </div>
         <div class="flex gap-2">
-          <v-btn variant="outlined" size="small" prepend-icon="mdi-content-copy" :disabled="!!editing" @click="startCreate(cycle)">
+          <v-btn variant="outlined" size="small" prepend-icon="mdi-content-copy" :disabled="!!editing" data-tour="duplicate" @click="startCreate(cycle)">
             Duplicate
           </v-btn>
-          <v-btn color="primary" size="small" prepend-icon="mdi-cog-outline" :to="`/admin/cycles/${cycle.id}`">
+          <v-btn color="primary" size="small" prepend-icon="mdi-cog-outline" data-tour="set-up" :to="`/admin/cycles/${cycle.id}`">
             Set up
           </v-btn>
         </div>

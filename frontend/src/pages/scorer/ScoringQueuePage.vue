@@ -46,7 +46,7 @@ function goToDetail(applicationId) {
       <v-empty-state icon="mdi-inbox-outline" text="No applications in your queue." />
     </v-card>
 
-    <v-card v-else class="overflow-hidden">
+    <v-card v-else class="overflow-hidden" data-tour="queue">
       <v-data-table
         :headers="headers"
         :items="scoringStore.queue"

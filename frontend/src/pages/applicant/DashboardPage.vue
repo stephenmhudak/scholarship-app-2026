@@ -66,7 +66,7 @@ onMounted(async () => {
 
     <template v-else>
       <!-- Open Applications -->
-      <v-card title="Open Applications">
+      <v-card title="Open Applications" data-tour="open-applications">
         <v-card-text class="pa-6">
           <p v-if="openCycles.length === 0" class="text-sm text-slate-400">
             Nothing is open for applications right now. Check back later.
@@ -117,7 +117,7 @@ onMounted(async () => {
       </v-card>
 
       <!-- Past Applications -->
-      <v-card v-if="pastApplications.length" title="Past Applications">
+      <v-card v-if="pastApplications.length" title="Past Applications" data-tour="past-applications">
         <v-card-text class="pa-6">
           <v-list lines="two" class="py-0">
             <template v-for="(app, i) in pastApplications" :key="app.id">
@@ -144,6 +144,7 @@ onMounted(async () => {
       <!-- References: status for each open application -->
       <ApplicationReferences
         v-for="app in openApplications"
+        data-tour="references"
         :key="app.id"
         :applicationId="app.id"
         :title="openApplications.length > 1 ? `References — ${app.cycleName}` : 'References'"

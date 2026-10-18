@@ -41,7 +41,7 @@ const groups = computed(() => {
 
 <template>
   <!-- Fixed beside the page on wide screens; a slide-out menu on small ones (see useNavDrawer) -->
-  <v-navigation-drawer v-model="drawer" :permanent="!isOverlay" :temporary="isOverlay" width="240" border="e" floating>
+  <v-navigation-drawer v-model="drawer" data-tour="nav" :permanent="!isOverlay" :temporary="isOverlay" width="240" border="e" floating>
     <v-list nav density="comfortable" color="primary" class="px-3 py-5">
       <template v-for="group in groups" :key="group.heading">
         <v-list-subheader v-if="groups.length > 1" class="text-[10px] font-bold uppercase tracking-widest">

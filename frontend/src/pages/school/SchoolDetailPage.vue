@@ -175,7 +175,7 @@ async function submitResetPassword() {
 
     <template v-if="!loading && school">
       <!-- School Info -->
-      <v-card class="pa-6 space-y-4">
+      <v-card class="pa-6 space-y-4" data-tour="school-info">
         <div>
           <h1 class="page-title">{{ school.name }}</h1>
           <p class="page-subtitle">School information</p>
@@ -202,7 +202,7 @@ async function submitResetPassword() {
       </v-card>
 
       <!-- Counselors (school_admin only) -->
-      <v-card v-if="canManageStaff" title="Counselors">
+      <v-card v-if="canManageStaff" title="Counselors" data-tour="counselors">
         <template #append>
           <!-- tonal with no color picks up the title bar's white text -->
           <v-btn variant="tonal" size="small" prepend-icon="mdi-plus" @click="showAddCounselor = true">
@@ -231,7 +231,7 @@ async function submitResetPassword() {
       </v-card>
 
       <!-- Students live on one page -->
-      <v-card v-if="studentsLink" title="Students">
+      <v-card v-if="studentsLink" title="Students" data-tour="students-link">
         <v-card-text class="pa-6 flex flex-wrap items-center justify-between gap-3">
           <p class="text-sm text-slate-400">See this school's students and how their applications are going, and send them reminders.</p>
           <v-btn color="primary" variant="outlined" append-icon="mdi-arrow-right" :to="studentsLink.to">{{ studentsLink.label }}</v-btn>

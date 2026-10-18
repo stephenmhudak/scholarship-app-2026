@@ -116,7 +116,7 @@ async function resetScholarship(s) {
     </div>
 
     <template v-else>
-      <v-card title="Base letters">
+      <v-card title="Base letters" data-tour="base-letters">
         <template #append>
           <v-btn variant="tonal" prepend-icon="mdi-plus" @click="editBase()">New letter</v-btn>
         </template>
@@ -138,7 +138,7 @@ async function resetScholarship(s) {
         </v-card-text>
       </v-card>
 
-      <v-card title="Scholarship letters">
+      <v-card title="Scholarship letters" data-tour="scholarship-letters">
         <v-card-text class="pa-6 space-y-3">
           <p v-if="scholarships.length === 0" class="text-sm text-slate-400">This application period has no scholarships yet.</p>
           <div v-for="s in scholarships" :key="s.id" class="rounded-lg border border-[#E9EDF7] pa-4 flex items-center gap-3">

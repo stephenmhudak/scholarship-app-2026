@@ -51,7 +51,7 @@ function openCode() {
 
     <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
-    <v-card title="Enter a reference code">
+    <v-card title="Enter a reference code" data-tour="reference-code">
       <v-card-text class="pa-6">
         <v-form class="flex items-start gap-3" @submit.prevent="openCode">
           <v-text-field
@@ -69,7 +69,7 @@ function openCode() {
       </v-card-text>
     </v-card>
 
-    <v-card class="overflow-hidden" title="Submitted references">
+    <v-card class="overflow-hidden" title="Submitted references" data-tour="submitted-references">
       <v-data-table
         :headers="headers"
         :items="references"

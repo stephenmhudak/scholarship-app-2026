@@ -156,3 +156,12 @@ html {
 .rich-text hr {
   @apply border-t border-[#E9EDF7];
 }
+
+/* Page tours (vue-onboarding-tour, components/common/PageTour.vue): the library's popup in the app's colors */
+.vueOnboardingTour .defaultTemplateContent .stepTitle { color: #2B3674; font-size: 1rem; font-weight: 700; }
+.vueOnboardingTour .defaultTemplateContent .stepDescription { color: #2B3674; opacity: 0.8; }
+.vueOnboardingTour .defaultTemplateContent .terminateTourButton { color: #4361EE; font-weight: 700; background: none; border: 0; }
+.vueOnboardingTour .defaultTemplateContent .terminateTourButton:hover { color: #2940A8; }
+.vueOnboardingTour .defaultTemplateContent { border-color: #E9EDF7; }
+.vueOnboardingTour .stepIndicators path[fill="#3b82f6"] { fill: #4361EE; }
+.vueOnboardingTour .stepIndicators path[fill="#d1d5db"] { fill: #E9EDF7; }

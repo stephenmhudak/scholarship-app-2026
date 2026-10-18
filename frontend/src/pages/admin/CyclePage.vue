@@ -54,7 +54,7 @@ const dates = computed(() => cycle.value
     <v-alert v-if="error" type="error" :text="error" />
 
     <template v-else>
-      <v-tabs color="primary" show-arrows class="border-b border-[#E9EDF7]">
+      <v-tabs color="primary" show-arrows class="border-b border-[#E9EDF7]" data-tour="period-tabs">
         <v-tab v-for="t in tabs" :key="t.to" :to="t.to" :exact="t.exact" :prepend-icon="t.icon">{{ t.title }}</v-tab>
       </v-tabs>
 
