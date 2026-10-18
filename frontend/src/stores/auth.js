@@ -61,6 +61,12 @@ export const useAuthStore = defineStore('auth', {
       return this._applySignInResponse(response.data)
     },
 
+    async updateProfile({ firstName, lastName }) {
+      const { data } = await api.put('/auth/profile', { firstName, lastName })
+      this.user = { ...this.user, firstName: data.firstName, lastName: data.lastName }
+      localStorage.setItem('auth_user', JSON.stringify(this.user))
+    },
+
     async changePassword({ currentPassword, newPassword }) {
       await api.post('/auth/change-password', { currentPassword, newPassword })
     },

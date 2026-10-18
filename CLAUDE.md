@@ -133,6 +133,7 @@ backend/ScholarshipApi/
 | POST | `/api/auth/setup-password/check` · `/setup-password` | Public | `{ token }` → `{ email, firstName }`; `{ token, newPassword }` → same payload as login. Invited counselors create their first password |
 | POST | `/api/schools/{id}/counselors/{cid}/resend-invite` · `/api/admin/users/{id}/resend-invite` | school_admin · app_admin | Emails a new setup link (1 min cooldown) |
 | POST | `/api/auth/change-password` | Bearer | `{ currentPassword, newPassword }` → 204 |
+| PUT | `/api/auth/profile` | Bearer (not impersonating) | `{ firstName, lastName }` → the saved name; new token in `X-Session-Token` (email stays admin-only) |
 | GET | `/api/auth/2fa` | Bearer | `{ enabled, method, recoveryCodesRemaining }` |
 | POST | `/api/auth/2fa/email/setup` · `/2fa/email/enable` | Bearer | Email method: setup emails a code → enable `{ code }` |
 | POST | `/api/auth/2fa/setup` · `/2fa/enable` · `/2fa/disable` · `/2fa/recovery-codes` | Bearer | setup → `{ secret, otpauthUri }`; enable `{ code }` → `{ recoveryCodes }`; disable / recovery-codes `{ password }` |

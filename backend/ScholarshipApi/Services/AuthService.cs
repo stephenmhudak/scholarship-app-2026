@@ -401,6 +401,15 @@ public class AuthService(QueryFactory db, IConfiguration config, IEmailService e
         return await SignInOrChallengeAsync(await GetCurrentUserAsync(user.Id));
     }
 
+    // People fix their own name; email stays with admins, since it's how they sign in
+    public async Task<User> UpdateProfileAsync(string userId, UpdateProfileRequest request)
+    {
+        var firstName = InputValidation.Required(request.FirstName, "First name", 100);
+        var lastName = InputValidation.Required(request.LastName, "Last name", 100);
+        await db.Query("Users").Where("Id", userId).UpdateAsync(new { FirstName = firstName, LastName = lastName });
+        return await GetCurrentUserAsync(userId);
+    }
+
     public async Task ChangePasswordAsync(string userId, ChangePasswordRequest request)
     {
         var user = await GetCurrentUserAsync(userId);

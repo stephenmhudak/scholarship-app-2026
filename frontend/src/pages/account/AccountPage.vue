@@ -16,6 +16,26 @@ const formRef = ref(null)
 const saving = ref(false)
 const alert = ref(null)
 
+// Name: shown read-only until Edit
+const editingName = ref(null)
+const savingName = ref(false)
+function startEditName() {
+  editingName.value = { firstName: authStore.user?.firstName ?? '', lastName: authStore.user?.lastName ?? '' }
+}
+async function saveName() {
+  savingName.value = true
+  alert.value = null
+  try {
+    await authStore.updateProfile(editingName.value)
+    editingName.value = null
+    alert.value = { type: 'success', message: 'Your name has been updated.' }
+  } catch (err) {
+    alert.value = { type: 'error', message: err.response?.data?.error || 'Failed to update your name.' }
+  } finally {
+    savingName.value = false
+  }
+}
+
 const twoFactor = ref(null)
 const settingUpTwoFactor = ref(false)
 // Turning 2FA off and regenerating recovery codes both re-confirm the password in one dialog
@@ -102,14 +122,36 @@ async function changePassword() {
     <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
     <v-card title="Profile">
-      <v-card-text class="pa-6 grid sm:grid-cols-2 gap-4">
-        <div>
-          <p class="eyebrow">Name</p>
-          <p class="text-navy">{{ authStore.fullName }}</p>
+      <v-card-text class="pa-6 space-y-5">
+        <v-form v-if="editingName" class="space-y-4" @submit.prevent="saveName">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <v-text-field v-model="editingName.firstName" label="First Name" autocomplete="given-name" hide-details="auto" />
+            <v-text-field v-model="editingName.lastName" label="Last Name" autocomplete="family-name" hide-details="auto" />
+          </div>
+          <div class="flex gap-3">
+            <v-btn type="submit" color="primary" :loading="savingName">Save</v-btn>
+            <v-btn variant="outlined" :disabled="savingName" @click="editingName = null">Cancel</v-btn>
+          </div>
+        </v-form>
+        <div v-else class="flex items-start justify-between gap-3">
+          <div>
+            <p class="eyebrow">Name</p>
+            <p class="text-navy">{{ authStore.fullName }}</p>
+          </div>
+          <v-btn
+            v-if="!authStore.isImpersonating"
+            variant="outlined"
+            size="small"
+            prepend-icon="mdi-pencil"
+            @click="startEditName"
+          >
+            Edit name
+          </v-btn>
         </div>
         <div>
           <p class="eyebrow">Email</p>
           <p class="text-navy">{{ authStore.user?.email }}</p>
+          <p class="text-xs text-slate-400 mt-1">You sign in with this address. To change it, contact the scholarship office.</p>
         </div>
       </v-card-text>
     </v-card>
