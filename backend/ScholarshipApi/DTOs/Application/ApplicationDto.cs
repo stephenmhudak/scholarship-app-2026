@@ -38,8 +38,15 @@ public class ApplicationListDto
 {
     public string Id { get; set; } = null!;
     public string Status { get; set; } = null!;
+    public string CycleId { get; set; } = null!;
+    public string CycleName { get; set; } = null!;
     public string FirstName { get; set; } = null!;
     public string LastName { get; set; } = null!;
+    public string? SchoolName { get; set; }
+    public List<string> ScholarshipsWon { get; set; } = [];
     public DateTime? SubmittedAt { get; set; }
     public DateTime CreatedAt { get; set; }
 }
+
+/// <summary>The admin applications list's filters (all optional).</summary>
+public record AdminApplicationFilter(string? Status, string? Search, string? CycleId, string? SchoolId);

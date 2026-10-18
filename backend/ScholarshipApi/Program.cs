@@ -63,9 +63,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     ?? context.Principal?.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
                 var tokenVersion = context.Principal?.FindFirstValue(SessionVersion.Claim);
                 var db = context.HttpContext.RequestServices.GetRequiredService<QueryFactory>();
-                var currentVersion = userId is null ? null
-                    : await db.Query("Users").Where("Id", userId).Select("SessionVersion").FirstOrDefaultAsync<int?>();
-                if (currentVersion is null || tokenVersion != currentVersion.Value.ToString())
+                var current = userId is null ? null
+                    : await db.Query("Users").Where("Id", userId).Select("SessionVersion", "DeactivatedAt").FirstOrDefaultAsync<ScholarshipApi.Models.User>();
+                if (current is null || current.DeactivatedAt is not null || tokenVersion != current.SessionVersion.ToString())
                 {
                     context.Fail("This session has ended. Please sign in again.");
                     return;

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Security.Cryptography;
 using System.Text;
 using SqlKata.Execution;
+using ScholarshipApi.DTOs.Application;
 using ScholarshipApi.Models;
 using ScholarshipApi.Services;
 
@@ -23,14 +24,17 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
     public async Task<IActionResult> ListApplications(
         [FromQuery] string? status,
         [FromQuery] string? search,
+        [FromQuery] string? cycleId,
+        [FromQuery] string? schoolId,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
         if (!string.IsNullOrEmpty(status)) InputValidation.ApplicationStatus(status);
+        var filter = new AdminApplicationFilter(status, search, cycleId, schoolId);
         page = Math.Max(page, 1);
         pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
-        var items = await applicationService.AdminListAsync(status, search, page, pageSize);
-        var total = await applicationService.AdminCountAsync(status, search);
+        var items = await applicationService.AdminListAsync(filter, page, pageSize);
+        var total = await applicationService.AdminCountAsync(filter);
         return Ok(new { data = items, total, page, pageSize });
     }
 
@@ -39,6 +43,26 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
     {
         await applicationService.UpdateStatusAsync(id, request.Status);
         return NoContent();
+    }
+
+    // Every score on an application, by scorer, for its detail page: what was scored (a section, the application as a
+    // whole, or a reference), the score and comments
+    [HttpGet("applications/{id}/scores")]
+    public async Task<IActionResult> ApplicationScores(string id)
+    {
+        if (!await db.Query("Applications").Where("Id", id).ExistsAsync()) throw new KeyNotFoundException("Application not found.");
+        var scores = await db.Query("Scores as s")
+            .Join("Users as u", "u.Id", "s.ScoredById")
+            .LeftJoin("Sections as sec", "sec.Id", "s.SectionId")
+            .LeftJoin("ReferenceRequests as rr", "rr.Id", "s.ReferenceRequestId")
+            .LeftJoin("ReferenceForms as rf", "rf.Id", "rr.FormId")
+            .Where("s.ApplicationId", id)
+            .OrderBy("u.LastName", "u.FirstName").OrderBy("sec.Order").OrderBy("rf.Order")
+            .Select("s.Id", "s.ScoredById", "u.FirstName as ScorerFirstName", "u.LastName as ScorerLastName",
+                    "s.SectionId", "sec.Title as SectionTitle", "s.ReferenceRequestId", "rf.Title as ReferenceTitle",
+                    "rr.Label as ReferenceLabel", "s.Score", "s.Comments", "s.ScoredAt")
+            .GetAsync<dynamic>();
+        return Ok(scores);
     }
 
     // ── Scoring Overview ──────────────────────────────────────────────────────
@@ -109,13 +133,13 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
     // ── Export ────────────────────────────────────────────────────────────────
 
     [HttpGet("applications/export")]
-    public async Task<IActionResult> Export([FromQuery] string? status)
+    public async Task<IActionResult> Export([FromQuery] string? status, [FromQuery] string? search,
+        [FromQuery] string? cycleId, [FromQuery] string? schoolId)
     {
         if (!string.IsNullOrEmpty(status)) InputValidation.ApplicationStatus(status);
-        var query = db.Query("Applications as a")
-            .Join("Users as u", "u.Id", "a.ApplicantId")
-            .Select("a.Id", "a.Status", "u.FirstName", "u.LastName", "u.Email", "a.SubmittedAt", "a.CreatedAt")
-            .When(!string.IsNullOrEmpty(status), q => q.Where("a.Status", status));
+        // The same applications the list shows with these filters
+        var query = ApplicationService.AdminFiltered(db, new AdminApplicationFilter(status, search, cycleId, schoolId))
+            .Select("a.Id", "a.Status", "u.FirstName", "u.LastName", "u.Email", "a.SubmittedAt", "a.CreatedAt");
 
         var rows = await query.GetAsync<dynamic>();
 
@@ -165,7 +189,7 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
                     "s.Name as SchoolName", "u.CreatedAt")
             .SelectRaw("u.TwoFactorMethod IS NOT NULL AS TwoFactorEnabled")
             .SelectRaw("u.PasswordHash = '' AS InvitePending")
-            .Select("u.ScoringScope")
+            .Select("u.ScoringScope", "u.DeactivatedAt")
             .OrderBy("u.LastName", "u.FirstName")
             .GetAsync<dynamic>();
         return Ok(users);
@@ -218,6 +242,68 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
             catch (ArgumentException) { emailSent = false; }
         }
         return CreatedAtAction(nameof(ListUsers), new { }, new { id, emailSent });
+    }
+
+    // Name, email, role and school. A role change ends the user's sessions so their permissions update.
+    [HttpPut("users/{id}")]
+    public async Task<IActionResult> UpdateUser(string id, [FromBody] UpdateUserRequest request)
+    {
+        await EnsureCanManageAsync(id);
+        var user = await db.Query("Users").Where("Id", id).FirstAsync<User>();
+        var email = InputValidation.Email(request.Email);
+        var firstName = InputValidation.Required(request.FirstName, "First name", 100);
+        var lastName = InputValidation.Required(request.LastName, "Last name", 100);
+        var role = InputValidation.Role(request.Role);
+        if (role != user.Role)
+        {
+            if (id == CurrentUserId) throw new ArgumentException("You can't change your own role.");
+            if (role == AppRoles.SuperAdmin && !IsSuperAdmin)
+                throw new UnauthorizedAccessException("Only super admins can make someone a super admin.");
+        }
+
+        string? schoolId = null;
+        if (role is "school_admin" or "counselor")
+        {
+            if (string.IsNullOrEmpty(request.SchoolId)) throw new ArgumentException("Choose a school for this user.");
+            if (!await db.Query("Schools").Where("Id", request.SchoolId).ExistsAsync())
+                throw new ArgumentException("That school doesn't exist.");
+            schoolId = request.SchoolId;
+        }
+
+        if (!string.Equals(email, user.Email, StringComparison.OrdinalIgnoreCase)
+            && await db.Query("Users").Where("Email", email).WhereNot("Id", id).ExistsAsync())
+            throw new ArgumentException("Email is already registered.");
+
+        await db.Query("Users").Where("Id", id).UpdateAsync(new
+        {
+            Email = email,
+            FirstName = firstName,
+            LastName = lastName,
+            Role = role,
+            SchoolId = schoolId,
+        });
+        // Role and school are in the session token
+        if (role != user.Role || schoolId != user.SchoolId) await SessionVersion.BumpAsync(db, id);
+        return NoContent();
+    }
+
+    // Deactivated users can't sign in and are signed out now; everything they did stays
+    [HttpPost("users/{id}/deactivate")]
+    public async Task<IActionResult> DeactivateUser(string id)
+    {
+        await EnsureCanManageAsync(id);
+        if (id == CurrentUserId) throw new ArgumentException("You can't deactivate your own account.");
+        await db.Query("Users").Where("Id", id).WhereNull("DeactivatedAt").UpdateAsync(new { DeactivatedAt = DateTime.UtcNow });
+        await SessionVersion.BumpAsync(db, id);
+        return NoContent();
+    }
+
+    [HttpPost("users/{id}/reactivate")]
+    public async Task<IActionResult> ReactivateUser(string id)
+    {
+        await EnsureCanManageAsync(id);
+        await db.Query("Users").Where("Id", id).UpdateAsync(new { DeactivatedAt = (DateTime?)null });
+        return NoContent();
     }
 
     // ── Scorer scope: which applications a scorer can see and score ──────────
@@ -452,6 +538,15 @@ public class AdminController(IApplicationService applicationService, ITwoFactorS
 // ── Request / Row types ───────────────────────────────────────────────────────
 
 public class UpdateStatusRequest { public string Status { get; set; } = null!; }
+
+public class UpdateUserRequest
+{
+    public string FirstName { get; set; } = null!;
+    public string LastName { get; set; } = null!;
+    public string Email { get; set; } = null!;
+    public string Role { get; set; } = null!;
+    public string? SchoolId { get; set; }
+}
 
 public class CreateUserRequest
 {

@@ -18,11 +18,11 @@ const percentage = computed(() =>
 </script>
 
 <template>
-  <v-card class="pa-4 space-y-2">
-    <div class="flex justify-between text-sm">
+  <div class="space-y-1">
+    <div class="flex justify-between gap-3 text-sm">
       <span class="font-semibold text-navy">Progress</span>
-      <span class="text-slate-400">{{ answered }} / {{ total }} answered ({{ percentage }}%)</span>
+      <span class="text-slate-400"><slot>{{ answered }} of {{ total }} answered</slot></span>
     </div>
-    <v-progress-linear :model-value="percentage" color="primary" bg-color="#E9EDF7" bg-opacity="1" height="8" rounded />
-  </v-card>
+    <v-progress-linear :model-value="percentage" color="primary" bg-color="#E9EDF7" bg-opacity="1" height="6" rounded />
+  </div>
 </template>

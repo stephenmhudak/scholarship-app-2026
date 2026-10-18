@@ -4,8 +4,6 @@ import { useRoute } from 'vue-router'
 import api from '../../services/api'
 import { isRichText } from '../../utils/richText'
 import { useConfirm } from '../../composables/useConfirm'
-import ReferenceFormsCard from '../../components/admin/ReferenceFormsCard.vue'
-import ScholarshipsCard from '../../components/admin/ScholarshipsCard.vue'
 import { CONDITION_TYPES, conditionKind, conditionFields, describeCondition, useSchools } from '../../utils/conditionTargets'
 
 const route = useRoute()
@@ -97,7 +95,7 @@ const groupedQuestions = computed(() => {
 
 onMounted(async () => {
   await Promise.all([
-    loadCycleName(),
+    isSubset && loadCycleName(),
     loadQuestions(),
     formId ? loadFormTitle() : scholarshipId ? loadScholarshipTitle() : loadSections(),
   ])
@@ -641,15 +639,13 @@ function globalIndex(q) {
 
 <template>
   <div class="space-y-6 max-w-3xl">
-    <!-- Header -->
-    <div>
-      <v-btn v-if="isSubset" variant="text" color="primary" size="small" prepend-icon="mdi-arrow-left" :to="`/admin/cycles/${cycleId}/questions`" class="-ml-3 mb-1">
-        Application questions
+    <!-- Header: a reference form's or scholarship's questions have their own page; the application questions are a
+         tab of the application period's page (CyclePage), which has the header -->
+    <div v-if="isSubset">
+      <v-btn variant="text" color="primary" size="small" prepend-icon="mdi-arrow-left" :to="`/admin/cycles/${cycleId}/${formId ? 'references' : 'scholarships'}`" class="-ml-3 mb-1">
+        {{ formId ? 'References' : 'Scholarships' }}
       </v-btn>
-      <v-btn v-else variant="text" color="primary" size="small" prepend-icon="mdi-arrow-left" to="/admin/scholarship-settings" class="-ml-3 mb-1">
-        Application Periods
-      </v-btn>
-      <h1 class="page-title">{{ isSubset ? formTitle : 'Questions' }}</h1>
+      <h1 class="page-title">{{ formTitle }}</h1>
       <p class="page-subtitle">{{ formId ? `Reference questions · ${cycleName}` : cycleName }}</p>
     </div>
 
@@ -1114,15 +1110,6 @@ function globalIndex(q) {
         Add section
       </v-btn>
     </template>
-
-    <ReferenceFormsCard v-if="!isSubset && !loading" :cycleId="cycleId" :questions="questions" />
-    <ScholarshipsCard
-      v-if="!isSubset && !loading"
-      :cycleId="cycleId"
-      :questions="questions"
-      :sections="sections"
-      @changed="loadSections(); loadQuestions()"
-    />
 
   </div>
 </template>

@@ -208,7 +208,59 @@ public class LettersController(QueryFactory db) : ControllerBase
         return Pdf(LetterPdf.Render(pages), $"{FileSafe(scholarship.Name)} - award letters.pdf");
     }
 
+    // ── An applicant's own awards ────────────────────────────────────────────
+
+    // Scholarships this application was awarded, for the applicant's status page (and admins)
+    [HttpGet("api/applications/{applicationId}/awards")]
+    public async Task<IActionResult> ApplicationAwards(string applicationId)
+    {
+        await EnsureOwnerOrAdminAsync(applicationId);
+        var awards = (await db.Query("ScholarshipAwards").Where("ApplicationId", applicationId).OrderBy("AwardedAt")
+            .GetAsync<ScholarshipAward>()).ToList();
+        if (awards.Count == 0) return Ok(Array.Empty<object>());
+
+        var scholarships = (await db.Query("Scholarships").WhereIn("Id", awards.Select(a => a.ScholarshipId))
+            .GetAsync<Scholarship>()).ToDictionary(s => s.Id);
+        var letters = (await db.Query("LetterTemplates").WhereIn("CycleId", scholarships.Values.Select(s => s.CycleId).Distinct())
+            .GetAsync<LetterTemplate>()).ToList();
+
+        return Ok(awards.Where(a => scholarships.ContainsKey(a.ScholarshipId)).Select(a =>
+        {
+            var s = scholarships[a.ScholarshipId];
+            return new
+            {
+                ScholarshipId = s.Id,
+                s.Name,
+                s.Description,
+                Amount = a.Amount ?? s.AwardAmount,
+                a.AwardedAt,
+                // Its own letter, else the period's default
+                HasLetter = letters.Any(l => l.ScholarshipId == s.Id || (l.CycleId == s.CycleId && l.ScholarshipId is null && l.IsDefault)),
+            };
+        }));
+    }
+
+    [HttpGet("api/applications/{applicationId}/awards/{scholarshipId}/letter")]
+    public async Task<IActionResult> MyAwardLetter(string applicationId, string scholarshipId)
+    {
+        await EnsureOwnerOrAdminAsync(applicationId);
+        var award = await db.Query("ScholarshipAwards").Where("ScholarshipId", scholarshipId).Where("ApplicationId", applicationId)
+            .FirstOrDefaultAsync<ScholarshipAward>() ?? throw new KeyNotFoundException("This application wasn't awarded that scholarship.");
+        var scholarship = await db.Query("Scholarships").Where("Id", scholarshipId).FirstAsync<Scholarship>();
+        var body = await LetterBodyAsync(scholarship);
+        var values = await LetterMerge.ForAwardAsync(db, scholarship, award);
+        return Pdf(LetterPdf.Render([LetterMerge.Apply(body, values)]), $"{FileSafe(scholarship.Name)} - award letter.pdf");
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private async Task EnsureOwnerOrAdminAsync(string applicationId)
+    {
+        var applicantId = await db.Query("Applications").Where("Id", applicationId).Select("ApplicantId").FirstOrDefaultAsync<string>()
+            ?? throw new KeyNotFoundException("Application not found.");
+        if (!IsAdmin && applicantId != UserId)
+            throw new UnauthorizedAccessException("You do not have permission to view this application.");
+    }
 
     private static object ToDto(LetterTemplate l) => new { l.Id, l.Name, l.Body, l.IsDefault, l.ScholarshipId, l.UpdatedAt };
 

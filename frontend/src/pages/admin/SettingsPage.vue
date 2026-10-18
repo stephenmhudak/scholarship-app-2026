@@ -1,11 +1,13 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '../../services/api'
 import DateField from '../../components/common/DateField.vue'
 
+// The list of application periods and creating one; each period is set up on its own page (CyclePage)
+const router = useRouter()
 const cycles = ref([])
 const editing = ref(null)
-const creating = ref(false)
 const loading = ref(true)
 const saving = ref(false)
 const alert = ref(null)
@@ -33,14 +35,13 @@ async function loadCycles() {
     const response = await api.get('/admin/cycles')
     cycles.value = response.data
   } catch {
-    alert.value = { type: 'error', message: 'Failed to load cycles.' }
+    alert.value = { type: 'error', message: 'Failed to load application periods.' }
   } finally {
     loading.value = false
   }
 }
 
 function startCreate(source = null) {
-  creating.value = true
   editing.value = blank()
   if (source) {
     editing.value.name = `${source.name} (copy)`
@@ -48,46 +49,19 @@ function startCreate(source = null) {
   }
 }
 
-function editCycle(cycle) {
-  creating.value = false
-  editing.value = {
-    id: cycle.id,
-    name: cycle.name,
-    openDate: cycle.openDate?.slice(0, 10) ?? '',
-    closeDate: cycle.closeDate?.slice(0, 10) ?? '',
-    isActive: cycle.isActive,
-  }
-}
-
 function cancel() {
   editing.value = null
-  creating.value = false
 }
 
 async function save() {
   saving.value = true
   alert.value = null
   try {
-    const payload = {
-      name: editing.value.name,
-      openDate: editing.value.openDate,
-      closeDate: editing.value.closeDate,
-      isActive: editing.value.isActive,
-    }
-
-    if (creating.value) {
-      await api.post('/admin/cycles', { ...payload, copyFromCycleId: editing.value.copyFromCycleId || null })
-      alert.value = { type: 'success', message: 'Application period created.' }
-    } else {
-      await api.put(`/admin/cycles/${editing.value.id}`, payload)
-      alert.value = { type: 'success', message: 'Application period updated.' }
-    }
-
-    editing.value = null
-    creating.value = false
-    await loadCycles()
-  } catch {
-    alert.value = { type: 'error', message: 'Failed to save cycle.' }
+    const { data } = await api.post('/admin/cycles', { ...editing.value, copyFromCycleId: editing.value.copyFromCycleId || null })
+    // Straight on to setting it up
+    router.push(`/admin/cycles/${data.id}/questions`)
+  } catch (err) {
+    alert.value = { type: 'error', message: err.response?.data?.error || 'Failed to create the application period.' }
   } finally {
     saving.value = false
   }
@@ -109,7 +83,7 @@ async function save() {
     <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
     <!-- Edit / Create Form -->
-    <v-card v-if="editing" :title="creating ? 'New Application Period' : 'Edit Application Period'">
+    <v-card v-if="editing" title="New Application Period">
       <v-card-text class="pa-6 space-y-5">
         <v-text-field
           v-model="editing.name"
@@ -118,13 +92,12 @@ async function save() {
           hide-details="auto"
         />
 
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <DateField v-model="editing.openDate" label="Open Date" hide-details="auto" />
           <DateField v-model="editing.closeDate" label="Close Date" hide-details="auto" />
         </div>
 
         <v-select
-          v-if="creating"
           v-model="editing.copyFromCycleId"
           :items="copyFromItems"
           label="Start with questions from"
@@ -140,8 +113,8 @@ async function save() {
         />
 
         <div class="flex gap-3 pt-2">
-          <v-btn color="primary" prepend-icon="mdi-content-save" :loading="saving" @click="save">
-            Save
+          <v-btn color="primary" prepend-icon="mdi-plus" :loading="saving" @click="save">
+            Create
           </v-btn>
           <v-btn variant="outlined" @click="cancel">Cancel</v-btn>
         </div>
@@ -151,7 +124,7 @@ async function save() {
     <!-- Loading -->
     <div v-if="loading" class="flex items-center gap-3 text-slate-400 py-4">
       <v-progress-circular indeterminate color="primary" size="22" width="2" />
-      Loading cycles…
+      Loading application periods…
     </div>
 
     <!-- Empty state -->
@@ -162,17 +135,17 @@ async function save() {
       />
     </v-card>
 
-    <!-- Cycles list -->
+    <!-- Periods list -->
     <div v-else class="space-y-3">
       <v-card
         v-for="cycle in cycles"
         :key="cycle.id"
-        class="pa-4 flex items-center justify-between"
+        class="pa-4 flex flex-wrap items-center justify-between gap-3"
       >
         <div>
           <div class="flex items-center gap-2">
             <p class="text-sm font-bold text-navy">{{ cycle.name }}</p>
-            <v-chip v-if="cycle.isActive" color="success" class="font-semibold">Active</v-chip>
+            <v-chip v-if="cycle.isActive" color="success" class="font-semibold">Accepting applications</v-chip>
           </div>
           <p class="text-xs text-slate-400 mt-0.5">
             {{ new Date(cycle.openDate).toLocaleDateString() }} –
@@ -180,14 +153,11 @@ async function save() {
           </p>
         </div>
         <div class="flex gap-2">
-          <v-btn variant="outlined" size="small" prepend-icon="mdi-format-list-bulleted" :to="`/admin/cycles/${cycle.id}/questions`">
-            Questions
-          </v-btn>
           <v-btn variant="outlined" size="small" prepend-icon="mdi-content-copy" :disabled="!!editing" @click="startCreate(cycle)">
             Duplicate
           </v-btn>
-          <v-btn variant="outlined" size="small" prepend-icon="mdi-pencil" @click="editCycle(cycle)">
-            Edit
+          <v-btn color="primary" size="small" prepend-icon="mdi-cog-outline" :to="`/admin/cycles/${cycle.id}`">
+            Set up
           </v-btn>
         </div>
       </v-card>

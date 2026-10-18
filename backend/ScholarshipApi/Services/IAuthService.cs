@@ -14,6 +14,7 @@ public interface IAuthService
     Task ForgotPasswordAsync(string email);
     Task<LoginResult> ResetPasswordAsync(ResetPasswordWithCodeRequest request);
     Task ChangePasswordAsync(string userId, ChangePasswordRequest request);
+    Task<User> UpdateProfileAsync(string userId, UpdateProfileRequest request);
     Task<User> GetCurrentUserAsync(string userId);
     Task<InviteInfoResponse> GetInviteAsync(string token);
     Task<IEnumerable<string>> GetPermissionsForRoleAsync(string roleName);

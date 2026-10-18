@@ -11,7 +11,7 @@ public interface IApplicationService
     Task<CopyAnswersResult> CopyAnswersAsync(string targetId, string sourceId, string applicantId);
     Task SaveDraftAsync(string id, string applicantId, SubmitApplicationRequest request);
     Task SubmitAsync(string id, string applicantId);
-    Task<IEnumerable<ApplicationListDto>> AdminListAsync(string? status, string? search, int page, int pageSize);
-    Task<int> AdminCountAsync(string? status, string? search);
+    Task<IEnumerable<ApplicationListDto>> AdminListAsync(AdminApplicationFilter filter, int page, int pageSize);
+    Task<int> AdminCountAsync(AdminApplicationFilter filter);
     Task UpdateStatusAsync(string id, string status);
 }

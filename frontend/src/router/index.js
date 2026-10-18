@@ -126,12 +126,6 @@ const routes = [
     meta: { permission: 'admin_scholarship' },
   },
   {
-    path: '/admin/cycles/:cycleId/letters',
-    name: 'AwardLetters',
-    component: () => import('../pages/admin/AwardLettersPage.vue'),
-    meta: { permission: 'admin_scholarship' },
-  },
-  {
     // Anyone assigned to award a scholarship (the permission is added at sign-in); super admins have it too
     path: '/awards',
     name: 'AwardScholarships',
@@ -146,10 +140,17 @@ const routes = [
     meta: { permission: 'admin_scholarship' },
   },
   {
-    path: '/admin/cycles/:cycleId/questions',
-    name: 'CycleQuestions',
-    component: () => import('../pages/admin/CycleQuestionsPage.vue'),
+    // One application period, a tab per child route
+    path: '/admin/cycles/:cycleId',
+    component: () => import('../pages/admin/CyclePage.vue'),
     meta: { permission: 'admin_scholarship' },
+    children: [
+      { path: '', name: 'CycleDetails', component: () => import('../pages/admin/cycle/CycleDetailsTab.vue') },
+      { path: 'questions', name: 'CycleQuestions', component: () => import('../pages/admin/CycleQuestionsPage.vue') },
+      { path: 'references', name: 'CycleReferences', component: () => import('../pages/admin/cycle/CycleReferencesTab.vue') },
+      { path: 'scholarships', name: 'CycleScholarships', component: () => import('../pages/admin/cycle/CycleScholarshipsTab.vue') },
+      { path: 'letters', name: 'AwardLetters', component: () => import('../pages/admin/AwardLettersPage.vue') },
+    ],
   },
   {
     path: '/schools',

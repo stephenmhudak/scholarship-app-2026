@@ -106,6 +106,16 @@ public class AuthController(IAuthService authService, ITwoFactorService twoFacto
         return NoContent();
     }
 
+    // Name only; the session token carries the name, so a fresh one comes back in X-Session-Token
+    [HttpPut("profile")]
+    [Authorize(Policy = "NotImpersonating")]
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request)
+    {
+        var user = await authService.UpdateProfileAsync(UserId, request);
+        await RefreshSessionAsync();
+        return Ok(new { user.FirstName, user.LastName });
+    }
+
     [HttpGet("2fa")]
     [Authorize]
     public async Task<IActionResult> GetTwoFactorStatus()

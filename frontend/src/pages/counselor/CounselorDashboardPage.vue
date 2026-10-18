@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import api from '../../services/api'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
 
@@ -7,6 +7,29 @@ const students = ref([])
 const loading = ref(true)
 const alert = ref(null)
 const nudging = ref({})
+
+// Search and status filter (the whole list is loaded, so both work in the browser)
+const search = ref('')
+const statusFilter = ref(null)
+const statusItems = [
+  { title: 'All statuses', value: null },
+  { title: 'Not started', value: 'none' },
+  { title: 'Draft', value: 'draft' },
+  { title: 'Submitted', value: 'submitted' },
+  { title: 'Under Review', value: 'under_review' },
+  { title: 'Awarded', value: 'awarded' },
+  { title: 'Rejected', value: 'rejected' },
+  { title: 'Not submitted', value: 'archived' },
+]
+const filteredStudents = computed(() => {
+  const terms = (search.value ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean)
+  return students.value.filter((s) => {
+    if (statusFilter.value && (s.applicationStatus ?? 'none') !== statusFilter.value) return false
+    const text = `${s.name} ${s.email}`.toLowerCase()
+    return terms.every((t) => text.includes(t))
+  })
+})
+const filtering = computed(() => !!(search.value?.trim() || statusFilter.value))
 
 const headers = [
   { title: 'Student', key: 'name' },
@@ -49,14 +72,30 @@ async function sendNudge(studentId) {
 
     <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
+    <v-card class="pa-4 flex flex-wrap items-center gap-3">
+      <v-text-field
+        v-model="search"
+        prepend-inner-icon="mdi-magnify"
+        placeholder="Search name or email"
+        density="compact"
+        hide-details
+        clearable
+        class="flex-1 min-w-[220px]"
+      />
+      <v-select v-model="statusFilter" :items="statusItems" aria-label="Application status" density="compact" hide-details class="min-w-[180px] max-w-[240px]" />
+      <span class="text-sm text-slate-400">
+        {{ filtering ? `${filteredStudents.length} of ${students.length}` : students.length }} student{{ students.length === 1 ? '' : 's' }}
+      </span>
+    </v-card>
+
     <v-card class="overflow-hidden">
       <v-data-table
         :headers="headers"
-        :items="students"
+        :items="filteredStudents"
         :sort-by="[{ key: 'name', order: 'asc' }]"
         :loading="loading"
         loading-text="Loading students…"
-        no-data-text="No students found in your school."
+        :no-data-text="filtering ? 'No students match.' : 'No students found in your school.'"
       >
         <template #item.name="{ item }">
           <p class="font-semibold text-navy">{{ item.name }}</p>

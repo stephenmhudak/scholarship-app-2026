@@ -80,6 +80,7 @@ backend/ScholarshipApi/
 - **Tables:** `<v-card class="overflow-hidden"><v-data-table :headers :items :loading no-data-text>`; cell slots `#item.<key>="{ item, value }"`; row click `@click:row="(e, { item }) => …"`. Sorting only works on header keys (use a header `value` fn for computed sorts). Server paging: `v-data-table-server` + `@update:options` (see `ApplicationsListPage`).
 - **Dialogs:** `<v-dialog v-model><v-card title>` with a close `v-btn` in `#append`, form in `v-card-text`. Rounding (`lg`) is global (`plugins/vuetify.js`) and the title bar follows the card rule above — don't restyle per dialog.
 - **Confirmations:** never `window.confirm`/`alert`/`prompt`. Use `const confirm = useConfirm()` (`composables/useConfirm.js`) → `if (!await confirm({ title, text, confirmText: 'Delete', color: 'error' })) return`. It drives the single `ConfirmDialog` mounted in `App.vue`.
+- **Tabbed pages:** child routes, `v-tabs` with `v-tab :to` (`exact` on the first), and a `<RouterView />` under them; the parent shares data with `provide` (see `CyclePage`: an application period's Details, Application Questions, References, Scholarships and Award Letters at `/admin/cycles/:cycleId/…`). `DefaultLayout` keys pages by top-level route + params, so the parent stays mounted while tabs change.
 - **Dates:** use `DateField` (wraps `v-date-input`, v-model is a `'YYYY-MM-DD'` string parsed in local time).
 - **Loading:** `v-progress-circular indeterminate` + text; empty states: `v-empty-state` inside a `v-card`.
 - **Store:** Pinia setup store — `defineStore('name', () => { ... })` with `api.get/post` calls. See any existing store for reference.
@@ -132,10 +133,13 @@ backend/ScholarshipApi/
 | POST | `/api/auth/setup-password/check` · `/setup-password` | Public | `{ token }` → `{ email, firstName }`; `{ token, newPassword }` → same payload as login. Invited counselors create their first password |
 | POST | `/api/schools/{id}/counselors/{cid}/resend-invite` · `/api/admin/users/{id}/resend-invite` | school_admin · app_admin | Emails a new setup link (1 min cooldown) |
 | POST | `/api/auth/change-password` | Bearer | `{ currentPassword, newPassword }` → 204 |
+| PUT | `/api/auth/profile` | Bearer (not impersonating) | `{ firstName, lastName }` → the saved name; new token in `X-Session-Token` (email stays admin-only) |
 | GET | `/api/auth/2fa` | Bearer | `{ enabled, method, recoveryCodesRemaining }` |
 | POST | `/api/auth/2fa/email/setup` · `/2fa/email/enable` | Bearer | Email method: setup emails a code → enable `{ code }` |
 | POST | `/api/auth/2fa/setup` · `/2fa/enable` · `/2fa/disable` · `/2fa/recovery-codes` | Bearer | setup → `{ secret, otpauthUri }`; enable `{ code }` → `{ recoveryCodes }`; disable / recovery-codes `{ password }` |
 | POST | `/api/admin/users/{id}/reset-2fa` | app_admin | Clears a user's 2FA (lost device + codes) |
+| PUT | `/api/admin/users/{id}` | app_admin | `{ firstName, lastName, email, role, schoolId? }`; not your own role; a role/school change ends their sessions |
+| POST | `/api/admin/users/{id}/deactivate` · `/reactivate` | app_admin | Deactivated accounts can't sign in (not yourself) |
 | GET/PUT | `/api/admin/users/{id}/scoring-scope` | app_admin | Scorers only: `{ scope: all\|filtered, filters: [{questionId, optionId?, textContains?}] }` |
 | POST | `/api/schools/{id}/counselors/{cid}/reset-2fa` | school_admin | Same, for the school's counselors |
 | GET | `/api/auth/me` | Bearer | Current user |
@@ -151,12 +155,14 @@ backend/ScholarshipApi/
 | PUT | `/api/cycles/{id}/questions/reorder` | app_admin | `[{id, order}]` |
 | POST | `/api/cycles/{id}/questions/bulk-delete` | app_admin | `{ questionIds }` (`?force=true` after a 409 listing answers/conditions that go too) |
 | PUT | `/api/cycles/{id}/questions/move` | app_admin | `{ questionIds, sectionId }` (null = ungrouped); appended to the end of the section |
-| GET | `/api/admin/applications` | app_admin | `?status=&page=&pageSize=` → `{data, total, page, pageSize}` |
-| PATCH | `/api/admin/applications/{id}/status` | app_admin | `{ status }` |
+| GET | `/api/admin/applications` · `/export` | app_admin | `?status=&search=&cycleId=&schoolId=&page=&pageSize=` → `{data, total, page, pageSize}`; rows carry `cycleName`, `schoolName`, `scholarshipsWon`. Filters in `ApplicationService.AdminFiltered` (shared with the CSV export) |
+| PATCH | `/api/admin/applications/{id}/status` | app_admin | `{ status }` (the detail page only offers Awarded while it's current; awarding sets it) |
+| GET | `/api/admin/applications/{id}/scores` | app_admin | Every score with scorer name and what it's for (section, reference, overall) and comments |
 | POST | `/api/files/upload` | auth | Multipart `file`, `applicationId`, `questionId?` → `{ fileId }` |
 | GET/POST/PUT/DELETE | `/api/cycles/{id}/scholarships` | app_admin | `{ name, description, eligibility: open\|conditional, eligibilityMatch: any\|all, conditions }`; `PUT /{sid}/awarders { userIds }`; DELETE `?force` after a 409. Questions via `/api/cycles/{id}/questions?scholarshipId=&part=eligibility\|details` |
 | GET/POST/DELETE | `/api/awards/scholarships` · `/{sid}/candidates` · `/{sid}/awards` · `/{sid}/awards/{appId}` | assigned awarders, super admins | Scholarships you can award; eligible submitted applications (avg score, award); award `{ applicationId, amount?, note? }` (upserts, sets Awarded); remove (back to Under Review if none left) |
 | GET/POST/PUT/DELETE | `/api/cycles/{id}/letters` · `POST /letters/preview` | app_admin | Base award letters `{ name, body, isDefault }`; lists scholarships' own letters |
+| GET | `/api/applications/{id}/awards` · `/awards/{sid}/letter` | owner or app_admin | Scholarships the application won `{ scholarshipId, name, description, amount, awardedAt, hasLetter }`; the applicant's own letter as PDF |
 | GET/PUT/DELETE | `/api/scholarships/{sid}/letter` · `POST /letter/preview` | app_admin or its awarders | A scholarship's own letter (else the cycle default) |
 | GET | `/api/scholarships/{sid}/letters` · `/letters/{appId}` · `/api/cycles/{id}/letter-fields` | app_admin or its awarders | All awardees' letters / one, as PDF; merge fields for the editor |
 | GET/POST/PUT/DELETE | `/api/cycles/{id}/reference-forms` | app_admin | Reference forms: `{ title, description, requiredCount, requirement: always\|conditional, conditions: [{questionId, optionId?, textContains?}] }`; questions via `/api/cycles/{id}/questions?referenceFormId=` |
@@ -172,7 +178,7 @@ backend/ScholarshipApi/
 
 ## Data Models
 
-**Users:** Id, Email, PasswordHash, FirstName, LastName, Role, SchoolId (nullable)
+**Users:** Id, Email, PasswordHash, FirstName, LastName, Role, SchoolId (nullable), DeactivatedAt (nullable)
 
 **ScholarshipCycles:** Id, Name, OpenDate, CloseDate, IsActive
 
@@ -205,6 +211,7 @@ backend/ScholarshipApi/
 - **Super admins & impersonation:** only a super admin can create or manage (password, 2FA, invite) a super admin; promote the first one in SQL (see `025_super_admin.sql`). Role checks must use `AppRoles.IsAdmin(role)`, not `== "app_admin"`. `POST /api/admin/users/{id}/impersonate` (SuperAdmin policy; not for super admins or yourself) returns a normal session for the target with `imp`/`imp_sv` claims, so every API and page behaves as that user; `OnTokenValidated` also ends it if the super admin loses the role or their sessions. `POST /api/auth/end-impersonation` returns the super admin's session. Password and 2FA endpoints use the `NotImpersonating` policy. The impersonate response also carries `returnSession` (a fresh super admin session) that the browser keeps (`utils/authStorage.js`): if ending fails or the impersonated session gets a 401 (expired/reset), the app restores it instead of signing out. Frontend: `authStore.impersonatorName`/`isImpersonating`; start/end reload the page; `AppHeader` swaps Logout for End impersonation. Starts and ends are logged.
 - **Two-factor is opt-in, one method at a time:** `Users.TwoFactorMethod` = `totp` (authenticator app, Otp.NET, with recovery codes) or `email` (6-digit code emailed per sign-in, stored hashed on the challenge, 10 min; no recovery codes). Null = off; it's the only "is 2FA on" flag (`TotpEnabledAt` is just the TOTP enrollment time). `TwoFactorService` handles enrollment and code checks. `Users.TotpSecret` is AES-GCM encrypted by `TotpSecretProtector` with `TwoFactor:EncryptionKey` (base64 32 bytes; required, the API won't start without it; dev key in `appsettings.Development.json`, Docker `secrets/twofactor.env`, k8s `twofactor-credentials`). Losing or changing the key means every enrolled user needs a 2FA reset. After a password sign-in, `useSignInRedirect()` sends non-enrolled users to `/two-factor` (setup or "Not now") on every login. Enrolled users get a `TwoFactorChallenges` row (5 min, 5 tries; 10 tries per user per 15 min); TOTP steps can't be replayed (`TotpLastUsedStep`). Any new sign-in path must go through `SignInOrChallengeAsync`, not `BuildAuthResponse`, or it bypasses 2FA.
 - **Public endpoints are rate limited per client IP** (`RateLimitPolicies`: `auth` 10/min for sign-in, 2FA, register, reset and verification; `public` 30/min for invite and reference links) → 429 `{ error }`. Accounts are never locked. The client IP comes from `X-Forwarded-For` across two proxy hops (Caddy/ingress → nginx); see `UseForwardedHeaders` in `Program.cs`.
+- **Deactivated users** (`Users.DeactivatedAt`): `AuthService.EnsureActive` runs in `SignInOrChallengeAsync` and `BuildAuthResponse`, so no route (password, 2FA, links, impersonation) gives them a session; `OnTokenValidated` rejects their tokens; forgot-password, reset codes and setup links ignore them. Their data stays.
 - **Account changes end sessions:** `SessionVersion.BumpAsync` (password reset/change, admin or school-admin password reset, 2FA enable/disable/reset) increments `Users.SessionVersion`; tokens carry it as the `sv` claim and `OnTokenValidated` rejects stale ones (and deleted users). When the change is the user's own, the endpoint returns a replacement token in `X-Session-Token`, which `api.js` stores.
 - **Input rules live in `InputValidation`:** 8+ character passwords (max 72 bytes, BCrypt's limit) everywhere a password is set, email format, roles, application statuses, required/max-length text. Use it for any new endpoint that takes user input.
 - **School admin invites** are stored as `TokenHash` (SHA-256); the link is only shown when generated. Registration claims the invite with a conditional update inside a transaction, so a link can only be used once.
