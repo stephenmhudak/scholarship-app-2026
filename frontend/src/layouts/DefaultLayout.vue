@@ -1,6 +1,7 @@
 <script setup>
 import AppHeader from '../components/common/AppHeader.vue'
 import AppSidebar from '../components/common/AppSidebar.vue'
+import PageTour from '../components/common/PageTour.vue'
 </script>
 
 <template>
@@ -16,4 +17,6 @@ import AppSidebar from '../components/common/AppSidebar.vue'
       </RouterView>
     </div>
   </v-main>
+  <!-- Guided tour of the current page (src/tours) -->
+  <PageTour />
 </template>

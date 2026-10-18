@@ -45,7 +45,7 @@ async function save() {
       Loading…
     </div>
 
-    <v-card v-else title="Details">
+    <v-card v-else title="Details" data-tour="period-details">
       <v-card-text class="pa-6 space-y-5">
         <v-text-field v-model="form.name" label="Name" placeholder="e.g. 2026–27 Scholarship Application" hide-details="auto" />
 

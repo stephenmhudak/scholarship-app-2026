@@ -72,7 +72,7 @@ async function sendNudge(studentId) {
 
     <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
-    <v-card class="pa-4 flex flex-wrap items-center gap-3">
+    <v-card class="pa-4 flex flex-wrap items-center gap-3" data-tour="student-filters">
       <v-text-field
         v-model="search"
         prepend-inner-icon="mdi-magnify"
@@ -88,7 +88,7 @@ async function sendNudge(studentId) {
       </span>
     </v-card>
 
-    <v-card class="overflow-hidden">
+    <v-card class="overflow-hidden" data-tour="students-table">
       <v-data-table
         :headers="headers"
         :items="filteredStudents"
@@ -116,6 +116,7 @@ async function sendNudge(studentId) {
             color="primary"
             size="small"
             prepend-icon="mdi-bell-ring-outline"
+            data-tour="remind"
             :loading="nudging[item.id]"
             @click="sendNudge(item.id)"
           >

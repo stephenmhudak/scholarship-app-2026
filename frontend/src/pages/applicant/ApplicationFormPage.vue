@@ -291,7 +291,7 @@ async function submit() {
       <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
       <!-- Reuse answers from another cycle's application -->
-      <v-card v-if="copySources.length" title="Reuse previous answers">
+      <v-card v-if="copySources.length" title="Reuse previous answers" data-tour="reuse-answers">
         <v-card-text class="pa-6 space-y-3">
           <p class="text-sm text-slate-400">
             Copies answers for questions that match exactly. Questions you've already answered aren't changed.
@@ -314,7 +314,7 @@ async function submit() {
       </v-card>
 
       <!-- Jump to a section; a check mark once its required questions are answered -->
-      <v-card v-if="sectionNav.length > 1" title="Sections">
+      <v-card v-if="sectionNav.length > 1" title="Sections" data-tour="sections">
         <v-card-text class="pa-4 flex flex-wrap gap-2">
           <v-chip
             v-for="s in sectionNav"
@@ -339,7 +339,7 @@ async function submit() {
         </div>
 
         <div class="space-y-4">
-          <div v-for="question in group.questions" :id="`q-${question.id}`" :key="question.id" class="scroll-mt-20">
+          <div v-for="question in group.questions" :id="`q-${question.id}`" :key="question.id" class="scroll-mt-20" data-tour="question">
             <QuestionRenderer
               :question="question"
               :applicationId="appStore.currentApplication?.id"
@@ -355,6 +355,7 @@ async function submit() {
         v-if="appStore.currentApplication"
         id="references"
         ref="referencesPanel"
+        data-tour="references"
         class="scroll-mt-20"
         @missing="(n) => referencesMissing = n"
         :applicationId="appStore.currentApplication.id"
@@ -364,7 +365,7 @@ async function submit() {
       />
 
       <!-- Stays at the bottom of the screen while scrolling the form -->
-      <div class="form-action-bar">
+      <div class="form-action-bar" data-tour="action-bar">
         <v-card class="pa-4 flex flex-wrap items-center gap-x-6 gap-y-3">
           <div class="flex-1 min-w-[220px] space-y-1">
             <ApplicationProgress :answered="answeredCount" :total="progressQuestions.length">
@@ -402,7 +403,7 @@ async function submit() {
               <v-btn variant="outlined" prepend-icon="mdi-content-save" :loading="saving" :disabled="!hasUnsavedChanges" @click="saveDraft">
                 Save now
               </v-btn>
-              <v-btn color="primary" prepend-icon="mdi-send" :loading="submitting" :disabled="referencesMissing > 0" @click="submit">
+              <v-btn color="primary" prepend-icon="mdi-send" :loading="submitting" :disabled="referencesMissing > 0" data-tour="submit" @click="submit">
                 Submit Application
               </v-btn>
             </div>

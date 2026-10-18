@@ -169,7 +169,7 @@ async function handleSave() {
 
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
             <!-- Answers -->
-            <v-card class="pa-5 space-y-4">
+            <v-card class="pa-5 space-y-4" data-tour="answers">
               <ReferenceResponse v-if="section.reference" :reference="section.reference" show-account />
               <template v-else-if="section.answers.length">
                 <div
@@ -186,7 +186,7 @@ async function handleSave() {
             </v-card>
 
             <!-- Score input -->
-            <v-card class="pa-5 space-y-4">
+            <v-card class="pa-5 space-y-4" data-tour="score">
               <v-number-input
                 v-model="scores[section.idx].score"
                 label="Score (1–100)"
@@ -209,7 +209,7 @@ async function handleSave() {
       </div>
 
       <div class="flex justify-end">
-        <v-btn color="primary" prepend-icon="mdi-content-save-outline" :loading="saving" @click="handleSave">
+        <v-btn color="primary" prepend-icon="mdi-content-save-outline" :loading="saving" data-tour="save-scores" @click="handleSave">
           Save Scores
         </v-btn>
       </div>

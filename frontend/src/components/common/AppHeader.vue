@@ -2,12 +2,14 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
+import { useToursStore } from '../../stores/tours'
 import { roleHome } from '../../utils/roleHome'
 import { useNavDrawer } from '../../composables/useNavDrawer'
 import { roleLabel } from '../../utils/roleLabels'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const tours = useToursStore()
 const { isOverlay, toggle } = useNavDrawer()
 const ending = ref(false)
 
@@ -34,7 +36,7 @@ async function endImpersonation() {
 
 <template>
   <v-app-bar flat border="b" height="64" class="px-2 sm:px-4">
-    <v-app-bar-nav-icon v-if="isOverlay" aria-label="Open menu" @click="toggle" />
+    <v-app-bar-nav-icon v-if="isOverlay" aria-label="Open menu" data-tour="nav-toggle" @click="toggle" />
     <!-- Logo -->
     <div class="flex items-center gap-3 min-w-0">
       <v-avatar color="primary" size="36" rounded="lg">
@@ -58,7 +60,18 @@ async function endImpersonation() {
           </p>
         </div>
       </div>
-      <v-btn variant="text" prepend-icon="mdi-account-cog-outline" to="/account">
+      <!-- Replays this page's guided tour (PageTour) -->
+      <v-btn
+        v-if="tours.currentTour"
+        icon="mdi-help-circle-outline"
+        variant="text"
+        size="small"
+        title="Take a tour of this page"
+        aria-label="Take a tour of this page"
+        data-tour="tour-button"
+        @click="tours.replay()"
+      />
+      <v-btn variant="text" prepend-icon="mdi-account-cog-outline" to="/account" data-tour="account-link">
         <span class="hidden sm:inline">Account</span>
       </v-btn>
       <template v-if="authStore.isImpersonating">

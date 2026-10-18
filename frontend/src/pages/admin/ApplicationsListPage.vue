@@ -105,7 +105,7 @@ function goToDetail(id) {
           {{ adminStore.pagination.total }} application{{ adminStore.pagination.total === 1 ? '' : 's' }}{{ hasFilters ? ' match these filters' : '' }}
         </p>
       </div>
-      <v-btn variant="outlined" prepend-icon="mdi-download" :loading="exporting" :title="hasFilters ? 'Exports the applications matching these filters' : 'Exports every application'" @click="exportData">
+      <v-btn variant="outlined" prepend-icon="mdi-download" data-tour="export" :loading="exporting" :title="hasFilters ? 'Exports the applications matching these filters' : 'Exports every application'" @click="exportData">
         Export CSV
       </v-btn>
     </div>
@@ -113,7 +113,7 @@ function goToDetail(id) {
     <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
     <!-- Filters -->
-    <v-card class="pa-4 flex flex-wrap items-center gap-3">
+    <v-card class="pa-4 flex flex-wrap items-center gap-3" data-tour="filters">
       <v-text-field
         v-model="search"
         prepend-inner-icon="mdi-magnify"
@@ -130,7 +130,7 @@ function goToDetail(id) {
     </v-card>
 
     <!-- Table -->
-    <v-card class="overflow-hidden">
+    <v-card class="overflow-hidden" data-tour="applications-table">
       <v-data-table-server
         v-model:page="page"
         v-model:items-per-page="perPage"

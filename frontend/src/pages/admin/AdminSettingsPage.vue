@@ -4,6 +4,7 @@ import ScorerScopeDialog from '../../components/admin/ScorerScopeDialog.vue'
 import { useAuthStore } from '../../stores/auth'
 import { roleHome } from '../../utils/roleHome'
 import { roleLabel } from '../../utils/roleLabels'
+import { tourLabel } from '../../tours'
 import api from '../../services/api'
 import { useConfirm } from '../../composables/useConfirm'
 
@@ -71,6 +72,7 @@ function userActions(u) {
   return [
     { title: 'Edit details', icon: 'mdi-pencil', run: () => openEditUser(u) },
     u.Role === 'scorer' && { title: 'Scoring access', icon: 'mdi-filter-outline', run: () => openScope(u) },
+    { title: 'Tour history', icon: 'mdi-map-marker-path', run: () => openTours(u) },
     active && u.InvitePending && { title: 'Resend invite', icon: 'mdi-email-fast-outline', run: () => resendInvite(u) },
     active && !u.InvitePending && { title: 'Reset password', icon: 'mdi-lock-reset', run: () => openResetPassword(u) },
     u.TwoFactorEnabled && { title: 'Reset 2FA', icon: 'mdi-shield-off-outline', run: () => resetTwoFactor(u) },
@@ -106,6 +108,34 @@ async function submitEditUser() {
     editUserLoading.value = false
   }
 }
+
+// ── Tour history: the page tours they've been through (UserTours) ──
+const toursUser = ref(null)
+const tourRows = ref([])
+const toursLoading = ref(false)
+const showTours = computed({ get: () => !!toursUser.value, set: (v) => { if (!v) toursUser.value = null } })
+const tourHeaders = [
+  { title: 'Page', key: 'page', value: (r) => tourLabel(r.tourId) },
+  { title: 'As', key: 'role', value: (r) => roleLabel(r.tourId.split(':')[0]) },
+  { title: 'Last taken', key: 'lastSeenAt' },
+  { title: 'Last finished', key: 'completedAt' },
+  { title: 'How it ended', key: 'outcome' },
+  { title: 'Times', key: 'timesSeen', align: 'end' },
+]
+async function openTours(u) {
+  toursUser.value = u
+  tourRows.value = []
+  toursLoading.value = true
+  try {
+    tourRows.value = (await api.get(`/admin/users/${u.Id}/tours`)).data
+  } catch (err) {
+    showAlert('error', err.response?.data?.error || 'Failed to load their tour history.')
+    toursUser.value = null
+  } finally {
+    toursLoading.value = false
+  }
+}
+const formatDateTime = (d) => (d ? new Date(d).toLocaleString() : '—')
 
 // ── Deactivate / reactivate ──
 async function deactivate(u) {
@@ -403,7 +433,7 @@ onMounted(() => { loadUsers(); loadSchools() })
     <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
     <!-- Tabs -->
-    <v-tabs v-model="activeTab" color="primary" class="border-b">
+    <v-tabs v-model="activeTab" color="primary" class="border-b" data-tour="admin-tabs">
       <v-tab value="users" class="text-none">Users</v-tab>
       <v-tab value="schools" class="text-none">Schools</v-tab>
       <v-tab value="invites" class="text-none">School Admin Invites</v-tab>
@@ -411,7 +441,7 @@ onMounted(() => { loadUsers(); loadSchools() })
 
     <!-- ── Users Tab ─────────────────────────────────────────────────────── -->
     <div v-if="activeTab === 'users'" class="space-y-4">
-      <div class="flex flex-wrap items-center gap-3">
+      <div class="flex flex-wrap items-center gap-3" data-tour="user-filters">
         <v-text-field
           v-model="userSearch"
           prepend-inner-icon="mdi-magnify"
@@ -423,7 +453,7 @@ onMounted(() => { loadUsers(); loadSchools() })
         />
         <v-select v-model="roleFilter" :items="roleFilterItems" density="compact" hide-details class="max-w-[200px]" aria-label="Role" />
         <v-checkbox v-if="deactivatedCount" v-model="showDeactivated" :label="`Show deactivated (${deactivatedCount})`" density="compact" hide-details class="flex-none" />
-        <v-btn color="primary" prepend-icon="mdi-plus" @click="openAddUser">Add User</v-btn>
+        <v-btn color="primary" prepend-icon="mdi-plus" data-tour="add-user" @click="openAddUser">Add User</v-btn>
       </div>
       <p class="text-sm text-slate-400">
         {{ filteredUsers.length === users.length ? '' : `${filteredUsers.length} of ` }}{{ users.length }} user{{ users.length !== 1 ? 's' : '' }}
@@ -467,6 +497,7 @@ onMounted(() => { loadUsers(); loadSchools() })
                 <v-btn
                   v-bind="menuProps"
                   icon="mdi-dots-horizontal"
+                  data-tour="user-actions"
                   variant="text"
                   size="small"
                   :loading="impersonating === item.Id"
@@ -614,6 +645,35 @@ onMounted(() => { loadUsers(); loadSchools() })
             <v-btn type="submit" color="primary" :loading="addUserLoading">Create User</v-btn>
           </div>
         </v-form>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
+
+  <!-- ── Tour History Dialog ─────────────────────────────────────────────── -->
+  <v-dialog v-model="showTours" max-width="860">
+    <v-card v-if="toursUser" :title="`Tour history — ${toursUser.FirstName} ${toursUser.LastName}`">
+      <template #append>
+        <v-btn icon="mdi-close" variant="text" size="small" @click="showTours = false" />
+      </template>
+      <v-card-text class="pa-6 space-y-3">
+        <p class="text-sm text-slate-400">
+          The page tours they've taken. A tour shows again on its own when its page changes.
+        </p>
+        <v-card class="overflow-hidden">
+          <v-data-table
+            :headers="tourHeaders"
+            :items="tourRows"
+            :loading="toursLoading"
+            :sort-by="[{ key: 'lastSeenAt', order: 'desc' }]"
+            no-data-text="They haven't taken any tours yet."
+          >
+            <template #item.lastSeenAt="{ value }">{{ formatDateTime(value) }}</template>
+            <template #item.completedAt="{ value }">{{ formatDateTime(value) }}</template>
+            <template #item.outcome="{ value }">
+              <v-chip :color="value === 'completed' ? 'success' : undefined">{{ value === 'completed' ? 'Finished' : 'Closed early' }}</v-chip>
+            </template>
+          </v-data-table>
+        </v-card>
       </v-card-text>
     </v-card>
   </v-dialog>

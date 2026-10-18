@@ -176,7 +176,7 @@ async function removeAward(candidate) {
     </v-card>
 
     <template v-else>
-      <v-card>
+      <v-card data-tour="scholarship-select">
         <v-card-text class="pa-6 space-y-2">
           <v-select
             v-model="selectedId"
@@ -198,7 +198,7 @@ async function removeAward(candidate) {
         </v-card-text>
       </v-card>
 
-      <v-card v-if="selectedId && letterInfo" title="Award letter">
+      <v-card v-if="selectedId && letterInfo" title="Award letter" data-tour="award-letter">
         <v-card-text class="pa-6 flex flex-wrap items-center gap-3">
           <p class="text-sm text-slate-400 flex-1 min-w-[16rem]">{{ letterText }}</p>
           <v-btn variant="outlined" prepend-icon="mdi-pencil" @click="letterEditorOpen = true">
@@ -216,7 +216,7 @@ async function removeAward(candidate) {
         </v-card-text>
       </v-card>
 
-      <v-card v-if="selectedId" class="overflow-hidden" :title="`Eligible applicants (${candidates.length}) · ${awardedCount} awarded`">
+      <v-card v-if="selectedId" class="overflow-hidden" data-tour="candidates" :title="`Eligible applicants (${candidates.length}) · ${awardedCount} awarded`">
         <v-data-table
           :headers="headers"
           :items="candidates"

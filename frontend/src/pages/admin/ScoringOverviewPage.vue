@@ -49,7 +49,7 @@ function scoringProgress(app) {
       <v-empty-state icon="mdi-clipboard-text-outline" text="No submitted applications yet." />
     </v-card>
 
-    <v-card v-else class="overflow-hidden">
+    <v-card v-else class="overflow-hidden" data-tour="scoring-table">
       <v-data-table
         v-model:expanded="expanded"
         :headers="headers"

@@ -150,9 +150,9 @@ async function remove(s) {
 </script>
 
 <template>
-  <v-card title="Scholarships">
+  <v-card title="Scholarships" data-tour="scholarships">
     <template #append>
-      <v-btn variant="tonal" prepend-icon="mdi-plus" @click="startAdd">Add scholarship</v-btn>
+      <v-btn variant="tonal" prepend-icon="mdi-plus" data-tour="add-scholarship" @click="startAdd">Add scholarship</v-btn>
     </template>
 
     <v-card-text class="pa-6 space-y-4">
@@ -171,7 +171,7 @@ async function remove(s) {
 
       <p v-else-if="scholarships.length === 0" class="text-sm text-slate-400">No scholarships in this application period yet.</p>
 
-      <div v-for="s in scholarships" :key="s.id" class="rounded-lg border border-[#E9EDF7] pa-4 space-y-2">
+      <div v-for="s in scholarships" :key="s.id" class="rounded-lg border border-[#E9EDF7] pa-4 space-y-2" data-tour="scholarship">
         <div class="flex items-start gap-3">
           <div class="flex-1 min-w-0 space-y-1">
             <p class="text-sm font-semibold text-navy">{{ s.name }}</p>

@@ -138,7 +138,7 @@ async function submit() {
         <p class="page-subtitle">{{ link.cycleName }}</p>
       </div>
 
-      <v-card title="Applicant">
+      <v-card title="Applicant" data-tour="ref-applicant">
         <v-card-text class="pa-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <p class="eyebrow">Applicant's name</p>
@@ -158,6 +158,7 @@ async function submit() {
       <div class="space-y-4">
         <QuestionRenderer
           v-for="question in link.questions"
+          data-tour="ref-question"
           :key="question.id"
           :question="question"
           :uploadUrl="uploadUrl"
@@ -167,7 +168,7 @@ async function submit() {
         />
       </div>
 
-      <v-card title="Signature">
+      <v-card title="Signature" data-tour="signature">
         <v-card-text class="pa-6 space-y-5">
           <v-text-field
             v-model="signerName"
@@ -185,7 +186,7 @@ async function submit() {
       <v-alert v-if="alert" :type="alert.type" :text="alert.message" closable @click:close="alert = null" />
 
       <div class="flex justify-end">
-        <v-btn color="primary" size="large" prepend-icon="mdi-send" :loading="submitting" @click="submit">
+        <v-btn color="primary" size="large" prepend-icon="mdi-send" :loading="submitting" data-tour="submit-reference" @click="submit">
           Submit Reference
         </v-btn>
       </div>

@@ -83,7 +83,7 @@ onMounted(async () => {
 
     <template v-else-if="application">
       <!-- Status Summary -->
-      <v-card class="pa-6">
+      <v-card class="pa-6" data-tour="status">
         <div class="flex items-center justify-between">
           <div>
             <p class="eyebrow mb-2">Current Status</p>
@@ -105,7 +105,7 @@ onMounted(async () => {
       </v-card>
 
       <!-- Scholarships won -->
-      <v-card v-if="awards.length" title="Scholarships awarded" class="card-header-success">
+      <v-card v-if="awards.length" title="Scholarships awarded" class="card-header-success" data-tour="awards">
         <v-card-text class="pa-6 space-y-4">
           <p class="text-sm text-navy">
             Congratulations! You've been awarded {{ awards.length === 1 ? 'this scholarship' : 'these scholarships' }}.
@@ -134,7 +134,7 @@ onMounted(async () => {
       </v-card>
 
       <!-- Submitted Answers -->
-      <v-card title="Your Answers">
+      <v-card title="Your Answers" data-tour="answers">
         <v-card-text class="pa-6">
           <div v-if="shownQuestions.length" class="space-y-5">
             <template v-for="(q, i) in shownQuestions" :key="q.id">

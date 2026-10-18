@@ -57,7 +57,7 @@ onMounted(async () => {
         </v-card-text>
       </v-card>
 
-      <v-card title="Your reference">
+      <v-card title="Your reference" data-tour="your-reference">
         <v-card-text class="pa-6">
           <ReferenceResponse :reference="reference" api-base="/my-references" />
         </v-card-text>
