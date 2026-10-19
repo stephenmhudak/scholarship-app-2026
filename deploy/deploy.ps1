@@ -471,11 +471,21 @@ function Start-App {
     Note 'Waiting for the API (the first start runs database migrations)...'
     Push-Location $RepoRoot
     try {
+        # The backend has no restart policy, so if it exits (e.g. MySQL not accepting it yet) start it again
+        $restarts = 0; $maxRestarts = 5
         for ($i = 0; $i -lt 60; $i++) {
             $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
             $out = & docker compose exec -T frontend wget -S -O /dev/null http://backend:8080/api/auth/me 2>&1 | Out-String
+            $running = & docker compose ps -q --status running backend 2>$null | Out-String
             $ErrorActionPreference = $old
             if ($out -match ' 401') { Note 'API is up.'; return }
+            if (-not $running.Trim()) {
+                if ($restarts -ge $maxRestarts) { break }
+                $restarts++
+                Try-Native { docker compose logs --tail 15 backend } -Show | Out-Null
+                Note "The API container stopped (log above); starting it again ($restarts of $maxRestarts)..."
+                Try-Native { docker compose start backend } | Out-Null
+            }
             Start-Sleep -Seconds 3
         }
     } finally { Pop-Location }

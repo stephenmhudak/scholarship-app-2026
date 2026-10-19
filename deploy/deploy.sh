@@ -1098,11 +1098,19 @@ docker_start() {
     info "Building and starting the containers"
     compose up -d --build --remove-orphans
     note "Waiting for the API (the first start runs database migrations)..."
-    local i
+    # The backend has no restart policy, so if it exits (e.g. MySQL not accepting it yet) start it again
+    local i restarts=0 max_restarts=5
     for i in $(seq 1 60); do
         if compose exec -T frontend wget -S -O /dev/null http://backend:8080/api/auth/me 2>&1 | grep -q ' 401'; then
             note "API is up."
             return
+        fi
+        if [ -z "$(compose ps -q --status running backend 2>/dev/null)" ]; then
+            [ "$restarts" -ge "$max_restarts" ] && break
+            restarts=$((restarts + 1))
+            compose logs --tail 15 backend || true
+            note "The API container stopped (log above); starting it again ($restarts of $max_restarts)..."
+            compose start backend >/dev/null 2>&1 || true
         fi
         sleep 3
     done
