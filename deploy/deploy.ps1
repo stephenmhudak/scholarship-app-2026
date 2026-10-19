@@ -423,7 +423,7 @@ function Write-Files($c) {
         "MYSQL_DATABASE=$DbName",
         "MYSQL_ROOT_HOST=$rootHost")
     Write-EnvFile "$Secrets\db.env" @('# Written by deploy/deploy.ps1',
-        "ConnectionStrings__Default=Server=mysql;Database=$DbName;User=$DbUser;Password=$($c.DbAppPassword)")
+        "ConnectionStrings__Default=Server=mysql;Database=$DbName;User=$DbUser;AllowPublicKeyRetrieval=True;Password=$($c.DbAppPassword)")
     Write-EnvFile "$Secrets\email.env" @('# Written by deploy/deploy.ps1', "Email__From=$($c.EmailFrom)", "Email__Resend__ApiKey=$($c.ResendKey)")
     Write-EnvFile "$Secrets\storage.env" (@('# Written by deploy/deploy.ps1') + $c.StorageLines)
     if (Test-Path "$Secrets\r2.env") {

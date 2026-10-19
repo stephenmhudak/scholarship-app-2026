@@ -561,7 +561,7 @@ nginx_write_config_files() {
         echo "ASPNETCORE_ENVIRONMENT=Production"
         echo "ASPNETCORE_URLS=http://127.0.0.1:$API_PORT"
         echo "App__BaseUrl=$APP_BASE_URL"
-        echo "ConnectionStrings__Default=Server=127.0.0.1;Port=3306;Database=$DB_NAME;User=$DB_USER;Password=$DB_APP_PASSWORD"
+        echo "ConnectionStrings__Default=Server=127.0.0.1;Port=3306;Database=$DB_NAME;User=$DB_USER;AllowPublicKeyRetrieval=True;Password=$DB_APP_PASSWORD"
         echo "Jwt__Key=$JWT_KEY"
         echo "TwoFactor__EncryptionKey=$TWOFACTOR_KEY"
         echo "Email__From=$EMAIL_FROM"
@@ -1051,7 +1051,7 @@ docker_write_files() {
         echo "MYSQL_DATABASE=$DB_NAME"
         echo "MYSQL_ROOT_HOST=$root_host"
     } | write_file "$s/mysql.env" 600
-    printf '# Written by deploy/deploy.sh\nConnectionStrings__Default=Server=mysql;Database=%s;User=%s;Password=%s\n' \
+    printf '# Written by deploy/deploy.sh\nConnectionStrings__Default=Server=mysql;Database=%s;User=%s;AllowPublicKeyRetrieval=True;Password=%s\n' \
         "$DB_NAME" "$DB_USER" "$DB_APP_PASSWORD" | write_file "$s/db.env" 600
     printf '# Written by deploy/deploy.sh\nEmail__From=%s\nEmail__Resend__ApiKey=%s\n' "$EMAIL_FROM" "$RESEND_KEY" |
         write_file "$s/email.env" 600
