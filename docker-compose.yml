@@ -1,9 +1,14 @@
+# Host-specific settings (domain, ports, MySQL exposure) come from .env in this folder, written by deploy/deploy.sh
+# (Ubuntu, macOS) or deploy/deploy.ps1 (Windows). Every one is required: there are no defaults.
 services:
   caddy:
     image: caddy:2-alpine
     ports:
-      - "80:80"
-      - "443:443"
+      - "${HTTP_PORT:?not set in .env}:80"
+      - "${HTTPS_PORT:?not set in .env}:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?not set in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?not set in .env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
@@ -17,17 +22,17 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      App__BaseUrl: https://scholarships.shudak.com
-    # Credentials live in gitignored env files (see secrets/*.env.example); missing files fall back to defaults
+      App__BaseUrl: ${APP_BASE_URL:?not set in .env}
+    # Credentials live in gitignored env files written by the deploy scripts (see secrets/*.env.example)
     env_file:
       - path: ./secrets/jwt.env
       - path: ./secrets/db.env
-      - path: ./secrets/r2.env
-        required: false
+      - path: ./secrets/storage.env
       - path: ./secrets/email.env
-        required: false
       - path: ./secrets/twofactor.env
-        required: false
+    # Uploads saved with Storage:Provider = Local survive rebuilds
+    volumes:
+      - uploads_data:/app/wwwroot/uploads
     depends_on:
       mysql:
         condition: service_healthy
@@ -37,13 +42,13 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
 
-  # Published on all of the host's interfaces so admins can connect from other computers. Anyone who can reach the
-  # host on 3306 can try to log in: keep a strong password in secrets/mysql.env and limit 3306 to trusted IPs with a
-  # firewall (on Linux, Docker-published ports bypass ufw; restrict them in the DOCKER-USER iptables chain instead).
+  # MYSQL_BIND is 127.0.0.1 in production (only this host can reach 3306, and root is limited to connections from
+  # inside the container) and 0.0.0.0 in testing (any host, root included). On Linux, Docker-published ports bypass
+  # ufw: restrict a 0.0.0.0 binding in the DOCKER-USER iptables chain if the host is reachable from untrusted networks.
   mysql:
     image: mysql:8.0
     ports:
-      - "3306:3306"
+      - "${MYSQL_BIND:?not set in .env}:${MYSQL_PORT:?not set in .env}:3306"
     env_file:
       - path: ./secrets/mysql.env
     volumes:
@@ -58,3 +63,4 @@ volumes:
   mysql_data:
   caddy_data:
   caddy_config:
+  uploads_data:

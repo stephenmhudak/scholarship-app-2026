@@ -18,6 +18,7 @@ frontend.tar
 .env.*
 !.env.example
 secrets/*.env
+secrets/*.env.old
 k8s/*-secret.yaml
 
 # Applicants' documents saved by local storage (Storage:Provider = Local)
