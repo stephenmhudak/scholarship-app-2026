@@ -1,5 +1,6 @@
 # SITE_ADDRESS and ACME_EMAIL come from .env (written by deploy/deploy.sh or deploy.ps1) through docker-compose.yml.
-# A domain gets an automatic Let's Encrypt certificate; ":80" serves plain HTTP on any host name (local testing).
+# A domain gets an automatic Let's Encrypt certificate and is served over HTTPS only: Caddy redirects every HTTP
+# request to HTTPS (except its own certificate challenges). ":80" serves plain HTTP on any host name (local testing).
 {
     email {$ACME_EMAIL}
 }

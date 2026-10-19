@@ -169,6 +169,9 @@ valid_url() {
         *) echo "    Start with http:// or https://."; return 1 ;;
     esac
 }
+valid_https_url() {
+    case "$1" in https://*) valid_url "$1" ;; *) echo "    The site is HTTPS only: start with https://."; return 1 ;; esac
+}
 valid_port() {
     case "$1" in *[!0-9]*|'') echo "    Enter a port number."; return 1 ;; esac
     [ "$1" -ge 1 ] && [ "$1" -le 65535 ] || { echo "    Enter a port number."; return 1; }
@@ -377,7 +380,11 @@ nginx_prompts() {
     note "Let's Encrypt certificate. Leave it blank to answer on any name or IP address over plain HTTP."
     ask_valid SITE_HOST "Domain name" "$EX_SITE_HOST" valid_domain
     USE_TLS=n ACME_EMAIL=''
-    if [ -n "$SITE_HOST" ]; then
+    if cert_valid; then
+        # A site with a working certificate is only ever served over HTTPS
+        USE_TLS=y ACME_EMAIL=$EX_ACME_EMAIL
+        note "$SITE_HOST already has a valid certificate: the site is served over HTTPS only (HTTP redirects)."
+    elif [ -n "$SITE_HOST" ]; then
         local tls_default=y
         [ "$DEPLOY_ENV" = testing ] && tls_default=n
         [ -n "$EX_USE_TLS" ] && tls_default=$EX_USE_TLS
@@ -395,7 +402,9 @@ nginx_prompts() {
     # The URL changes with the address answers, so only reuse the old one if those didn't change
     [ "$SITE_HOST" = "$EX_SITE_HOST" ] && [ "$USE_TLS" = "${EX_USE_TLS:-n}" ] && [ -n "$EX_APP_BASE_URL" ] && default_url=$EX_APP_BASE_URL
     note "The address used in emailed links (verification, invites, reference requests)."
-    ask_valid APP_BASE_URL "Site URL" "$default_url" valid_url
+    if [ "$USE_TLS" = y ]; then ask_valid APP_BASE_URL "Site URL" "$default_url" valid_https_url
+    else ask_valid APP_BASE_URL "Site URL" "$default_url" valid_url
+    fi
 
     info "Database (MySQL 8 on this server)"
     note "The app connects as '$DB_USER'@'127.0.0.1' with rights on $DB_NAME only."
@@ -467,6 +476,13 @@ nginx_install_packages() {
     [ "$USE_TLS" = y ] && apt_install certbot
     install_node
     install_dotnet
+}
+
+# True when SITE_HOST has a Let's Encrypt certificate on this server that hasn't expired
+cert_valid() {
+    local cert="/etc/letsencrypt/live/$SITE_HOST/fullchain.pem"
+    [ -n "$SITE_HOST" ] && [ -f "$cert" ] && command -v openssl >/dev/null 2>&1 &&
+        openssl x509 -checkend 0 -noout -in "$cert" >/dev/null 2>&1
 }
 
 # Runs SQL from stdin as MySQL root over the local socket (Ubuntu's root uses auth_socket)
@@ -691,19 +707,20 @@ map $sent_http_content_type $scholarship_cache_control {
 }
 
 EOF
-    echo "server {"
-    echo "    listen 80$default_server;"
-    echo "    listen [::]:80$default_server;"
-    echo "    server_name $name;"
-    echo
-    echo "    location ^~ /.well-known/acme-challenge/ {"
-    echo "        root $ACME_WEBROOT;"
-    echo "    }"
     if [ "$tls" = y ]; then
-        echo
+        # HTTPS only: every plain-HTTP request, for this name or any other (an IP address, an old name), is
+        # redirected. Only Let's Encrypt's challenge files stay on HTTP, which renewals need.
+        echo "server {"
+        echo "    listen 80 default_server;"
+        echo "    listen [::]:80 default_server;"
+        echo "    server_name _;"
         echo "    server_tokens off;"
+        echo
+        echo "    location ^~ /.well-known/acme-challenge/ {"
+        echo "        root $ACME_WEBROOT;"
+        echo "    }"
         echo '    location / {'
-        echo '        return 301 https://$host$request_uri;'
+        echo "        return 301 https://$SITE_HOST\$request_uri;"
         echo '    }'
         echo "}"
         echo
@@ -718,6 +735,15 @@ EOF
         echo "    ssl_session_cache shared:scholarship_ssl:10m;"
         echo "    ssl_session_timeout 1d;"
         echo
+    else
+        echo "server {"
+        echo "    listen 80$default_server;"
+        echo "    listen [::]:80$default_server;"
+        echo "    server_name $name;"
+        echo
+        echo "    location ^~ /.well-known/acme-challenge/ {"
+        echo "        root $ACME_WEBROOT;"
+        echo "    }"
     fi
     nginx_app_block "$tls"
     echo "}"
@@ -725,19 +751,21 @@ EOF
 
 nginx_configure_web() {
     info "Configuring nginx"
-    local cert="/etc/letsencrypt/live/$SITE_HOST/fullchain.pem"
-    [ -z "$SITE_HOST" ] && rm -f /etc/nginx/sites-enabled/default
+    # Ubuntu's stock site would otherwise answer plain HTTP for other host names (both configs use default_server)
+    rm -f /etc/nginx/sites-enabled/default
     ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/scholarship-app
     systemctl enable --now nginx >/dev/null 2>&1
 
-    if [ "$USE_TLS" = y ] && [ ! -f "$cert" ]; then
-        # Serve HTTP first so Let's Encrypt can reach the challenge files, then switch to HTTPS
+    if [ "$USE_TLS" = y ] && ! cert_valid; then
+        # Missing or expired: serve HTTP first so Let's Encrypt can reach the challenge files, then switch to HTTPS
+        local account=(--email "$ACME_EMAIL")
+        [ -z "$ACME_EMAIL" ] && account=(--register-unsafely-without-email)
         nginx_site_config n | write_file "$NGINX_SITE" 644
         nginx -t && systemctl reload nginx
         note "Requesting a certificate for $SITE_HOST..."
-        certbot certonly --webroot -w "$ACME_WEBROOT" -d "$SITE_HOST" --email "$ACME_EMAIL" \
-            --agree-tos --non-interactive --deploy-hook "systemctl reload nginx" ||
-            die "Certificate request failed: check that $SITE_HOST points at this server and port 80 is reachable. The site is running on HTTP; re-run to try again."
+        certbot certonly --webroot -w "$ACME_WEBROOT" -d "$SITE_HOST" "${account[@]}" --keep-until-expiring \
+            --agree-tos --non-interactive --deploy-hook "systemctl reload nginx" && cert_valid ||
+            die "Certificate request failed: check that $SITE_HOST points at this server and port 80 is reachable. The site is running on HTTP until a certificate is issued; re-run to try again."
     fi
     nginx_site_config "$USE_TLS" | write_file "$NGINX_SITE" 644
     nginx -t
