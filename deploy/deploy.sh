@@ -174,6 +174,16 @@ valid_port() {
     [ "$1" -ge 1 ] && [ "$1" -le 65535 ] || { echo "    Enter a port number."; return 1; }
 }
 
+valid_admin_password() {
+    local bytes
+    bytes=$(printf '%s' "$1" | wc -c | tr -d ' ')
+    [ "${#1}" -ge 8 ] && [ "$bytes" -le 72 ] && return 0
+    echo "    Use 8 to 72 characters."
+    return 1
+}
+valid_name() { [ -n "$1" ] && [ "${#1}" -le 100 ] && return 0; echo "    Enter 1 to 100 characters."; return 1; }
+valid_name_or_blank() { [ "${#1}" -le 100 ] && return 0; echo "    Use at most 100 characters."; return 1; }
+
 gen_jwt_key() { openssl rand -base64 48 | tr -d '\n'; }
 gen_twofactor_key() { openssl rand -base64 32 | tr -d '\n'; }
 gen_password() { local p; p=$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9'); printf '%s' "${p:0:32}"; }
@@ -252,6 +262,60 @@ prompt_app_settings() {
     esac
 }
 
+# Sets SA_SETUP (y/n) and SA_EMAIL, SA_FIRST, SA_LAST, SA_PASSWORD. Nobody can register as a super admin, so the
+# first one is made here; the API creates it (or promotes an existing account) after migrations.
+prompt_super_admin() {
+    info "Super admin account"
+    note "A super admin can do everything, including creating the other admin, scorer and staff accounts."
+    local default=y again check=valid_name
+    if [ -n "$EX_SUPER_ADMIN_EMAIL" ]; then
+        note "Set up on a previous run: $EX_SUPER_ADMIN_EMAIL"
+        default=n
+    fi
+    SA_EMAIL='' SA_FIRST='' SA_LAST='' SA_PASSWORD=''
+    ask_yn SA_SETUP "Create or update a super admin account now?" "$default"
+    [ "$SA_SETUP" = y ] || return 0
+
+    ask_valid SA_EMAIL "Super admin email" "$EX_SUPER_ADMIN_EMAIL" valid_email
+    note "If an account with this email already exists, it's made a super admin."
+    if [ "$SA_EMAIL" = "$EX_SUPER_ADMIN_EMAIL" ]; then
+        note "Leave a field blank to keep the account's current value."
+        check=valid_name_or_blank
+    fi
+    ask_valid SA_FIRST "First name" "" "$check"
+    ask_valid SA_LAST "Last name" "" "$check"
+    while :; do
+        printf 'Password (hidden; 8+ characters%s): ' "$([ "$check" = valid_name_or_blank ] && echo ", Enter keeps the current one")"
+        IFS= read -rs SA_PASSWORD || die "Input closed."
+        echo
+        if [ -z "$SA_PASSWORD" ]; then
+            [ "$check" = valid_name_or_blank ] && break
+            echo "    A password is required."
+            continue
+        fi
+        valid_admin_password "$SA_PASSWORD" || continue
+        printf 'Confirm the password: '
+        IFS= read -rs again || die "Input closed."
+        echo
+        [ "$again" = "$SA_PASSWORD" ] && break
+        echo "    The passwords don't match."
+    done
+}
+
+super_admin_summary() {
+    if [ "$SA_SETUP" = y ]; then echo "$SA_EMAIL (create or update)"
+    elif [ -n "$EX_SUPER_ADMIN_EMAIL" ]; then echo "unchanged ($EX_SUPER_ADMIN_EMAIL)"
+    else echo "none yet"
+    fi
+}
+
+super_admin_done_note() {
+    if [ "$SA_SETUP" = y ] && [ "${SA_FAILED-}" != y ]; then note "Super admin:   sign in as $SA_EMAIL"
+    elif [ -n "$EX_SUPER_ADMIN_EMAIL" ]; then note "Super admin:   $EX_SUPER_ADMIN_EMAIL"
+    else note "Super admin:   none yet; re-run the script and answer yes to create one"
+    fi
+}
+
 # Env lines for the app settings above (shared by api.env and the Docker secrets files)
 storage_env_lines() {
     echo "Storage__Provider=$STORAGE_PROVIDER"
@@ -287,6 +351,7 @@ nginx_load_existing() {
     EX_SITE_HOST=$(env_get "$DEPLOY_CONF" SITE_HOST)
     EX_USE_TLS=$(env_get "$DEPLOY_CONF" USE_TLS)
     EX_ACME_EMAIL=$(env_get "$DEPLOY_CONF" ACME_EMAIL)
+    EX_SUPER_ADMIN_EMAIL=$(env_get "$DEPLOY_CONF" SUPER_ADMIN_EMAIL)
     EX_APP_BASE_URL=$(env_get "$API_ENV_FILE" App__BaseUrl)
     EX_JWT=$(env_get "$API_ENV_FILE" Jwt__Key)
     EX_TWOFACTOR=$(env_get "$API_ENV_FILE" TwoFactor__EncryptionKey)
@@ -344,6 +409,7 @@ nginx_prompts() {
     fi
 
     prompt_app_settings
+    prompt_super_admin
 
     info "Summary"
     note "Deployment:   nginx + systemd ($DEPLOY_ENV)"
@@ -352,6 +418,7 @@ nginx_prompts() {
     note "MySQL root:   $([ "$DEPLOY_ENV" = testing ] && echo "any host (port 3306 open)" || echo "localhost only")"
     note "Uploads:      $STORAGE_PROVIDER$([ "$STORAGE_PROVIDER" = Local ] && echo " ($DATA_DIR/uploads)")"
     note "Email:        $([ -n "$RESEND_KEY" ] && echo "Resend, from $EMAIL_FROM" || echo "not sent (logged only)")"
+    note "Super admin:  $(super_admin_summary)"
     confirm_or_exit
 }
 
@@ -451,6 +518,17 @@ mysqlx-bind-address = 127.0.0.1"
     fi
 }
 
+nginx_write_deploy_conf() {
+    {
+        echo "# Answers from the last deploy/deploy.sh run (secrets are in api.env)"
+        echo "DEPLOY_ENV=$DEPLOY_ENV"
+        echo "SITE_HOST=$SITE_HOST"
+        echo "USE_TLS=$USE_TLS"
+        echo "ACME_EMAIL=$ACME_EMAIL"
+        echo "SUPER_ADMIN_EMAIL=$EX_SUPER_ADMIN_EMAIL"
+    } | write_file "$DEPLOY_CONF" 600
+}
+
 nginx_write_config_files() {
     info "Writing configuration"
     id "$SERVICE_USER" >/dev/null 2>&1 ||
@@ -473,13 +551,7 @@ nginx_write_config_files() {
         echo "Storage__LocalPath=$DATA_DIR/uploads"
     } | write_file "$API_ENV_FILE" 600
 
-    {
-        echo "# Answers from the last deploy/deploy.sh run (secrets are in api.env)"
-        echo "DEPLOY_ENV=$DEPLOY_ENV"
-        echo "SITE_HOST=$SITE_HOST"
-        echo "USE_TLS=$USE_TLS"
-        echo "ACME_EMAIL=$ACME_EMAIL"
-    } | write_file "$DEPLOY_CONF" 600
+    nginx_write_deploy_conf
 
     write_file "/etc/systemd/system/$SERVICE_NAME.service" 644 <<EOF
 # Managed by deploy/deploy.sh
@@ -546,6 +618,23 @@ nginx_build_and_install() {
     done
     journalctl -u "$SERVICE_NAME" -n 60 --no-pager || true
     die "The API didn't start. See the log above (journalctl -u $SERVICE_NAME)."
+}
+
+# Runs the API's --create-super-admin mode as the service would run (same user and settings); details go on stdin
+nginx_setup_super_admin() {
+    [ "$SA_SETUP" = y ] || return 0
+    info "Setting up the super admin"
+    if printf '%s\n' "$SA_EMAIL" "$SA_FIRST" "$SA_LAST" "$SA_PASSWORD" |
+        systemd-run --quiet --wait --pipe --collect \
+            -p User="$SERVICE_USER" -p Group="$SERVICE_USER" -p WorkingDirectory="$APP_DIR" \
+            -p EnvironmentFile="$API_ENV_FILE" -p Environment="HOME=$DATA_DIR DOTNET_NOLOGO=1" \
+            "$(command -v dotnet)" "$APP_DIR/ScholarshipApi.dll" --create-super-admin; then
+        EX_SUPER_ADMIN_EMAIL=$SA_EMAIL
+        nginx_write_deploy_conf
+    else
+        SA_FAILED=y
+        warn "The super admin wasn't set up (see the message above). Re-run the script to try again."
+    fi
 }
 
 # The part of the nginx server block that serves the app; $1 = y adds HSTS (HTTPS only)
@@ -677,6 +766,7 @@ deploy_nginx() {
     nginx_write_config_files
     nginx_build_and_install
     nginx_configure_web
+    nginx_setup_super_admin
 
     info "Done: $APP_BASE_URL"
     note "API service:   systemctl status $SERVICE_NAME   ·   logs: journalctl -u $SERVICE_NAME -f"
@@ -688,8 +778,7 @@ deploy_nginx() {
         note "MySQL root:    localhost only: sudo mysql $DB_NAME"
     fi
     note "Redeploy:      git pull && sudo deploy/deploy.sh nginx"
-    note "First super admin: register and verify an account, then run"
-    note "  sudo mysql $DB_NAME -e \"UPDATE Users SET Role = 'super_admin', SessionVersion = SessionVersion + 1 WHERE Email = 'you@example.org';\""
+    super_admin_done_note
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -765,6 +854,7 @@ docker_load_existing() {
     EX_HTTP_PORT=$(env_get "$dotenv" HTTP_PORT)
     EX_HTTPS_PORT=$(env_get "$dotenv" HTTPS_PORT)
     EX_MYSQL_PORT=$(env_get "$dotenv" MYSQL_PORT)
+    EX_SUPER_ADMIN_EMAIL=$(env_get "$dotenv" SUPER_ADMIN_EMAIL)
     EX_JWT=$(env_get "$s/jwt.env" Jwt__Key)
     EX_TWOFACTOR=$(env_get "$s/twofactor.env" TwoFactor__EncryptionKey)
     EX_EMAIL_FROM=$(env_get "$s/email.env" Email__From)
@@ -831,6 +921,7 @@ docker_prompts() {
     ask_secret DB_APP_PASSWORD "Password for the $DB_USER MySQL user" "$EX_DB_APP_PASSWORD" generate valid_db_password gen_password
 
     prompt_app_settings
+    prompt_super_admin
 
     info "Summary"
     note "Deployment:   Docker Compose ($DEPLOY_ENV)"
@@ -839,14 +930,11 @@ docker_prompts() {
     note "MySQL:        $MYSQL_BIND:$MYSQL_PORT, root $([ "$DEPLOY_ENV" = testing ] && echo "from any host" || echo "localhost only")"
     note "Uploads:      $STORAGE_PROVIDER$([ "$STORAGE_PROVIDER" = Local ] && echo " (uploads_data volume)")"
     note "Email:        $([ -n "$RESEND_KEY" ] && echo "Resend, from $EMAIL_FROM" || echo "not sent (logged only)")"
+    note "Super admin:  $(super_admin_summary)"
     confirm_or_exit
 }
 
-docker_write_files() {
-    info "Writing .env and secrets/*.env"
-    local s=$REPO_ROOT/secrets root_host=localhost
-    [ "$DEPLOY_ENV" = testing ] && root_host=%
-    mkdir -p "$s"
+docker_write_dotenv() {
     {
         echo "# Written by deploy/deploy.sh: re-run it to change these. Read by docker-compose.yml."
         echo "DEPLOY_ENV=$DEPLOY_ENV"
@@ -857,7 +945,17 @@ docker_write_files() {
         echo "HTTPS_PORT=$HTTPS_PORT"
         echo "MYSQL_BIND=$MYSQL_BIND"
         echo "MYSQL_PORT=$MYSQL_PORT"
+        echo "# The super admin set up by the script (only the email; used as the default next time)"
+        echo "SUPER_ADMIN_EMAIL=$EX_SUPER_ADMIN_EMAIL"
     } | write_file "$REPO_ROOT/.env" 600
+}
+
+docker_write_files() {
+    info "Writing .env and secrets/*.env"
+    local s=$REPO_ROOT/secrets root_host=localhost
+    [ "$DEPLOY_ENV" = testing ] && root_host=%
+    mkdir -p "$s"
+    docker_write_dotenv
     printf '# Written by deploy/deploy.sh\nJwt__Key=%s\n' "$JWT_KEY" | write_file "$s/jwt.env" 600
     printf '# Written by deploy/deploy.sh\nTwoFactor__EncryptionKey=%s\n' "$TWOFACTOR_KEY" | write_file "$s/twofactor.env" 600
     {
@@ -926,6 +1024,20 @@ docker_start() {
     die "The API didn't start. See the log above (docker compose logs backend)."
 }
 
+# Runs the API image's --create-super-admin mode in a one-off container; details go on stdin
+docker_setup_super_admin() {
+    [ "$SA_SETUP" = y ] || return 0
+    info "Setting up the super admin"
+    if printf '%s\n' "$SA_EMAIL" "$SA_FIRST" "$SA_LAST" "$SA_PASSWORD" |
+        compose run --rm -T --no-deps backend --create-super-admin; then
+        EX_SUPER_ADMIN_EMAIL=$SA_EMAIL
+        docker_write_dotenv
+    else
+        SA_FAILED=y
+        warn "The super admin wasn't set up (see the message above). Re-run the script to try again."
+    fi
+}
+
 deploy_docker() {
     command -v openssl >/dev/null 2>&1 || die "openssl is required (sudo apt-get install openssl)."
     ensure_docker
@@ -934,6 +1046,7 @@ deploy_docker() {
     docker_write_files
     docker_setup_mysql
     docker_start
+    docker_setup_super_admin
 
     local dc="docker compose"
     [ "${DOCKER[0]}" = sudo ] && dc="sudo docker compose"
@@ -947,8 +1060,7 @@ deploy_docker() {
         note "MySQL root:    inside the container only: $dc exec mysql sh -c 'mysql -uroot -p\"\$MYSQL_ROOT_PASSWORD\" $DB_NAME'"
     fi
     note "Redeploy:      git pull && deploy/deploy.sh docker"
-    note "First super admin: register and verify an account, then in the MySQL shell above run"
-    note "  UPDATE Users SET Role = 'super_admin', SessionVersion = SessionVersion + 1 WHERE Email = 'you@example.org';"
+    super_admin_done_note
 }
 
 # ---------------------------------------------------------------------------------------------------------------------

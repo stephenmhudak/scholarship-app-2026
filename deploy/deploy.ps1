@@ -11,6 +11,8 @@
 #>
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2
+# Text piped to docker (SQL, the super admin's details) goes as UTF-8, so names with accents survive
+$OutputEncoding = New-Object Text.UTF8Encoding $false
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $Secrets = Join-Path $RepoRoot 'secrets'
@@ -135,6 +137,12 @@ $CheckUrl = {
     if ($v.EndsWith('/')) { return 'Leave off the trailing slash.' }
     & $CheckEnvValue $v
 }
+$CheckAdminPassword = {
+    param($v)
+    if ($v.Length -lt 8 -or [Text.Encoding]::UTF8.GetByteCount($v) -gt 72) { return 'Use 8 to 72 characters.' }
+}
+$CheckName = { param($v) if (-not $v -or $v.Length -gt 100) { return 'Enter 1 to 100 characters.' } }
+$CheckNameOrBlank = { param($v) if ($v.Length -gt 100) { return 'Use at most 100 characters.' } }
 $CheckPort = { param($v) $n = 0; if (-not ([int]::TryParse($v, [ref]$n) -and $n -ge 1 -and $n -le 65535)) { return 'Enter a port number.' } }
 
 function RandomBase64([int]$Bytes) {
@@ -226,6 +234,7 @@ function Load-Existing {
         HttpPort        = Get-EnvValue $DotEnv 'HTTP_PORT'
         HttpsPort       = Get-EnvValue $DotEnv 'HTTPS_PORT'
         MysqlPort       = Get-EnvValue $DotEnv 'MYSQL_PORT'
+        SuperAdminEmail = Get-EnvValue $DotEnv 'SUPER_ADMIN_EMAIL'
         Jwt             = Get-EnvValue "$s\jwt.env" 'Jwt__Key'
         TwoFactor       = Get-EnvValue "$s\twofactor.env" 'TwoFactor__EncryptionKey'
         EmailFrom       = Get-EnvValue "$s\email.env" 'Email__From'
@@ -245,6 +254,40 @@ function Load-Existing {
     $Ex.AzureContainer = Get-EnvValue $storage 'Storage__ContainerName'
     $conn = Get-EnvValue "$s\db.env" 'ConnectionStrings__Default'
     if ($conn -like "*User=$DbUser;*") { $Ex.DbAppPassword = Get-ConnPassword $conn }
+}
+
+function Read-Hidden([string]$Prompt) {
+    $secure = Read-Host $Prompt -AsSecureString
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+}
+
+# Nobody can register as a super admin, so the first one is made here; the API creates it (or promotes an existing
+# account) after migrations. Returns $null when skipped.
+function Ask-SuperAdmin {
+    Info 'Super admin account'
+    Note 'A super admin can do everything, including creating the other admin, scorer and staff accounts.'
+    if ($Ex.SuperAdminEmail) { Note "Set up on a previous run: $($Ex.SuperAdminEmail)" }
+    if (-not (AskYesNo 'Create or update a super admin account now?' (-not $Ex.SuperAdminEmail))) { return $null }
+
+    $sa = @{ Email = Ask 'Super admin email' $Ex.SuperAdminEmail $CheckEmail }
+    Note 'If an account with this email already exists, it''s made a super admin.'
+    $keep = $sa.Email -eq $Ex.SuperAdminEmail
+    $nameCheck = $CheckName
+    if ($keep) { Note 'Leave a field blank to keep the account''s current value.'; $nameCheck = $CheckNameOrBlank }
+    $sa.FirstName = Ask 'First name' '' $nameCheck
+    $sa.LastName = Ask 'Last name' '' $nameCheck
+    $hint = if ($keep) { '8+ characters, Enter keeps the current one' } else { '8+ characters' }
+    while ($true) {
+        $sa.Password = Read-Hidden "Password (hidden; $hint)"
+        if (-not $sa.Password) { if ($keep) { break }; Note 'A password is required.'; continue }
+        $err = & $CheckAdminPassword $sa.Password
+        if ($err) { Note $err; continue }
+        if ((Read-Hidden 'Confirm the password') -ceq $sa.Password) { break }
+        Note 'The passwords don''t match.'
+    }
+    return $sa
 }
 
 function Ask-Settings {
@@ -335,6 +378,8 @@ function Ask-Settings {
         $c.StorageLines += "Storage__ContainerName=$(Ask 'Azure container name' $container $CheckRequired)"
     }
 
+    $c.SuperAdmin = Ask-SuperAdmin
+
     Info 'Summary'
     Note "Deployment:   Docker Compose ($($c.DeployEnv))"
     Note "Site URL:     $($c.AppBaseUrl)"
@@ -342,15 +387,14 @@ function Ask-Settings {
     Note "MySQL:        $($c.MysqlBind):$($c.MysqlPort), root $(if ($c.DeployEnv -eq 'testing') { 'from any host' } else { 'localhost only' })"
     Note "Uploads:      $($c.StorageProvider)"
     Note "Email:        $(if ($c.ResendKey) { "Resend, from $($c.EmailFrom)" } else { 'not sent (logged only)' })"
+    $saSummary = if ($c.SuperAdmin) { "$($c.SuperAdmin.Email) (create or update)" } elseif ($Ex.SuperAdminEmail) { "unchanged ($($Ex.SuperAdminEmail))" } else { 'none yet' }
+    Note "Super admin:  $saSummary"
     Write-Host ''
     if (-not (AskYesNo 'Proceed with the installation?' $true)) { Fail 'Cancelled; nothing was changed.' }
     return $c
 }
 
-function Write-Files($c) {
-    Info 'Writing .env and secrets\*.env'
-    New-Item -ItemType Directory -Force -Path $Secrets | Out-Null
-    $rootHost = if ($c.DeployEnv -eq 'testing') { '%' } else { 'localhost' }
+function Write-DotEnv($c) {
     Write-EnvFile $DotEnv @(
         '# Written by deploy/deploy.ps1: re-run it to change these. Read by docker-compose.yml.',
         "DEPLOY_ENV=$($c.DeployEnv)",
@@ -360,7 +404,16 @@ function Write-Files($c) {
         "HTTP_PORT=$($c.HttpPort)",
         "HTTPS_PORT=$($c.HttpsPort)",
         "MYSQL_BIND=$($c.MysqlBind)",
-        "MYSQL_PORT=$($c.MysqlPort)")
+        "MYSQL_PORT=$($c.MysqlPort)",
+        '# The super admin set up by the script (only the email; used as the default next time)',
+        "SUPER_ADMIN_EMAIL=$($Ex.SuperAdminEmail)")
+}
+
+function Write-Files($c) {
+    Info 'Writing .env and secrets\*.env'
+    New-Item -ItemType Directory -Force -Path $Secrets | Out-Null
+    $rootHost = if ($c.DeployEnv -eq 'testing') { '%' } else { 'localhost' }
+    Write-DotEnv $c
     Write-EnvFile "$Secrets\jwt.env" @('# Written by deploy/deploy.ps1', "Jwt__Key=$($c.JwtKey)")
     Write-EnvFile "$Secrets\twofactor.env" @('# Written by deploy/deploy.ps1', "TwoFactor__EncryptionKey=$($c.TwoFactorKey)")
     Write-EnvFile "$Secrets\mysql.env" @(
@@ -430,6 +483,24 @@ function Start-App {
     Fail "The API didn't start. See the log above (docker compose logs backend)."
 }
 
+# Runs the API image's --create-super-admin mode in a one-off container; details go on stdin. Returns $true on success.
+function Setup-SuperAdmin($c) {
+    $sa = $c.SuperAdmin
+    if (-not $sa) { return $false }
+    Info 'Setting up the super admin'
+    $text = @($sa.Email, $sa.FirstName, $sa.LastName, $sa.Password) -join "`n"
+    Push-Location $RepoRoot
+    try { $ok = Try-Native { $text | docker compose run --rm -T --no-deps backend --create-super-admin } -Show }
+    finally { Pop-Location }
+    if ($ok) {
+        $Ex.SuperAdminEmail = $sa.Email
+        Write-DotEnv $c
+        return $true
+    }
+    Warn 'The super admin wasn''t set up (see the message above). Re-run the script to try again.'
+    return $false
+}
+
 # ---------------------------------------------------------------------------------------------------------------------
 
 Ensure-Docker
@@ -438,6 +509,7 @@ $settings = Ask-Settings
 Write-Files $settings
 Setup-Mysql $settings
 Start-App
+$superAdminDone = Setup-SuperAdmin $settings
 
 Info "Done: $($settings.AppBaseUrl)"
 if ($settings.SiteHost) { Note 'Caddy requests the HTTPS certificate on the first visit; give it a minute.' }
@@ -449,5 +521,6 @@ if ($settings.DeployEnv -eq 'testing') {
     Note "MySQL root:    inside the container only: docker compose exec mysql sh -c 'mysql -uroot -p`"`$MYSQL_ROOT_PASSWORD`" $DbName'"
 }
 Note 'Redeploy:      git pull, then run deploy\deploy.ps1 again'
-Note 'First super admin: register and verify an account, then in the MySQL shell above run'
-Note "  UPDATE Users SET Role = 'super_admin', SessionVersion = SessionVersion + 1 WHERE Email = 'you@example.org';"
+if ($superAdminDone) { Note "Super admin:   sign in as $($settings.SuperAdmin.Email)" }
+elseif ($Ex.SuperAdminEmail) { Note "Super admin:   $($Ex.SuperAdminEmail)" }
+else { Note 'Super admin:   none yet; re-run the script and answer yes to create one' }

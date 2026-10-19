@@ -101,27 +101,17 @@ Every prompt shows its default in brackets. For keys and passwords, pressing Ent
 | Two-factor encryption key | Protects users' authenticator secrets. **Keep it safe and never change it**: if it's lost or changed, everyone who set up two-factor needs it reset by an admin |
 | Email | Sender address and Resend API key |
 | File storage | Server disk, Cloudflare R2 or Azure Blob Storage |
+| Super admin account | Email, name and password for the first administrator (see below). On later runs this defaults to skipping, or you can update the account |
 
 The script shows a summary and asks before it changes anything.
 
-### Create the first administrator
+### The first administrator
 
-Nobody can register as an administrator. Instead:
+Nobody can register as an administrator, so the setup script asks for a **super admin** account: email, first and last name, and a password (typed twice, not shown). Once the app is running, the script creates the account, already verified. If an account with that email already exists, for example one you registered earlier, it's made a super admin instead, and any field you leave blank keeps its current value.
 
-1. Open the site and register an account.
-2. Verify the email address. If email isn't set up yet, the verification link is in the API log.
-3. Promote that account to super admin in MySQL:
+Sign in with it, then create every other account from **Users & Schools**.
 
-   ```sql
-   UPDATE Users SET Role = 'super_admin', SessionVersion = SessionVersion + 1 WHERE Email = 'you@example.org';
-   ```
-
-   To open MySQL:
-
-   - **nginx:** `sudo mysql scholarship_db`
-   - **Docker:** `docker compose exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" scholarship_db'`
-
-4. Sign in again. The super admin can then create every other account from **Users & Schools**.
+To add or reset a super admin later, run the script again and answer yes when it asks. The password is passed to the API privately and isn't saved anywhere; only the email is remembered as the default for next time.
 
 ### Updating
 
