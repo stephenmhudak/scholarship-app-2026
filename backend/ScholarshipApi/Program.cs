@@ -5,6 +5,7 @@ using DbUp;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
+using MySqlConnector;
 using ScholarshipApi.Authorization;
 using ScholarshipApi.Data;
 using ScholarshipApi.Middleware;
@@ -23,8 +24,17 @@ var jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrWhiteSpace(jwtKey) || Encoding.UTF8.GetByteCount(jwtKey) < 32 || jwtKey.StartsWith("REPLACE_", StringComparison.Ordinal))
     throw new InvalidOperationException("Jwt:Key must be a random secret of at least 32 bytes (see secrets/jwt.env.example).");
 
-// Run DbUp migrations before the host starts
-EnsureDatabase.For.MySqlDatabase(connectionString);
+// Run DbUp migrations before the host starts. EnsureDatabase connects to the `mysql` schema, which the app's
+// scholarship user can't read (the deploy scripts create the database), so only use it when the database is missing.
+try
+{
+    using var probe = new MySqlConnection(connectionString);
+    probe.Open();
+}
+catch (MySqlException e) when (e.ErrorCode == MySqlErrorCode.UnknownDatabase)
+{
+    EnsureDatabase.For.MySqlDatabase(connectionString);
+}
 
 var upgrader = DeployChanges.To
     .MySqlDatabase(connectionString)
