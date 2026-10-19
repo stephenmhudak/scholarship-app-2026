@@ -68,7 +68,7 @@ The script asks for your `sudo` password, then:
 2. Creates the database and a dedicated MySQL user.
 3. Builds the website and the API.
 4. Starts the API as the `scholarship-api` service, which restarts automatically and runs at boot.
-5. Configures nginx and, if you chose HTTPS, gets a Let's Encrypt certificate that renews automatically.
+5. Configures nginx and, if you chose HTTPS, gets a Let's Encrypt certificate. A daily check renews it every 30 days (the `scholarship-cert-renew` timer), and plain-HTTP requests are redirected to HTTPS.
 
 ### Docker on Ubuntu or macOS
 
@@ -84,7 +84,7 @@ Open PowerShell in the repository folder and run:
 powershell -ExecutionPolicy Bypass -File deploy\deploy.ps1
 ```
 
-The Docker scripts check for Docker (and offer to install it), write the settings files, set up MySQL and start the containers. With a domain name, Caddy gets an HTTPS certificate automatically on the first visit.
+The Docker scripts check for Docker (and offer to install it), write the settings files, set up MySQL and start the containers. With a domain name, Caddy gets an HTTPS certificate automatically on the first visit, renews it every 30 days and redirects plain HTTP to HTTPS.
 
 ### What the script asks
 
