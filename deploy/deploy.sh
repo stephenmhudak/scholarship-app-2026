@@ -28,6 +28,9 @@ DEPLOY_CONF=$CONF_DIR/deploy.conf
 MYSQL_ROOT_FILE=$CONF_DIR/mysql-root.env
 ACME_WEBROOT=/var/www/letsencrypt
 NGINX_SITE=/etc/nginx/sites-available/scholarship-app
+CERT_RENEW_SCRIPT=/usr/local/sbin/scholarship-cert-renew
+CERT_RENEW_UNIT=scholarship-cert-renew
+CERT_MAX_AGE_DAYS=30
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Output and prompts
@@ -749,6 +752,60 @@ EOF
     echo "}"
 }
 
+# Renews the certificate once it's CERT_MAX_AGE_DAYS old: a daily timer checks its age and forces a renewal
+# (certbot's own timer only renews 30 days before expiry, i.e. at 60 days for Let's Encrypt's 90-day certificates,
+# and stays as a fallback). The renewal reuses the deploy hook stored with the certificate, which reloads nginx.
+nginx_setup_cert_renewal() {
+    if [ "$USE_TLS" != y ]; then
+        systemctl disable --now "$CERT_RENEW_UNIT.timer" >/dev/null 2>&1 || true
+        rm -f "/etc/systemd/system/$CERT_RENEW_UNIT.timer" "/etc/systemd/system/$CERT_RENEW_UNIT.service" "$CERT_RENEW_SCRIPT"
+        systemctl daemon-reload
+        return
+    fi
+    write_file "$CERT_RENEW_SCRIPT" 755 <<EOF
+#!/bin/sh
+# Managed by deploy/deploy.sh: renews $SITE_HOST's certificate once it is $CERT_MAX_AGE_DAYS days old.
+set -eu
+cert=/etc/letsencrypt/live/$SITE_HOST/cert.pem
+[ -f "\$cert" ] || exit 0
+issued=\$(date -d "\$(openssl x509 -noout -startdate -in "\$cert" | cut -d= -f2)" +%s)
+age_days=\$(( (\$(date +%s) - issued) / 86400 ))
+if [ "\$age_days" -lt $CERT_MAX_AGE_DAYS ]; then
+    echo "Certificate for $SITE_HOST is \$age_days days old; renewing at $CERT_MAX_AGE_DAYS."
+    exit 0
+fi
+echo "Certificate for $SITE_HOST is \$age_days days old: renewing."
+exec certbot renew --cert-name "$SITE_HOST" --force-renewal --non-interactive
+EOF
+    write_file "/etc/systemd/system/$CERT_RENEW_UNIT.service" 644 <<EOF
+# Managed by deploy/deploy.sh
+[Unit]
+Description=Renew the Scholarship App certificate every $CERT_MAX_AGE_DAYS days
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=$CERT_RENEW_SCRIPT
+EOF
+    write_file "/etc/systemd/system/$CERT_RENEW_UNIT.timer" 644 <<EOF
+# Managed by deploy/deploy.sh. Checks daily, so a failed renewal is retried the next day.
+[Unit]
+Description=Daily check of the Scholarship App certificate's age
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+    systemctl daemon-reload
+    systemctl enable --now "$CERT_RENEW_UNIT.timer" >/dev/null 2>&1
+    note "Certificate renews every $CERT_MAX_AGE_DAYS days ($CERT_RENEW_UNIT.timer)."
+}
+
 nginx_configure_web() {
     info "Configuring nginx"
     # Ubuntu's stock site would otherwise answer plain HTTP for other host names (both configs use default_server)
@@ -770,6 +827,7 @@ nginx_configure_web() {
     nginx_site_config "$USE_TLS" | write_file "$NGINX_SITE" 644
     nginx -t
     systemctl reload nginx
+    nginx_setup_cert_renewal
 
     if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q 'Status: active'; then
         note "ufw is active: allowing HTTP/HTTPS$([ "$DEPLOY_ENV" = testing ] && echo " and MySQL (3306)")."

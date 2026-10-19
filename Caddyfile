@@ -3,6 +3,9 @@
 # request to HTTPS (except its own certificate challenges). ":80" serves plain HTTP on any host name (local testing).
 {
     email {$ACME_EMAIL}
+    # Renew once two thirds of a certificate's lifetime is left: every 30 days for Let's Encrypt's 90-day
+    # certificates (Caddy's default is a third, i.e. at 60 days). Caddy checks every 10 minutes and retries failures.
+    renewal_window_ratio 0.6667
 }
 
 {$SITE_ADDRESS} {
