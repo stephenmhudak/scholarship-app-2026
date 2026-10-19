@@ -150,6 +150,15 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// Deploy scripts: set up a super admin (details on stdin), then exit without serving
+if (args.Contains(SuperAdminSetup.Argument))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<SqlKata.Execution.QueryFactory>();
+    Environment.ExitCode = await SuperAdminSetup.RunAsync(db, Console.In, app.Logger);
+    return;
+}
+
 if (string.IsNullOrEmpty(app.Configuration["Email:Resend:ApiKey"]))
     app.Logger.LogWarning("Email:Resend:ApiKey is not set: emails will be written to the console instead of being sent.");
 

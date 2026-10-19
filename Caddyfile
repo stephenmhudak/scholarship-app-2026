@@ -1,7 +1,9 @@
+# SITE_ADDRESS and ACME_EMAIL come from .env (written by deploy/deploy.sh or deploy.ps1) through docker-compose.yml.
+# A domain gets an automatic Let's Encrypt certificate; ":80" serves plain HTTP on any host name (local testing).
 {
-    email stephen@shudak.com
+    email {$ACME_EMAIL}
 }
 
-scholarships.shudak.com {
+{$SITE_ADDRESS} {
     reverse_proxy frontend:80
 }
